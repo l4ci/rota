@@ -24,7 +24,7 @@ func testEnv(now *time.Time, alive map[int]bool) roundlease.Env {
 // fakeEnv is a worker.Env whose registry is the given JSON text and whose git
 // says it is outside any repo: the seam under test, with nothing on disk.
 func fakeEnv(registry string) worker.Env {
-	return worker.Env{
+	return worker.Env{Config: worker.NoConfig,
 		Registry: func(string) worker.Registry { return worker.ParseRegistry(registry) },
 		Git:      func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil },
 	}

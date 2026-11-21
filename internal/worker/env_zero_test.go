@@ -14,7 +14,7 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 	dir := t.TempDir()
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // a cancelled ctx keeps real git/shell/host calls from running long
-	var e Env
+	e := Env{Config: NoConfig}
 	for name, call := range map[string]func(){
 		"Gate":            func() { e.Gate(ctx, dir, GateOpts{}) },
 		"Train":           func() { e.Train(ctx, dir, TrainOpts{}) },
@@ -36,7 +36,7 @@ func TestZeroEnvVerbEntriesDoNotPanic(t *testing.T) {
 		"RunVerify":       func() { e.RunVerify(ctx, []string{"true"}, dir) },
 		"RunShell":        func() { e.RunShell(ctx, dir, "true") },
 		"LedgerRound":     func() { LedgerRound(e, dir) },
-		"Accounts":        func() { (&Accounts{}).Meters(ctx, dir) },
+		"Accounts":        func() { (&Accounts{Env: Env{Config: NoConfig}}).Meters(ctx, dir) },
 		"BounceRecord":    func() { recordBounceVia(e, dir, "1", "w1", "head") },
 	} {
 		func() {
@@ -59,7 +59,7 @@ func TestZeroEnvWriterTrustMissingTracker(t *testing.T) {
 			t.Errorf("WriterTrust panicked with an omitted optional IssueComments seam: %v", r)
 		}
 	}()
-	trust, err := (Env{}).WriterTrust(t.TempDir())
+	trust, err := (Env{Config: NoConfig}).WriterTrust(t.TempDir())
 	if trust != nil || err == nil || !strings.Contains(err.Error(), "issues.source has no issue tracker") {
 		t.Errorf("WriterTrust = %v, %v; want missing-tracker refusal", trust, err)
 	}
@@ -69,7 +69,7 @@ func TestZeroEnvWriterTrustMissingTracker(t *testing.T) {
 // usage meters) and IssueComments (resolved when a consumer needs comments),
 // which are optional on purpose.
 func TestWithDefaultsFillsEverySeam(t *testing.T) {
-	v := reflect.ValueOf(Env{}.WithDefaults())
+	v := reflect.ValueOf(Env{Config: NoConfig}.WithDefaults())
 	for i := 0; i < v.NumField(); i++ {
 		f, name := v.Field(i), v.Type().Field(i).Name
 		switch f.Kind() {

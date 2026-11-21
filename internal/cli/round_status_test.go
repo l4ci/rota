@@ -29,7 +29,7 @@ func roundFixture(t *testing.T, agents []host.Agent) (string, *Deps) {
 	}
 	d := testDeps()
 	d.RoundEnv = func(_ context.Context, _ string, o RoundOpts) round.Env {
-		e := round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", ForgeErr: "fake: no forge"}
+		e := round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "feat/x", ForgeErr: "fake: no forge"}
 		if agents != nil {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) { return agents, nil }
 			e.HostName = "herdr"
@@ -43,7 +43,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	root, deps := roundFixture(t, []host.Agent{})
 	// Re-point the fake at the real worktree path now that root is known.
 	deps.RoundEnv = func(_ context.Context, _ string, o RoundOpts) round.Env {
-		return withRoundOpts(round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
+		return withRoundOpts(round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
 			Snapshot: func(context.Context) ([]host.Agent, error) {
 				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"}}, nil
 			}}, o)
@@ -81,8 +81,8 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	}
 
 	// A slot's bounce count shows on its row, and only on its row.
-	recordBounceVia(worker.Env{}, root, "58", "", "")
-	recordBounceVia(worker.Env{}, root, "58", "", "")
+	recordBounceVia(worker.Env{Config: worker.NoConfig}, root, "58", "", "")
+	recordBounceVia(worker.Env{Config: worker.NoConfig}, root, "58", "", "")
 	_, out, _ = rotaInWith(t, deps, root, "--json", "round", "status")
 	for _, r := range data(t, out)["slots"].([]any) {
 		row := r.(map[string]any)

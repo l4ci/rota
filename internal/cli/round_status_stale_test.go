@@ -25,7 +25,7 @@ func staleStatusDeps(t *testing.T) (string, *Deps) {
 	d := testDeps()
 	d.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	d.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
-		return round.Env{Forge: returnForge{fake}, Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
+		return round.Env{Forge: returnForge{fake}, Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 	}
 	return root, d
 }

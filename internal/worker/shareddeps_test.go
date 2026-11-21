@@ -34,7 +34,7 @@ func linkTarget(t *testing.T, b, slot string) string {
 func TestSharedDirsLinkedOnPoolInitWithoutInstall(t *testing.T) {
 	b := sharedProject(t, `,"envSetup":"npm ci"`)
 	r := &setupRecorder{}
-	res, err := Env{Config: diskConfig, Shell: r.shell}.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{})
+	res, err := Env{Config: diskConfig, Shell: r.shell}.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestSharedDirsSkippedWhenLockfileDiffers(t *testing.T) {
 	b := sharedProject(t, `,"envSetup":"npm ci"`)
 	r := &setupRecorder{}
 	env := Env{Config: diskConfig, Shell: r.shell}.WithDefaults()
-	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{}); err != nil {
+	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}}); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")
@@ -79,7 +79,7 @@ func TestSharedDirsSkippedWhenLockfileDiffers(t *testing.T) {
 func TestSharedDirsRelinkedWhenTargetVanished(t *testing.T) {
 	b := sharedProject(t, ``)
 	env := Env{Config: diskConfig, Shell: (&setupRecorder{}).shell}.WithDefaults()
-	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{}); err != nil {
+	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}}); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")
@@ -97,7 +97,7 @@ func TestSharedDirsRelinkedWhenTargetVanished(t *testing.T) {
 func TestSharedDirsSkippedWhenMissingInMainOrUnsafe(t *testing.T) {
 	b := sharedProject(t, ``)
 	env := Env{Config: diskConfig, Shell: (&setupRecorder{}).shell}.WithDefaults()
-	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{}); err != nil {
+	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}}); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")
@@ -116,7 +116,7 @@ func TestSharedDirsSkippedWhenMissingInMainOrUnsafe(t *testing.T) {
 func TestSharedDirsKeepsRealDirectory(t *testing.T) {
 	b := sharedProject(t, ``)
 	env := Env{Config: diskConfig, Shell: (&setupRecorder{}).shell}.WithDefaults()
-	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{}); err != nil {
+	if _, err := env.PoolInit(bg, b, InitOpts{Slots: 1, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}}); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(b, ".worktrees", "w1")

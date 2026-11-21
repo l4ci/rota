@@ -956,7 +956,7 @@ func TestAssignCodexSkipsAccounts(t *testing.T) {
 	(&codexRig{version: "codex-cli 0.159.2\n", loggedIn: true}).install(f)
 	f.host.name = "herdr"
 	fetched := 0
-	f.env = f.env.WithAccounts(&worker.Accounts{Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
+	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: worker.NoConfig}, Read: func(context.Context, harness.QuotaReporter, harness.QuotaRequest, harness.QuotaOptions) harness.QuotaSnapshot {
 		fetched++
 		return unreadable
 	}})

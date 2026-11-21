@@ -16,7 +16,7 @@ import (
 
 func goInit(t *testing.T, dir string, o InitOpts) (InitResult, error) {
 	t.Helper()
-	return Env{Config: diskConfig}.PoolInit(bg, dir, o, &Accounts{})
+	return Env{Config: diskConfig}.PoolInit(bg, dir, o, &Accounts{Env: Env{Config: diskConfig}})
 }
 
 func TestPoolInit(t *testing.T) {

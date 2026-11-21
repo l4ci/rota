@@ -68,7 +68,7 @@ func remoteFixture(t *testing.T, tr Tracker) (RemoteScanner, any) {
 		},
 		NewForge: func(context.Context) (tracker.Forge, error) { return remoteForge{}, nil },
 		RoundEnv: func(context.Context) round.Env {
-			return round.Env{Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return remoteNow }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
+			return round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return remoteNow }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 		},
 	}, cfg
 }

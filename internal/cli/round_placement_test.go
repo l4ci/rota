@@ -26,7 +26,7 @@ func TestTickAssignsOnTheFallbackHarness(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Date(2026, 10, 8, 12, 0, 0, 0, time.UTC)
-	renv := round.Env{Worker: round.FromWorkerEnv(worker.Env{Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Now: func() time.Time { return now }},
+	renv := round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }, Accounts: &worker.Accounts{Env: worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }},
 		Read: claudeReading(100, func() *time.Time { r := now.Add(time.Hour); return &r }(), 0)}})}
 	assigned := 0
 	r, err := roundtick.Run(context.Background(), roundtick.Env{

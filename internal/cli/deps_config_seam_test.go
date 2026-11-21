@@ -91,3 +91,15 @@ func TestProductionWorkerEnvReadsDiskConfig(t *testing.T) {
 		t.Fatalf("worker Env git.remote = %q, %v; want from-disk read from .rota/config.json", got, err)
 	}
 }
+
+// The WorkerEnv and EscalationEnv hook defaults carry Config themselves, so a
+// direct caller of the hook cannot get a nil one.
+func TestHookDefaultsCarryConfig(t *testing.T) {
+	d := defaultDeps()
+	if d.WorkerEnv().Config == nil {
+		t.Error("WorkerEnv() default has no Config")
+	}
+	if d.EscalationEnv().Config == nil {
+		t.Error("EscalationEnv() default has no Config")
+	}
+}

@@ -40,7 +40,7 @@ func TestPoolInitReservesDistinctPortBlocks(t *testing.T) {
 func TestPortBlockHonoursConfig(t *testing.T) {
 	b := gittest.Project(t, `{}`)
 	e := Env{Config: memConfig(t, `{"round":{"portBase":30000,"portBlock":50}}`)}
-	if _, err := e.PoolInit(bg, b, InitOpts{Slots: 2, Base: "main"}, &Accounts{}); err != nil {
+	if _, err := e.PoolInit(bg, b, InitOpts{Slots: 2, Base: "main"}, &Accounts{Env: Env{Config: diskConfig}}); err != nil {
 		t.Fatal(err)
 	}
 	got := portBases(t, b)

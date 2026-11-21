@@ -12,7 +12,7 @@ import (
 // WithDefaults is the one site that supplies a production value for the rest.
 // Accounts is the exception on purpose: nil records no usage meters.
 func TestBareDepsWorkerEnvFillsEverySeam(t *testing.T) {
-	d := &Deps{WorkerEnv: func() worker.Env { return worker.Env{} }}
+	d := &Deps{WorkerEnv: func() worker.Env { return worker.Env{} }, Config: func(string) any { return nil }}
 	v := reflect.ValueOf(d.workerEnv().WithDefaults())
 	for i := 0; i < v.NumField(); i++ {
 		f, name := v.Field(i), v.Type().Field(i).Name

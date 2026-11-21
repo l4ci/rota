@@ -56,7 +56,7 @@ func TestSupportQueueMarksItemsUnknownWithoutItemStatus(t *testing.T) {
 	}
 	fr.claims = map[string]string{"2": "mac-ben"}
 	be := &noStatusBoard{fakeRemote: fr}
-	e := Env{SupportLabel: label, Worker: wk(worker.Env{})}
+	e := Env{SupportLabel: label, Worker: wk(worker.Env{Config: worker.NoConfig})}
 	got, err := e.SupportQueue(bg, be, "mac")
 	if err != nil {
 		t.Fatal(err)

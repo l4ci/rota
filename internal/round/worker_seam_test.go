@@ -94,7 +94,7 @@ func TestEnvClockAndAccountsComeFromTheWorker(t *testing.T) {
 	if got := e.now(); !got.Equal(at) {
 		t.Errorf("now = %v, want %v", got, at)
 	}
-	acc := &worker.Accounts{}
+	acc := &worker.Accounts{Env: worker.Env{Config: worker.NoConfig}}
 	picked := e.WithAccounts(acc)
 	if !picked.AccountPicking || picked.Worker.Accounts() != acc {
 		t.Errorf("WithAccounts: picking = %v, accounts = %v", picked.AccountPicking, picked.Worker.Accounts())
