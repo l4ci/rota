@@ -158,7 +158,7 @@ func readTestAuditTelemetry(c *Ctx, root string, cfg any) (suiteaudit.Telemetry,
 	}
 	// Gate producers use the main checkout for shared round records.
 	recordRoot := root
-	if main, ok := c.MainCheckoutOf(common); ok {
+	if main, ok := rotastate.MainCheckout(common); ok {
 		recordRoot = main
 	}
 	telemetry := suiteaudit.ReadTelemetry(recordRoot, checkpoint, seconds, prs)
