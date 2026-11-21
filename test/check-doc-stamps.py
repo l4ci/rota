@@ -36,39 +36,36 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
+from fmlite import FmError, load_front_matter  # noqa: E402
+
 SHA_RE = re.compile(r"^[0-9a-f]{7,40}$")
 STAMPS = "docs/contributing/contract/STAMPS"
 
 
 def parse_refs(text):
-    """Return (refs, error) from a doc's leading frontmatter block."""
-    lines = text.split("\n")
-    if not lines or lines[0].strip() != "---":
-        return [], "no frontmatter (expected a leading --- block)"
+    """Return (refs, error) from a doc's leading frontmatter block, read by fmlite."""
     try:
-        end = lines.index("---", 1)
-    except ValueError:
-        return [], "frontmatter is not closed with ---"
-    refs, in_refs = [], False
-    for raw in lines[1:end]:
-        if not raw.strip():
-            continue
-        item = re.match(r"^\s+-\s+(\S.*?)\s*$", raw)
-        if in_refs and item:
-            refs.append(item.group(1))
-            continue
-        in_refs = False
-        key = re.match(r"^([A-Za-z-]+):\s*(.*?)\s*$", raw)
-        if not key:
-            return [], f"unparseable frontmatter line: {raw!r}"
-        if key.group(1) == "verified-sha":
-            return [], f"verified-sha: belongs in {STAMPS}, not in the doc"
-        elif key.group(1) == "refs":
-            if key.group(2):
-                return [], "refs: must be a block list (one `  - path` per line)"
-            in_refs = True
-    if not refs:
+        fm, _ = load_front_matter("frontmatter", text)
+    except FmError as exc:
+        msg = re.sub(r"^frontmatter:\d+: ", "", str(exc))
+        if "does not start with" in msg:
+            return [], "no frontmatter (expected a leading --- block)"
+        if "is not closed" in msg:
+            return [], "frontmatter is not closed with ---"
+        return [], f"frontmatter: {msg}"
+    return stamp_rules(fm)
+
+
+def stamp_rules(fm):
+    """The stamp-specific rules on parsed front matter: (refs, error)."""
+    if "verified-sha" in fm:
+        return [], f"verified-sha: belongs in {STAMPS}, not in the doc"
+    refs = fm.get("refs")
+    if refs is None or refs == []:
         return [], "missing refs: (a list of repo paths)"
+    if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
+        return [], "refs: must be a block list (one `  - path` per line)"
     return refs, None
 
 
