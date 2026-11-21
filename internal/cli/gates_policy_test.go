@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"flag"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -237,6 +238,35 @@ func TestGatesInheritDownTheTree(t *testing.T) {
 	// The root's own policy is for bare rota alone.
 	if g := gatesAt(root, "rota"); g.RoundKeys != RoundKeysRefuse || g.LegacyExempt {
 		t.Errorf("root = %+v", g)
+	}
+}
+
+// Every Gates field is folded by merge or named in neverInherited; a field
+// added to the struct and to neither fails here instead of being dropped.
+func TestGatesMergeCoversEveryField(t *testing.T) {
+	typ := reflect.TypeOf(Gates{})
+	for i := 0; i < typ.NumField(); i++ {
+		f := typ.Field(i)
+		var parent Gates
+		pf := reflect.ValueOf(&parent).Elem().Field(i)
+		switch pf.Kind() {
+		case reflect.Bool:
+			pf.SetBool(true)
+		case reflect.Uint8:
+			pf.SetUint(uint64(RoundKeysRefuse))
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			pf.SetInt(1)
+		default:
+			t.Fatalf("Gates.%s has kind %s: teach this test to set it", f.Name, pf.Kind())
+		}
+		got := reflect.ValueOf(parent.merge(Gates{})).Field(i)
+		if inherited := !got.IsZero(); inherited == neverInherited[f.Name] {
+			t.Errorf("Gates.%s: merge inherits = %v, neverInherited = %v: fold it in merge or list it in neverInherited", f.Name, inherited, neverInherited[f.Name])
+		}
+	}
+	// A verb's own non-default RoundKeys beats the group's; the default does not.
+	if g := (Gates{RoundKeys: RoundKeysRefuse}).merge(Gates{RoundKeys: RoundKeysQuiet}); g.RoundKeys != RoundKeysQuiet {
+		t.Errorf("child RoundKeys lost: %+v", g)
 	}
 }
 

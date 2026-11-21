@@ -41,27 +41,40 @@ type Gates struct {
 	Fence roundcfg.FenceClass
 }
 
+// neverInherited names the Gates fields merge leaves out of a group's policy.
+// A field is either folded by merge or listed here: TestGatesMergeCoversEveryField fails otherwise.
+var neverInherited = map[string]bool{"Fence": true}
+
+// merge folds the group policy g under child: a boolean is set when either
+// side sets it, and a non-default RoundKeys policy of child beats g's. Fence
+// is the verb's own and never inherited, so the result leaves it zero.
+func (g Gates) merge(child Gates) Gates {
+	out := Gates{
+		LegacyExempt:      g.LegacyExempt || child.LegacyExempt,
+		TrackedRoleExempt: g.TrackedRoleExempt || child.TrackedRoleExempt,
+		RoundMachine:      g.RoundMachine || child.RoundMachine,
+		ConfigExempt:      g.ConfigExempt || child.ConfigExempt,
+		RoundKeys:         g.RoundKeys,
+	}
+	if child.RoundKeys != RoundKeysWarn {
+		out.RoundKeys = child.RoundKeys
+	}
+	return out
+}
+
 // gatesFor is the gate policy of the verb the dispatcher resolved: chain runs
 // from the root down to it. The policies on the way down count, a verb's own
 // over its group's. The root's policy is for bare rota alone.
 func gatesFor(chain []*Command) Gates {
-	if len(chain) == 1 {
-		g := chain[0].Gates
-		g.Fence = chain[0].Fence
-		return g
-	}
 	var g Gates
-	for _, cmd := range chain[1:] {
-		g.LegacyExempt = g.LegacyExempt || cmd.Gates.LegacyExempt
-		g.TrackedRoleExempt = g.TrackedRoleExempt || cmd.Gates.TrackedRoleExempt
-		g.RoundMachine = g.RoundMachine || cmd.Gates.RoundMachine
-		g.ConfigExempt = g.ConfigExempt || cmd.Gates.ConfigExempt
-		if cmd.Gates.RoundKeys != RoundKeysWarn {
-			g.RoundKeys = cmd.Gates.RoundKeys
+	if len(chain) == 1 {
+		g = chain[0].Gates
+	} else {
+		for _, cmd := range chain[1:] {
+			g = g.merge(cmd.Gates)
 		}
 	}
-	last := chain[len(chain)-1]
-	g.Fence = last.Fence
+	g.Fence = chain[len(chain)-1].Fence
 	return g
 }
 
