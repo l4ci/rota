@@ -41,12 +41,16 @@ func gateVerdictConsts(t *testing.T) map[string]string {
 					if !strings.HasPrefix(n.Name, "Gate") || i >= len(vs.Values) {
 						continue
 					}
-					lit, ok := vs.Values[i].(*ast.BasicLit)
-					if !ok || lit.Kind != token.STRING {
-						continue
+					switch x := vs.Values[i].(type) {
+					case *ast.BasicLit:
+						if x.Kind == token.STRING {
+							found[n.Name], _ = strconv.Unquote(x.Value)
+						}
+					case *ast.SelectorExpr: // = blockedby.X: the shared spelling
+						if v, ok := blockedByConsts(t)[x.Sel.Name]; ok {
+							found[n.Name] = v
+						}
 					}
-					v, _ := strconv.Unquote(lit.Value)
-					found[n.Name] = v
 				}
 			}
 		}
@@ -92,8 +96,8 @@ func TestVerdictMeaningsAreCoherent(t *testing.T) {
 	}
 }
 
-// A refusal's blockedBy is a declared value, and equals its verdict except for
-// the verdict-blocked refusal, which names the shorter key the CLI special-cases.
+// A refusal's blockedBy is a declared value. Verdicts that share a key with
+// blockedby are that constant, so no pin test is needed for the spelling.
 func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
 	declared := map[string]bool{}
 	for _, v := range blockedby.All() {
@@ -105,9 +109,6 @@ func TestVerdictRefusalsNameDeclaredBlockedBy(t *testing.T) {
 		}
 		if !declared[m.BlockedBy] {
 			t.Errorf("%q names blockedBy %q, which blockedby.All() does not declare", v, m.BlockedBy)
-		}
-		if v != GateVerdictBlocked && m.BlockedBy != v {
-			t.Errorf("%q names blockedBy %q: a refusal verdict and its blockedBy share a spelling", v, m.BlockedBy)
 		}
 	}
 }
@@ -132,4 +133,29 @@ func TestStaleAndProvenanceFailAreNotifyOnly(t *testing.T) {
 			t.Errorf("%q must be notify-only: %+v", v, m)
 		}
 	}
+}
+
+// blockedByConsts maps each string constant of the blockedby package to its value.
+func blockedByConsts(t *testing.T) map[string]string {
+	t.Helper()
+	f, err := parser.ParseFile(token.NewFileSet(), "../blockedby/blockedby.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]string{}
+	for _, d := range f.Decls {
+		gd, ok := d.(*ast.GenDecl)
+		if !ok || gd.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gd.Specs {
+			vs := spec.(*ast.ValueSpec)
+			for i, n := range vs.Names {
+				if lit, ok := vs.Values[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					out[n.Name], _ = strconv.Unquote(lit.Value)
+				}
+			}
+		}
+	}
+	return out
 }
