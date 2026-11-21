@@ -97,9 +97,9 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 		raise(config.DepthFull, SignalRisky, "diff touches change.riskyPaths")
 	}
 	unchecked := ""
-	if !p.NoScopeDrift && in.Tier != change.TierDocs && in.IssueBodyUnknown {
+	if driftApplies(p, in.Tier) && in.IssueBodyUnknown {
 		unchecked = "issue body not read, so scope drift was not checked"
-	} else if !p.NoScopeDrift && in.Tier != change.TierDocs {
+	} else if driftApplies(p, in.Tier) {
 		if drift := scopeDrift(in.IssueBody, in.Files, p.EffectiveSupportPaths()); len(drift) > 0 {
 			d := config.DepthFull
 			if d.Outranks(driftCap) {
@@ -123,6 +123,20 @@ func Decide(p config.ReviewPolicy, in Input) Decision {
 	}
 	best.DriftUnchecked = unchecked
 	return best
+}
+
+// NeedsIssue reports whether the issue can change the depth of a change of this
+// tier: a label can match at any tier, a declared file set to drift from only
+// where scope drift applies (never for docs). Decide and the worker's issue
+// read share this one rule.
+func NeedsIssue(p config.ReviewPolicy, tier change.Tier) bool {
+	return len(p.Labels) > 0 || (driftApplies(p, tier) && p.MayBeBelowFull())
+}
+
+// driftApplies is the one statement of "a docs-tier change needs no scope-drift
+// check".
+func driftApplies(p config.ReviewPolicy, tier change.Tier) bool {
+	return !p.NoScopeDrift && tier != change.TierDocs
 }
 
 // baseDecision is the depth from labels, then the size rule, then the default.

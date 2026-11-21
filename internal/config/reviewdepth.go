@@ -188,12 +188,6 @@ func (p ReviewPolicy) MayBeBelowFull() bool {
 	return false
 }
 
-// NeedsIssue reports whether the branch's issue can change the depth: it holds
-// a label to match, or a declared file set to drift from.
-func (p ReviewPolicy) NeedsIssue() bool {
-	return len(p.Labels) > 0 || (!p.NoScopeDrift && p.MayBeBelowFull())
-}
-
 // Legacy is "true" or "false" when the policy came from the old boolean, else "".
 func (p ReviewPolicy) Legacy() string { return p.legacy }
 

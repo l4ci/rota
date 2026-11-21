@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
 )
@@ -319,5 +320,35 @@ func TestScopeDriftLineSuffixPointers(t *testing.T) {
 	d := Decide(p, Input{Changed: 3, IssueBody: issue, Files: []string{"internal/cli/doctor.go", "internal/cli/review.go", "internal/git/run.go"}})
 	if d.Signal == SignalScopeDrift {
 		t.Errorf("Decide = %+v, want no scope drift", d)
+	}
+}
+
+// A docs-tier change has no drift to read the issue for, so only a label rule
+// keeps the issue needed; every other tier follows the policy's own answer.
+func TestNeedsIssueByTier(t *testing.T) {
+	noLabels, err := config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	labels, err := config.ReviewPolicyOf(decode(t, `{"ship":{"review":{"default":"full","lightBelow":50,"labels":{"review:none":"none"}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		p    config.ReviewPolicy
+		tier change.Tier
+		want bool
+	}{
+		{"docs without labels", noLabels, change.TierDocs, false},
+		{"docs with labels", labels, change.TierDocs, true},
+		{"full without labels", noLabels, change.TierFull, true},
+		{"small without labels", noLabels, change.TierSmall, true},
+		{"untiered without labels", noLabels, "", true},
+	}
+	for _, c := range cases {
+		if got := NeedsIssue(c.p, c.tier); got != c.want {
+			t.Errorf("%s: NeedsIssue = %v, want %v", c.name, got, c.want)
+		}
 	}
 }
