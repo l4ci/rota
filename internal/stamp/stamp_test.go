@@ -179,3 +179,11 @@ func TestParseRFC3339(t *testing.T) {
 		t.Error("Parse must stay strict: an offset is not a registry stamp")
 	}
 }
+
+func TestDisplayIsUTCWithZoneName(t *testing.T) {
+	loc := time.FixedZone("CEST", 2*3600)
+	got := Display(time.Date(2026, 1, 2, 17, 4, 59, 0, loc))
+	if want := "2026-01-02 15:04 UTC"; got != want {
+		t.Fatalf("Display = %q, want %q", got, want)
+	}
+}

@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -211,7 +212,7 @@ func (e Env) poolEntries(ctx context.Context, ms meterReadings, kind string, lis
 			}
 		}
 		if at, ok := coolingByLog[acct.Name]; ok && acct.Name != "" && pe.Skip == "" {
-			pe.Skip = "limited until " + at.UTC().Format("2006-01-02 15:04 MST")
+			pe.Skip = "limited until " + stamp.Display(at)
 		}
 		entries = append(entries, pe)
 	}
@@ -267,7 +268,7 @@ func noAccount(entries []worker.PoolEntry, restriction string, cfg any) error {
 		slices.Sort(pool)
 		text := "every " + strings.Join(pool, " and ") + " account is cooling down"
 		if len(resets) > 0 {
-			text += "; slots fill again at " + earliest(resets).UTC().Format("2006-01-02 15:04 MST")
+			text += "; slots fill again at " + stamp.Display(earliest(resets))
 		}
 		why = append(why, text+" ("+strings.Join(cooling, ", ")+")")
 	}

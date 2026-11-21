@@ -86,3 +86,9 @@ func ParseNano(v string) time.Time {
 	t, _ := time.Parse(time.RFC3339Nano, v)
 	return t
 }
+
+// Display is t as the human-readable reset time round messages show, in UTC
+// with the zone named: "2026-01-02 15:04 UTC".
+func Display(t time.Time) string { return t.UTC().Format(displayLayout) }
+
+const displayLayout = "2006-01-02 15:04 MST"
