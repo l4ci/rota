@@ -316,7 +316,7 @@ func initCheck(c *Ctx, args []string) (Result, error) {
 // already names a source, is left alone.
 func initIssueSource(c *Ctx, root string) error {
 	cfg := c.deps().Config(root)
-	if _, set := config.Lookup(cfg, "issues.source"); set || len(config.Legacy(root)) > 0 {
+	if _, set := config.Lookup(cfg, config.IssuesSourceKey); set || len(config.Legacy(root)) > 0 {
 		return nil
 	}
 	source := config.SourceFile
@@ -325,7 +325,7 @@ func initIssueSource(c *Ctx, root string) error {
 			source = p
 		}
 	}
-	_, err := config.Set(root, "issues.source", source)
+	_, err := config.Set(root, config.IssuesSourceKey, source)
 	c.configWritten()
 	return err
 }

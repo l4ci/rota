@@ -70,6 +70,6 @@ func Check(root string, cfg any, drift func() string) CheckResult {
 }
 
 func umbrellaFlag(cfg any) any {
-	v, _ := config.Lookup(cfg, "umbrella.enabled")
+	v, _ := config.Lookup(cfg, config.UmbrellaEnabledKey)
 	return v
 }
