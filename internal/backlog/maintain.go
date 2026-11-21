@@ -145,8 +145,8 @@ func openSpans(body string) []Span {
 type OpenSpan struct {
 	Span
 	Section string
-	// Abs is the offset of the line in the file, found as the helper finds it:
-	// where the section body first occurs in the text.
+	// Abs is the offset of the line in the file: the section body's start
+	// offset from section.Find plus the line's offset in the body.
 	Abs int
 }
 
@@ -158,10 +158,8 @@ func openBulletSpans(content string) []OpenSpan {
 		if !ok {
 			continue
 		}
-		body := content[s:e]
-		base := strings.Index(content, body)
-		for _, sp := range openSpans(body) {
-			out = append(out, OpenSpan{Span: sp, Section: name, Abs: base + sp.Start})
+		for _, sp := range openSpans(content[s:e]) {
+			out = append(out, OpenSpan{Span: sp, Section: name, Abs: s + sp.Start})
 		}
 	}
 	return out
