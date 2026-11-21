@@ -326,17 +326,14 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 		_, err := tr.AddComment(b.ctx(), n, "Blocked"+suffix+"\n\n"+marker.Line("blocked"))
 		return err == nil, err
 	}
-	acceptanceRecord, err := b.completionAcceptance(is, itemID, in)
+	acceptanceRecord, err := completionPreflight(itemID, in,
+		func() (string, error) { return b.completionAcceptance(is, itemID, in) },
+		func() (int, error) { return b.proofCount(itemID) })
 	if err != nil {
 		return false, err
 	}
 	if acceptanceRecord != "" {
 		acceptanceRecord = "\n\n" + acceptanceRecord
-	}
-	if in.Reason == "done" && !in.NoProof {
-		if err := requireProof(itemID, func() (int, error) { return b.proofCount(itemID) }); err != nil {
-			return false, err
-		}
 	}
 	var stale []string
 	for _, l := range b.stateLabels() {
