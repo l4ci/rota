@@ -116,7 +116,7 @@ func (s *sweepHost) SweepShells(_ context.Context, cwd string) (int, error) {
 }
 
 func envWith(h host.Host) Env {
-	return Env{NewHost: func(host.Kind) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
+	return Env{Config: diskConfig, NewHost: func(host.Kind) host.Host { return h }, Sleep: func(time.Duration) {}, Now: func() time.Time {
 		return time.Date(2026, 10, 2, 15, 4, 5, 0, time.UTC)
 	}, Getenv: func(k string) string {
 		switch k { // the developer's own account must not reach a dispatch
@@ -267,7 +267,7 @@ func TestDispatchPassesTheAccountConfigDir(t *testing.T) {
 	cfg := `{"round":{"accounts":[{"name":"a","configDir":"/acct/a"}]}}`
 	dir := gittest.Project(t, cfg)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	(&Accounts{Env: Env{Getenv: func(string) string { return t.TempDir() }}}).Assign(bg, dir, "w1", "a")
+	(&Accounts{Env: Env{Config: diskConfig, Getenv: func(string) string { return t.TempDir() }}}).Assign(bg, dir, "w1", "a")
 	f := tmuxFake()
 	envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Task: "T1"})
 	if got := accountEnv(f.spawnOpts); got != "CLAUDE_CONFIG_DIR=/acct/a" {

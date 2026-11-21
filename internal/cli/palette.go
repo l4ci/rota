@@ -28,14 +28,26 @@ import (
 // A verb with a --ui view opens it inside the palette instead: nothing here
 // names a screen, the entry follows the verb's own Command.View.
 func paletteVerb(c *Ctx, root *Command, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
+	cmd := mustPaletteVerb(root, label, verb)
 	e := palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
 		paletteRun(c, root, verb, c.Stdin, c.Stdout, c.Stderr, nil)
 		return nil
 	}}
-	if cmd := findVerb(root, verb); cmd != nil && cmd.View != nil {
+	if cmd.View != nil {
 		e.View = func() (tui.Model, error) { return paletteView(c, root, verb) }
 	}
 	return e
+}
+
+// mustPaletteVerb is the command at a verb path an entry runs. Same rule as
+// gateDecls and receipted verbs: a renamed verb fails the build of the table,
+// not a click on its entry.
+func mustPaletteVerb(root *Command, label string, verb []string) *Command {
+	cmd := findVerb(root, verb)
+	if cmd == nil {
+		panic("palette entry " + label + " names " + strings.Join(verb, " ") + ", which is not in the tree")
+	}
+	return cmd
 }
 
 // paletteRun runs one palette entry as a nested verb. Each entry starts from
@@ -82,6 +94,9 @@ func paletteView(c *Ctx, root *Command, verb []string) (tui.Model, error) {
 // without a round. The label marks the layout in force, read from the round
 // registry each time, so it follows the switch it just made.
 func layoutToggle(c *Ctx) (palette.Entry, bool) {
+	// Checked before the host gates below, so every build proves the path, not
+	// only one with a live layouter.
+	mustPaletteVerb(Tree(), "View: split ⇄ tabs", []string{"layout"})
 	root, err := c.Root()
 	if err != nil {
 		return palette.Entry{}, false

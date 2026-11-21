@@ -15,7 +15,7 @@ func homeAt(h string) func() (string, error) { return func() (string, error) { r
 func TestAccountAssignCachesTheExpandedConfigDir(t *testing.T) {
 	dir := gittest.Project(t, `{"round":{"accounts":[{"kind":"claude","name":"a","dir":"~/.claude-personal"}]}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	acc := &Accounts{Env: Env{Home: homeAt("/home/u"), Getenv: func(string) string { return t.TempDir() }}}
+	acc := &Accounts{Env: Env{Config: diskConfig, Home: homeAt("/home/u"), Getenv: func(string) string { return t.TempDir() }}}
 	if _, _, err := acc.Assign(bg, dir, "w1", "a"); err != nil {
 		t.Fatal(err)
 	}

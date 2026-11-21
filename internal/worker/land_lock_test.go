@@ -13,7 +13,7 @@ import (
 )
 
 func TestLandLockHeld(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 
 	t.Run("free lock reads as not held", func(t *testing.T) {
 		repo := gittest.NewRepo(t, "main")
@@ -55,7 +55,7 @@ func TestLandLockHeld(t *testing.T) {
 }
 
 func TestLandLockHolder(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	if got := env.LandLockHolder(bg, repo); got != "" {
 		t.Fatalf("holder with a free lock = %q, want empty", got)
@@ -77,7 +77,7 @@ func TestLandLockHolder(t *testing.T) {
 }
 
 func TestLandLockHolderPublishesNewFile(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	common, err := rotastatetest.CommonDir(repo)
 	if err != nil {
@@ -115,7 +115,7 @@ func TestLandLockHolderPublishesNewFile(t *testing.T) {
 // An interrupted gate or train (its context cancelled mid-run) frees the land
 // lock and its landing-run marker, so the next run does not wait on a corpse.
 func TestInterruptedLandingRunReleasesLock(t *testing.T) {
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	ctx, cancel := context.WithCancel(bg)
 	err := env.withLandingRun(ctx, repo, "slot", false, func(bool) error {

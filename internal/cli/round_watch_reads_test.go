@@ -38,7 +38,7 @@ func TestWatchForgeSeesAChangeBetweenPasses(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "feat/x", HostName: "solo", Forge: f}
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "feat/x", HostName: "solo", Forge: f}
 	}
 	c := &Ctx{Deps: deps, ctx: context.Background()}
 	pass := func() string {

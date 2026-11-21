@@ -21,7 +21,7 @@ func TestCandidatesStaleClaimListed(t *testing.T) {
 			return git.Result{}, nil
 		}
 		return git.Exec(ctx, dir, args...)
-	}, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}}
+	}, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}}
 	cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestCandidatesStaleClaimDetailIsUTC(t *testing.T) {
 			return git.Result{}, nil
 		}
 		return git.Exec(ctx, dir, args...)
-	}, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}}
+	}, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}}
 	cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if err != nil || len(cs) != 1 || len(cs[0].Checks) == 0 {
 		t.Fatalf("candidates %+v, %v", cs, err)
@@ -92,7 +92,7 @@ func TestStaleClaimsActivity(t *testing.T) {
 				be.prs = []tracker.PR{{Branch: "mac-ben/7-work", UpdatedAt: now.Add(-tc.prAge)}}
 			}
 			calls := 0
-			e := Env{Forge: be.asForge(), Worker: wk(worker.Env{Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}, Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+			e := Env{Forge: be.asForge(), Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Round: roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}, Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 				calls++
 				switch args[0] {
 				case "ls-remote":

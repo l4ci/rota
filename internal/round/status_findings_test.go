@@ -163,7 +163,7 @@ func TestStalledFindingsOwnInputs(t *testing.T) {
 					o.Set("event", jsonx.Obj("kind", "done", "ts", "2026-11-01T11:30:00Z"))
 				}
 			})
-			e := Env{Worker: wk(worker.Env{Now: func() time.Time { return now }})}
+			e := Env{Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }})}
 			e.Round.StallMinutes = 30
 			got := e.stalledFindings(bg, []*Row{r}, map[string]*view{"kit": {}}, map[string]*worker.Slot{"kit": s}, true, map[string]bool{"kit": tc.alive}, map[string]bool{"kit": tc.escalated})
 			if !reflect.DeepEqual(got, tc.want) {

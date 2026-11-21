@@ -74,7 +74,7 @@ func TestPoolReapKeepsTheSlotWhenNodeModulesPointsIn(t *testing.T) {
 	os.MkdirAll(filepath.Join(w2, "node_modules", "vite"), 0o755)
 	os.Symlink(filepath.Join(w2, "node_modules", "vite"), filepath.Join(b, "node_modules", "vite"))
 
-	reaped, err := Env{}.Reap(b, []string{"w1", "w2"}, false)
+	reaped, err := Env{Config: diskConfig}.Reap(b, []string{"w1", "w2"}, false)
 	if err == nil || !strings.Contains(err.Error(), "pnpm install --offline --frozen-lockfile") || !strings.Contains(err.Error(), "w2") {
 		t.Fatalf("want an error naming w2 and the fix, got %v (reaped %v)", err, reaped)
 	}

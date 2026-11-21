@@ -142,7 +142,7 @@ func supportReturnDeps(fake *trackertest.Fake) *Deps {
 	deps := testDeps()
 	deps.NewTracker = func(context.Context, string, any) (backlog.Tracker, error) { return fake, nil }
 	deps.RoundEnv = func(context.Context, string, RoundOpts) round.Env {
-		return round.Env{Worker: round.FromWorkerEnv(worker.Env{}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
+		return round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "main", Forge: returnForge{fake}, SupportLabel: "machine:mac",
 			Round: roundcfg.Settings{Support: "mac", Role: roundcfg.RoleSupport}}
 	}
 	return deps

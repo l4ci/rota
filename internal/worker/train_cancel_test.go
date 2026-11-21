@@ -264,7 +264,7 @@ func TestTrainRunsUnderBracketedRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 	gittest.Run(t, root, "init", "-q", "-b", "main")
-	env := Env{}.WithDefaults()
+	env := Env{Config: diskConfig}.WithDefaults()
 	writeTrainRun(t, env, root, "req-live", os.Getpid())
 	runs, err := env.TrainRuns(bg, root)
 	if err != nil || len(runs) != 1 || runs[0].RequestID != "req-live" {

@@ -84,7 +84,7 @@ func bounceRoot(t *testing.T, cfg string) string {
 
 func storeOver(t *testing.T, root string, fc *fakeComments) BounceStore {
 	t.Helper()
-	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) { return fc, nil }}
+	e := Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (IssueComments, error) { return fc, nil }}
 	st, err := e.BounceStore(root)
 	if err != nil {
 		t.Fatal(err)
@@ -154,7 +154,7 @@ func TestBounceStoreIssue(t *testing.T) {
 // before, and the tracker is never touched.
 func TestBounceStoreRegistryWithoutSupport(t *testing.T) {
 	root := bounceRoot(t, `{"issues":{"source":"github"}}`)
-	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) {
+	e := Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (IssueComments, error) {
 		t.Fatal("the registry store built a tracker")
 		return nil, nil
 	}}
@@ -213,7 +213,7 @@ func TestPostReviewBounce(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		e := Env{Forge: func(string, string, tracker.Settings) (Forge, error) { return nf, nil }}
+		e := Env{Config: diskConfig, Forge: func(string, string, tracker.Settings) (Forge, error) { return nf, nil }}
 		posted, err := e.PostReviewBounce(root, branch, "https://github.com/o/r/pull/70", "abc123", "stale: the PR head moved")
 		if err != nil {
 			t.Fatal(err)
@@ -308,7 +308,7 @@ func TestBounceStoreCapHoldsAgainstARacingWriter(t *testing.T) {
 func TestPostReviewBounceIsIdempotentPerHead(t *testing.T) {
 	nf := &noteForge{notes: map[int][]string{}}
 	root := bounceRoot(t, `{"issues":{"source":"github"},"round":{"support":"mac"}}`)
-	e := Env{Forge: func(string, string, tracker.Settings) (Forge, error) { return nf, nil }}
+	e := Env{Config: diskConfig, Forge: func(string, string, tracker.Settings) (Forge, error) { return nf, nil }}
 	post := func(head string) bool {
 		t.Helper()
 		posted, err := e.PostReviewBounce(root, "mac-ben/12-thing", "https://github.com/o/r/pull/70", head, "stale")
@@ -362,7 +362,7 @@ func TestBounceStoreFailuresDoNotCount(t *testing.T) {
 // Both comment consumers require the capability to check write access.
 func TestIssueCommentConsumersWithoutPushTrustAreRefused(t *testing.T) {
 	root := bounceRoot(t, `{"issues":{"source":"gitlab"},"round":{"support":"mac"}}`)
-	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) { return noTrustComments{}, nil }}
+	e := Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (IssueComments, error) { return noTrustComments{}, nil }}
 	if _, err := e.BounceStore(root); !errors.Is(err, ErrNoPushTrust) {
 		t.Errorf("err = %v, want ErrNoPushTrust", err)
 	}
@@ -374,7 +374,7 @@ func TestIssueCommentConsumersWithoutPushTrustAreRefused(t *testing.T) {
 func TestWriterTrustInjectedFactory(t *testing.T) {
 	root := bounceRoot(t, `{"issues":{"source":"github"}}`)
 	fc := &fakeComments{}
-	e := Env{IssueComments: func(dir string, s tracker.Settings) (IssueComments, error) {
+	e := Env{Config: diskConfig, IssueComments: func(dir string, s tracker.Settings) (IssueComments, error) {
 		if dir != root || s.Source != "github" {
 			t.Errorf("factory arguments = %q, %+v; want root and configured source", dir, s)
 		}
@@ -405,7 +405,7 @@ func TestIssueCommentConsumersMissingTracker(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := bounceRoot(t, `{"issues":{"source":"file"},"round":{"support":"mac"}}`)
-			e := Env{}
+			e := Env{Config: diskConfig}
 			if !tc.omit {
 				e.IssueComments = func(string, tracker.Settings) (IssueComments, error) { return nil, tc.err }
 			}
@@ -430,7 +430,7 @@ func TestIssueCommentConsumersMissingTracker(t *testing.T) {
 
 func TestIssueTrackerReadsRefuseInvalidSource(t *testing.T) {
 	root := bounceRoot(t, `{"issues":{"source":"svn"},"round":{"support":"mac"}}`)
-	e := Env{IssueComments: func(string, tracker.Settings) (IssueComments, error) {
+	e := Env{Config: diskConfig, IssueComments: func(string, tracker.Settings) (IssueComments, error) {
 		t.Error("tracker built over an invalid issues.source")
 		return noTrustComments{}, nil
 	}}

@@ -151,7 +151,7 @@ func TestInspectReconcileDoesNotFetchStaleClaimActivity(t *testing.T) {
 	fr.items["7"].Labels = []string{"claimed:mac-ben@mac"}
 	e := env(nil, fr.asForge())
 	e.Board = fr
-	e.Worker = wk(worker.Env{Now: func() time.Time { return now }})
+	e.Worker = wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }})
 	e.Round.ClaimStaleMinutes = 240
 	fetches := 0
 	e.Git = func(ctx context.Context, dir string, args ...string) (git.Result, error) {

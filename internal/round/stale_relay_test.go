@@ -30,7 +30,7 @@ func TestStaleClaimsTransferredAndBundledActivity(t *testing.T) {
 			if tc.pr.Branch != "" {
 				be.prs = []tracker.PR{tc.pr}
 			}
-			e := Env{Forge: be.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Now: func() time.Time { return now }}), Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
+			e := Env{Forge: be.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Git: func(_ context.Context, _ string, args ...string) (git.Result, error) {
 				if args[0] == "ls-remote" && tc.branch != "" {
 					return git.Result{Stdout: "abc\trefs/heads/" + tc.branch + "\n"}, nil
 				}
@@ -70,7 +70,7 @@ func TestStaleClaimsOnlyReadsLabelledItems(t *testing.T) {
 	}
 	remote.items["7"].Labels = []string{"claimed:ben@main"}
 	be := &staleReadBoard{fakeRemote: remote}
-	e := Env{Forge: remote.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Now: func() time.Time { return now }}), Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
+	e := Env{Forge: remote.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 	got, warnings := e.StaleClaims(bg, t.TempDir(), be, nil)
 	if len(got) != 1 || len(warnings) != 0 {
 		t.Fatalf("stale=%+v warnings=%v", got, warnings)
@@ -85,7 +85,7 @@ func TestStaleClaimsExplicitUnlabelledKey(t *testing.T) {
 	remote := &fakeRemote{claims: map[string]string{"7": "ben@3"}, claimTimes: map[string]map[string]time.Time{"7": {"ben@3": now.Add(-8 * time.Hour)}}}
 	remote.add("7", "Unlabelled claim", "", false, "")
 	be := &staleReadBoard{fakeRemote: remote}
-	e := Env{Forge: remote.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Now: func() time.Time { return now }}), Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
+	e := Env{Forge: remote.asForge(), Round: roundcfg.Settings{ClaimStaleMinutes: 240}, Worker: wk(worker.Env{Config: worker.NoConfig, Now: func() time.Time { return now }}), Git: func(context.Context, string, ...string) (git.Result, error) { return git.Result{}, nil }}
 	got, warnings := e.StaleClaims(bg, t.TempDir(), be, []tracker.IssueKey{tracker.NumKey(7)})
 	if len(got) != 1 || got[0].Holder != "ben@3" || len(warnings) != 0 {
 		t.Fatalf("explicit unlabelled stale claim=%+v warnings=%v", got, warnings)

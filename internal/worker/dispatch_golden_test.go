@@ -59,7 +59,7 @@ func newRig(t *testing.T, kind string) *hostRig {
 	os.WriteFile(filepath.Join(r.tmuxDir, "pane"), []byte("? for shortcuts\n"), 0o644)
 	r.hostEnv = map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w9"}
 	run := fakeBinRunner(t, r.herdrDir, r.tmuxDir)
-	r.goEnv = Env{
+	r.goEnv = Env{Config: diskConfig,
 		NewHost: func(d host.Kind) host.Host { return host.New(d, hostDeps(run, r.hostEnv)) },
 		Sleep:   func(time.Duration) {},
 		Getenv:  envWith(nil).Getenv,

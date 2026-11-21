@@ -163,7 +163,7 @@ func TestAssignUnderSoloRefusesACodexWorker(t *testing.T) {
 
 func TestAssignUnderSoloSkipsTheAccountPick(t *testing.T) {
 	f := soloAssign(t)
-	f.env = f.env.WithAccounts(&worker.Accounts{})
+	f.env = f.env.WithAccounts(&worker.Accounts{Env: worker.Env{Config: worker.NoConfig}})
 	f.config(t, `{"round":{"accounts":[{"name":"a","configDir":"/nonexistent"}]}}`)
 	if _, err := f.assign("12", "ben", nil); err != nil {
 		t.Fatalf("no account is picked under solo: %v", err)
@@ -329,7 +329,7 @@ func TestReportRearmsWaitForASoloSlot(t *testing.T) {
 	if _, err := f.env.ReportSlot(bg, f.root, ReportOpts{Slot: "ben", State: "done"}); err != nil {
 		t.Fatal(err)
 	}
-	var e worker.Env
+	e := worker.Env{Config: worker.NoConfig}
 	wait := func() worker.WaitResult {
 		res, err := e.Wait(context.Background(), f.root, worker.WaitOpts{Slots: []string{"ben"}})
 		if err != nil {
