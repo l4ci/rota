@@ -75,12 +75,10 @@ type bullet struct {
 // a line is its stamp; earlier comment text belongs to the body.
 func parseBullets(file string) []bullet {
 	var out []bullet
-	for i, l := range strings.Split(file, "\n") {
-		if !strings.HasPrefix(l, "- ") {
-			continue
-		}
-		p := bulletfmt.Parse(l)
-		b := bullet{Line: i, Title: p.Title, Body: p.Body, Stamp: p.Stamp}
+	lines := strings.Split(file, "\n")
+	for _, sp := range bulletfmt.Spans(lines) {
+		p := bulletfmt.Parse(lines[sp.Start])
+		b := bullet{Line: sp.Start, Title: p.Title, Body: p.Body, Stamp: p.Stamp}
 		parseStamp(&b, p.Stamp)
 		out = append(out, b)
 	}

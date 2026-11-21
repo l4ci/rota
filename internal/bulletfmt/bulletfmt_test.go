@@ -239,3 +239,17 @@ func TestBullets(t *testing.T) {
 		}
 	}
 }
+
+func TestSpans(t *testing.T) {
+	lines := []string{"# H", "", "- **A** — x", "  more", "", "- plain", "\tcont", "prose", "- **B**"}
+	want := []Span{{Start: 2, End: 4, Title: "A"}, {Start: 5, End: 7}, {Start: 8, End: 9, Title: "B"}}
+	got := Spans(lines)
+	if len(got) != len(want) {
+		t.Fatalf("Spans = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Spans[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
