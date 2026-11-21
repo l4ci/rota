@@ -43,7 +43,8 @@
     "small": [
       "bash test/fast.sh {files}"
     ],
-    "rerunCheck": "SECTION_LIST={check} bash test/gate.sh"
+    "rerunCheck": "SECTION_LIST={check} bash test/gate.sh",
+    "smokeSectionsDir": "test/sections"
   },
   "round": {
     "sharedPaths": [
