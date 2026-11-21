@@ -2,6 +2,7 @@ package reap
 
 import (
 	"context"
+	"strings"
 
 	"github.com/l4ci/rota/internal/git"
 )
@@ -92,13 +93,21 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 	if in.ProcessUses != nil {
 		ri.ProcessUses = in.ProcessUses
 	}
-	if in.Root == "" || ri.Git == nil {
+	bare := func() (Count, []string) {
 		s := &state{in: ri, live: newOwnership(nil, "", "", nil)}
 		cands, _ := findSysTmp(ctx, s)
 		return unheld(cands), s.warnings
 	}
+	if in.Root == "" || ri.Git == nil {
+		return bare()
+	}
 	res, err := Find(ctx, ri, []string{KindSysTmp})
 	if err != nil {
+		// A project dir that is no git repo has no checkouts for a dir to hold;
+		// the process table still judges it. Any other git failure stays closed.
+		if strings.Contains(err.Error(), "not a git repository") {
+			return bare()
+		}
 		return Count{}, []string{"system temp dir not checked: " + err.Error()}
 	}
 	return unheld(res.Candidates), res.Warnings

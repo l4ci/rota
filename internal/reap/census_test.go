@@ -135,3 +135,23 @@ func TestTakeCensusSysTmpProcessUsesIsAuthoritative(t *testing.T) {
 		t.Errorf("no reader anywhere must hold every dir: %+v", got.LeakedTemp)
 	}
 }
+
+// A project dir outside any git repo has no checkouts to hold a dir, so the
+// systmp count still runs; any other git failure leaves it unchecked.
+func TestTakeCensusSysTmpToleratesNoGitRepoOnly(t *testing.T) {
+	sys := sysTemp(t, map[string]time.Duration{"rota-smoke.old": 3 * time.Hour})
+	failing := func(stderr string) git.Runner {
+		return func(context.Context, string, ...string) (git.Result, error) {
+			return git.Result{ExitCode: 128, Stderr: stderr}, nil
+		}
+	}
+	free := func() ([]ProcUse, error) { return nil, nil }
+	in := CensusInput{Root: t.TempDir(), SystemTemp: sys, ProcessUses: free, Git: failing("fatal: not a git repository (or any of the parent directories): .git")}
+	if got := TakeCensus(context.Background(), in); got.LeakedTemp.N != 1 || len(got.Warnings) != 0 {
+		t.Errorf("no repo: %+v warnings %v, want 1 dir and no warning", got.LeakedTemp, got.Warnings)
+	}
+	in.Git = failing("fatal: index file corrupt")
+	if got := TakeCensus(context.Background(), in); got.LeakedTemp.N != 0 || len(got.Warnings) != 1 {
+		t.Errorf("other git error: %+v warnings %v, want unchecked with a warning", got.LeakedTemp, got.Warnings)
+	}
+}
