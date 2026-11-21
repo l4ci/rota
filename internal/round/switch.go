@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
@@ -248,7 +249,7 @@ func limitedRefusal(account string, pe worker.PoolEntry) error {
 	}
 	why := "account " + account + " is at its usage limit"
 	if pe.Meter.ResetsAt != nil {
-		why += "; it resets at " + pe.Meter.ResetsAt.UTC().Format("2006-01-02 15:04 MST")
+		why += "; it resets at " + stamp.Display(*pe.Meter.ResetsAt)
 	} else if pe.Skip != "" {
 		why += " (" + pe.Skip + ")"
 	}

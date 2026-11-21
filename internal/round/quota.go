@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/limits"
 	"github.com/l4ci/rota/internal/roundcfg"
+	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -163,7 +164,7 @@ func (e Env) QuotaCap(ctx context.Context, root string, set roundcfg.Settings) C
 
 // coolingWhy is the reason text: which accounts, and when the first resets.
 func coolingWhy(pool string, resumes time.Time) string {
-	return fmt.Sprintf("every %s account is cooling down; slots fill again at %s", pool, resumes.UTC().Format("2006-01-02 15:04 MST"))
+	return fmt.Sprintf("every %s account is cooling down; slots fill again at %s", pool, stamp.Display(resumes))
 }
 
 func earliest(ts []time.Time) time.Time {
