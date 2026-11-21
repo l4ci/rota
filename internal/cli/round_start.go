@@ -238,7 +238,7 @@ func roundStart(fs *flag.FlagSet) RunFunc {
 			d.Set("slate", jsonx.Strings(st.Slate))
 		}
 		d.Set("candidates", candidateList(cands))
-		notePath := handoffFile(c.deps(), root, cfg)
+		notePath := hook.ResolveHandoff(orchestratorFacts(c.deps(), root, cfg))
 		if notePath == "" {
 			c.Warn("%s: the orchestrator handoff note was not read", noHandoffBaseMsg(cfg))
 		}

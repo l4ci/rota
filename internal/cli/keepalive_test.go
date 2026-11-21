@@ -9,6 +9,7 @@ import (
 
 	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/hook"
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 )
@@ -25,7 +26,7 @@ func kaProject(t *testing.T, cfg string) string {
 }
 
 func kaHandoff(dir string) string {
-	return handoffFile(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), dir))
+	return hook.ResolveHandoff(orchestratorFacts(defaultDeps(), dir, config.Load(cfgdir.OSEnv(), dir)))
 }
 
 // kaChild is a shell child that counts its starts, records its arguments and

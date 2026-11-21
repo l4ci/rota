@@ -182,11 +182,11 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	}
 	switch {
 	case hc.who.Orchestrator || !anySession:
-		hc.handoff = handoffFile(c.deps(), hc.root, hc.cfg)
+		hc.handoff = hook.ResolveHandoff(orchestratorFacts(c.deps(), hc.root, hc.cfg))
 	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
 		// A work session pauses to .rota/handoff/<its branch>.md, where
 		// /rota-pause writes it; only the auto guard reads it.
-		hc.handoff = branchHandoffFile(c.deps(), hc.root, hc.cwd)
+		hc.handoff = hook.ResolveHandoff(workSessionFacts(c.deps(), hc.root, hc.cwd))
 	}
 	return hc, true
 }
@@ -229,18 +229,13 @@ func hookReadContext(c *Ctx) (hc hookContext, ok bool) {
 	return hc, true
 }
 
-// branchHandoffFile is the absolute `.rota/handoff/<branch>.md` of the branch
-// checked out in cwd, the path `rota status handoff <branch> --canonical`
-// returns from there. "" on a detached HEAD, so no note counts.
-func branchHandoffFile(d *Deps, root, cwd string) string {
-	branch, err := d.Repo(cwd).CurrentBranch(context.Background())
-	if err != nil || branch == "" {
-		return ""
-	}
-	return hook.NotePath(root, branch)
+// workSessionFacts reads the branch checked out in cwd; "" on a detached HEAD.
+func workSessionFacts(d *Deps, root, cwd string) hook.HandoffFacts {
+	branch, _ := d.Repo(cwd).CurrentBranch(context.Background())
+	return hook.HandoffFacts{Role: hook.RoleWorkSession, Root: root, Branch: branch}
 }
 
-// noHandoffBaseMsg says why handoffFile found no path: the named key when
+// noHandoffBaseMsg says why the orchestrator handoff resolved no path: the named key when
 // git.baseBranch is set but missing, else the shared candidate list.
 func noHandoffBaseMsg(cfg any) string {
 	if v, err := config.Value(cfg, "git.baseBranch"); err == nil {
@@ -251,16 +246,10 @@ func noHandoffBaseMsg(cfg any) string {
 	return noBaseMsg
 }
 
-// handoffFile is the absolute `.rota/handoff/<base>.md`, the path
-// `rota status handoff <base> --canonical` returns. It is "" when no base
-// resolves, so a caller reads no note rather than one filed under a guessed
-// branch.
-func handoffFile(d *Deps, root string, cfg any) string {
-	base := hookBase(d, root, cfg)
-	if base == "" {
-		return ""
-	}
-	return hook.NotePath(root, base)
+// orchestratorFacts reads the base the orchestrator's handoff is filed under;
+// Base is "" when none resolves.
+func orchestratorFacts(d *Deps, root string, cfg any) hook.HandoffFacts {
+	return hook.HandoffFacts{Role: hook.RoleOrchestrator, Root: root, Base: hookBase(d, root, cfg)}
 }
 
 func hookBase(d *Deps, dir string, cfg any) string {
