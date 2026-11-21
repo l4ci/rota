@@ -64,28 +64,51 @@ func TestResolveIssueActor(t *testing.T) {
 	}
 }
 
-// IssueProvider is the one rule issues adds to the forge resolver: an
-// issues.source of github or gitlab names the provider outright, whatever the
-// forge; any other source is dir's forge, as the kind resolves it.
-func TestIssueProvider(t *testing.T) {
-	const gh = "https://github.com/o/r.git"
+// resolveIssueSource is the one place an issues.source becomes a provider:
+// every source crossed with each use, the origin kinds that tell them apart.
+func TestResolveIssueSource(t *testing.T) {
+	const gh, gl, unk = "https://github.com/o/r.git", "https://gitlab.com/o/r.git", "https://example.org/r.git"
 	for _, c := range []struct {
-		origin string
-		s      Settings
-		kind   ForgeKind
-		want   string
+		name, origin string
+		s            Settings
+		use          issueUse
+		want, how    string // want "" is an error
+		own          bool
 	}{
-		{gh, Settings{Source: "gitlab"}, ForgeActor, "gitlab"},
-		{"", Settings{Source: "github"}, ForgeActor, "github"},
-		{gh, Settings{Source: "file"}, ForgeActor, "github"},
-		{"", Settings{Source: "jira"}, ForgeActor, "local"},
-		{gh, Settings{Source: "forge", Provider: "gitlab"}, ForgeActor, "gitlab"}, // forge.provider beats the origin
-		{"https://example.org/r.git", Settings{Source: "forge"}, ForgeReader, "github"},
-		{"https://example.org/r.git", Settings{Source: "forge"}, ForgeActor, ""},
+		{"github outright", gl, Settings{Source: "github"}, useActor, "github", HowConfig, false},
+		{"gitlab outright, no origin", "", Settings{Source: "gitlab"}, useReader, "gitlab", HowConfig, false},
+		{"github outright for the tracker", gl, Settings{Source: "github"}, useTracker, "github", HowConfig, false},
+		{"forge follows the origin", gl, Settings{Source: "forge"}, useActor, "gitlab", HowOrigin, false},
+		{"forge.provider beats the origin", gh, Settings{Source: "forge", Provider: "gitlab"}, useReader, "gitlab", HowConfig, false},
+		{"forge, no origin, is local", "", Settings{Source: "forge"}, useTracker, "local", HowNoOrigin, false},
+		{"forge, unknown origin, actor refuses", unk, Settings{Source: "forge"}, useActor, "", "", false},
+		{"forge, unknown origin, reader assumes", unk, Settings{Source: "forge"}, useReader, "github", HowAssumed, false},
+		{"forge, unknown origin, tracker assumes", unk, Settings{Source: "forge"}, useTracker, "github", HowAssumed, false},
+		{"legacy issues follows the origin", gl, Settings{Source: "issues"}, useTracker, "gitlab", "", false},
+		{"legacy issues, forge.provider local, still the origin", gh, Settings{Source: "issues", Provider: "local"}, useTracker, "github", "", false},
+		{"legacy issues, no origin, cannot tell", "", Settings{Source: "issues"}, useTracker, "", "", false},
+		{"legacy issues as an actor is dir's forge", "", Settings{Source: "issues"}, useActor, "local", HowNoOrigin, false},
+		{"file as a reader is dir's forge", gh, Settings{Source: "file"}, useReader, "github", HowOrigin, false},
+		{"file has no tracker", gh, Settings{Source: "file"}, useTracker, "", "", false},
+		{"unknown source has no tracker", gh, Settings{Source: "svn"}, useTracker, "", "", false},
+		{"jira names its own tracker", gh, Settings{Source: "jira"}, useActor, "", "", true},
+		{"jira builds its own tracker", gh, Settings{Source: "jira"}, useTracker, "", "", true},
+		{"jira as a reader is dir's forge", gh, Settings{Source: "jira"}, useReader, "github", HowOrigin, false},
 	} {
-		r, err := IssueProvider(context.Background(), c.s, c.kind, "", execOrigin(c.origin))
-		if r.Provider != c.want || (err != nil) != (c.want == "") {
-			t.Errorf("origin %q %+v kind %d: %+v, %v; want %q", c.origin, c.s, c.kind, r, err, c.want)
+		r, err := newCLI(c.s, "", execOrigin(c.origin)).resolveIssueSource(context.Background(), c.s, c.s.Source, c.use)
+		switch {
+		case c.own:
+			if err != nil || r.own == nil {
+				t.Errorf("%s: %+v, %v; want an own kind", c.name, r, err)
+			}
+		case c.want == "":
+			if err == nil {
+				t.Errorf("%s: %+v, want an error", c.name, r)
+			}
+		default:
+			if err != nil || r.own != nil || r.Provider != c.want || r.How != c.how {
+				t.Errorf("%s: %+v, %v; want %s via %q", c.name, r, err, c.want, c.how)
+			}
 		}
 	}
 }

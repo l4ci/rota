@@ -72,18 +72,6 @@ type Forge interface {
 	Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error
 }
 
-// Provider is the issue tracker's provider for dir ("" is the process cwd).
-// An issues.source of github or gitlab names it outright; any other source
-// takes dir's forge as kind resolves it (tracker.ResolveProvider), which can be
-// the local forge.
-func Provider(ctx context.Context, env Env, kind tracker.ForgeKind, dir string) (tracker.Resolution, error) {
-	s, err := env.settings()
-	if err != nil {
-		return tracker.Resolution{}, err
-	}
-	return tracker.IssueProvider(ctx, s, kind, dir, env.Opts...)
-}
-
 func noProvider(verb string) error {
 	return fmt.Errorf("%w: cannot %s (issues.source does not name a tracker, and the forge is local: no origin remote, or forge.provider local)", ErrNoProvider, verb)
 }
