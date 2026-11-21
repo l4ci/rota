@@ -43,10 +43,6 @@ func CheckTitle(title string) error {
 // break splits the bullet, "-->" closes its stamp early. what names the field
 // in the error. Both stores' write paths call it on body, amend and
 // replacement text.
-// CheckLine refuses text that would break the one-line bullet format: a line
-// break splits the bullet, "-->" closes its stamp early. what names the field
-// in the error. Both stores' write paths call it on body, amend and
-// replacement text.
 func CheckLine(what, s string) error {
 	if strings.ContainsAny(s, "\r\n") {
 		return fmt.Errorf("%w: %s must be a single line", ErrInvalid, what)
