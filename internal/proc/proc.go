@@ -105,23 +105,9 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	if c.Detach {
 		return detach(c)
 	}
-	switch {
-	case c.Timeout == 0:
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, DefaultTimeout)
-		defer cancel()
-	case c.Timeout > 0:
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
-		defer cancel()
-	}
-	cmd := exec.CommandContext(ctx, c.Name, c.Args...)
-	cmd.Dir = c.Dir
-	if c.Environ != nil {
-		cmd.Env = c.Environ
-	} else if len(c.Env) > 0 {
-		cmd.Env = append(os.Environ(), c.Env...)
-	}
+	ctx, cancel := withTimeout(ctx, c)
+	defer cancel()
+	cmd := newCmd(ctx, c)
 	if c.Stdin != nil {
 		cmd.Stdin = bytes.NewReader(c.Stdin)
 	}
@@ -129,7 +115,6 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 		cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	}
 	if c.Group {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 		if c.Kill != nil {
 			cmd.Cancel = func() error { return c.Kill(cmd.Process.Pid) }
@@ -205,9 +190,6 @@ func detach(c Cmd) (Result, error) {
 	if c.Stdio != nil {
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = c.Stdio.In, c.Stdio.Out, c.Stdio.Err
 	}
-	if c.Group {
-		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	}
 	if err := start(cmd, c.OnStart); err != nil {
 		return Result{}, err
 	}
@@ -235,4 +217,36 @@ func (b *capBuf) Write(p []byte) (int, error) {
 	}
 	b.buf.Write(p)
 	return n, nil
+}
+
+// newCmd turns c into an *exec.Cmd: Dir, the environment and Group. A nil ctx
+// builds a plain exec.Command (detach, which ctx must not reach).
+func newCmd(ctx context.Context, c Cmd) *exec.Cmd {
+	var cmd *exec.Cmd
+	if ctx == nil {
+		cmd = exec.Command(c.Name, c.Args...)
+	} else {
+		cmd = exec.CommandContext(ctx, c.Name, c.Args...)
+	}
+	cmd.Dir = c.Dir
+	if c.Environ != nil {
+		cmd.Env = c.Environ
+	} else if len(c.Env) > 0 {
+		cmd.Env = append(os.Environ(), c.Env...)
+	}
+	if c.Group {
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	}
+	return cmd
+}
+
+// withTimeout bounds ctx by c.Timeout (0 is DefaultTimeout, NoTimeout is none).
+func withTimeout(ctx context.Context, c Cmd) (context.Context, context.CancelFunc) {
+	switch {
+	case c.Timeout == 0:
+		return context.WithTimeout(ctx, DefaultTimeout)
+	case c.Timeout > 0:
+		return context.WithTimeout(ctx, c.Timeout)
+	}
+	return ctx, func() {}
 }
