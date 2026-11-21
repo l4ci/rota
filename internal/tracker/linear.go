@@ -749,17 +749,11 @@ func (l *Linear) EnsureLabels(ctx context.Context, names []string, autoCreate bo
 }
 
 func (l *Linear) AddLabels(ctx context.Context, key IssueKey, labels []string, autoCreate bool) error {
-	if len(uniq(labels)) == 0 {
-		return nil
-	}
-	return l.Edit(ctx, key, IssueEdit{AddLabels: labels, NoCreateLabels: !autoCreate})
+	return editLabels(ctx, l.Edit, key, IssueEdit{AddLabels: labels, NoCreateLabels: !autoCreate})
 }
 
 func (l *Linear) RemoveLabels(ctx context.Context, key IssueKey, labels []string) error {
-	if len(uniq(labels)) == 0 {
-		return nil
-	}
-	return l.Edit(ctx, key, IssueEdit{RemoveLabels: labels})
+	return editLabels(ctx, l.Edit, key, IssueEdit{RemoveLabels: labels})
 }
 
 // filter is the IssueFilter of f on the team.
