@@ -80,3 +80,19 @@ func completionAcceptanceRecord(id string, unmet []acceptance.Status, in Complet
 	}
 	return AcceptanceRecord(unmet, in.UnmetReason), nil
 }
+
+// completionPreflight is the step both backends' Complete run before writing:
+// the acceptance record first, then the proof gate on a done close without
+// NoProof. Each backend supplies its own acceptance check and proof count.
+func completionPreflight(id string, in CompleteInput, acceptance func() (string, error), proofCount func() (int, error)) (string, error) {
+	record, err := acceptance()
+	if err != nil {
+		return "", err
+	}
+	if in.Reason == "done" && !in.NoProof {
+		if err := requireProof(id, proofCount); err != nil {
+			return "", err
+		}
+	}
+	return record, nil
+}

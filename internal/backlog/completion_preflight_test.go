@@ -39,3 +39,41 @@ func TestUmbrellaAcceptancePreflightUsesOwner(t *testing.T) {
 		t.Fatal("preflight mutated owner issue")
 	}
 }
+
+func TestCompletionPreflightOrderAndGate(t *testing.T) {
+	errAcc := errors.New("acceptance")
+	cases := []struct {
+		name       string
+		in         CompleteInput
+		accErr     error
+		count      int
+		wantProofs int
+		wantErr    string
+	}{
+		{"done without proof refuses", CompleteInput{Reason: "done"}, nil, 0, 1, "no proof recorded"},
+		{"done with proof passes", CompleteInput{Reason: "done"}, nil, 1, 1, ""},
+		{"no-proof skips the count", CompleteInput{Reason: "done", NoProof: true}, nil, 0, 0, ""},
+		{"non-done skips the count", CompleteInput{Reason: "wontfix"}, nil, 0, 0, ""},
+		{"acceptance error wins before the count", CompleteInput{Reason: "done"}, errAcc, 0, 0, "acceptance"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			proofs := 0
+			rec, err := completionPreflight("42", c.in,
+				func() (string, error) { return "RECORD", c.accErr },
+				func() (int, error) { proofs++; return c.count, nil })
+			if proofs != c.wantProofs {
+				t.Fatalf("proof count calls = %d, want %d", proofs, c.wantProofs)
+			}
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("err = %v, want %q", err, c.wantErr)
+				}
+				return
+			}
+			if err != nil || rec != "RECORD" {
+				t.Fatalf("got (%q, %v), want (RECORD, nil)", rec, err)
+			}
+		})
+	}
+}
