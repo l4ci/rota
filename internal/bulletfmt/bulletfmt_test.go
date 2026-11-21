@@ -225,3 +225,17 @@ func TestCheckMarker(t *testing.T) {
 		}
 	}
 }
+
+func TestBullets(t *testing.T) {
+	text := "intro\n- **One** a\n  - **Nested** not a bullet start\n- plain\n- **A*B** star\n- **Two** b\n"
+	got := Bullets(text)
+	want := []Bullet{{Start: strings.Index(text, "- **One**"), Title: "One"}, {Start: strings.Index(text, "- **Two**"), Title: "Two"}}
+	if len(got) != len(want) {
+		t.Fatalf("Bullets = %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("Bullets[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}

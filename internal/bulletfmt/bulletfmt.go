@@ -84,6 +84,35 @@ func Title(line string) (title string, ok bool) {
 	return strings.TrimSpace(m[1]), true
 }
 
+// Bullet is a titled bullet found in a text: the byte offset of its first line
+// and its title as Title reads it.
+type Bullet struct {
+	Start int
+	Title string
+}
+
+// Bullets lists, in order, every titled bullet of text that starts a line
+// (indented lines continue a bullet, they do not open one). It is the one
+// title grammar: a line titleRe cannot parse is not listed, so every verb that
+// selects by title sees the same set.
+func Bullets(text string) []Bullet {
+	var out []Bullet
+	for off := 0; off < len(text); {
+		line := text[off:]
+		next := len(text)
+		if i := strings.IndexByte(line, '\n'); i >= 0 {
+			line, next = line[:i], off+i+1
+		}
+		if strings.HasPrefix(line, "- ") {
+			if t, ok := Title(line); ok {
+				out = append(out, Bullet{Start: off, Title: t})
+			}
+		}
+		off = next
+	}
+	return out
+}
+
 // Render is the line a store writes for a new entry; stamp is the text between
 // "<!-- " and " -->".
 func Render(title, body, stamp string) string {

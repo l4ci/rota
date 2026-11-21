@@ -89,9 +89,9 @@ func (s Store) PathEntries(file string) ([]PathEntry, error) {
 			return err
 		}
 		for _, topic := range section.Topics(content) {
-			for _, loc := range bulletStart.FindAllStringSubmatchIndex(topic.Body, -1) {
-				title := topic.Body[loc[2]:loc[3]]
-				block := strings.TrimSpace(topic.Body[loc[0]:bulletfmt.EndOffset(topic.Body, loc[0])])
+			for _, b := range bulletfmt.Bullets(topic.Body) {
+				title := b.Title
+				block := strings.TrimSpace(topic.Body[b.Start:bulletfmt.EndOffset(topic.Body, b.Start)])
 				if !scopedMatch(block, relative) {
 					continue
 				}

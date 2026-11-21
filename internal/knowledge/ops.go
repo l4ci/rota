@@ -257,9 +257,30 @@ type RenameResult struct {
 	Changed bool
 }
 
-var (
-	bulletStart = regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`)
-)
+// selectBullet is the one title lookup RenameTopic's bullet mode and Remove
+// share: bulletfmt's title grammar and bulletfmt.SelectTitle's case rule. A
+// miss is ErrNotFound and a title two bullets share is ErrMultiMatch naming
+// every hit, so the verbs cannot disagree on what a title is. topic is the
+// heading the bullets sit under, km the file, for the messages.
+func selectBullet(body, title, topic, km string) (bulletfmt.Bullet, error) {
+	all := bulletfmt.Bullets(body)
+	titles := make([]string, len(all))
+	for i, b := range all {
+		titles[i] = b.Title
+	}
+	hits := bulletfmt.SelectTitle(titles, title)
+	switch {
+	case len(hits) == 0:
+		return bulletfmt.Bullet{}, notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
+	case len(hits) > 1:
+		named := make([]string, len(hits))
+		for i, h := range hits {
+			named[i] = "'" + titles[h] + "'"
+		}
+		return bulletfmt.Bullet{}, fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s: %s", ErrMultiMatch, len(hits), title, topic, km, strings.Join(named, ", "))
+	}
+	return all[hits[0]], nil
+}
 
 // RenameTopic renames the "## from" heading to "## to" and re-keys the
 // sidecar entries (topic mode, title empty), or moves the single bullet
@@ -348,17 +369,11 @@ func (s Store) renameLocked(km, sidecar, from, to, title, mode string) (RenameRe
 		return RenameResult{}, notFound("target topic '%s' not found in %s — append `## %s` heading before moving bullets", to, km, to)
 	}
 	srcBody := content[srcStart:srcEnd]
-	var tm []int
-	for _, m := range bulletStart.FindAllStringSubmatchIndex(srcBody, -1) {
-		if srcBody[m[2]:m[3]] == title {
-			tm = m
-			break
-		}
+	hit, err := selectBullet(srcBody, title, from, km)
+	if err != nil {
+		return RenameResult{}, err
 	}
-	if tm == nil {
-		return RenameResult{}, notFound("bullet titled '%s' not found under '## %s' in %s", title, from, km)
-	}
-	bStart := tm[0]
+	bStart := hit.Start
 	bEnd := bulletfmt.EndOffset(srcBody, bStart)
 	block := strings.TrimRight(srcBody[bStart:bEnd], "\n")
 	// The collapse of blank lines around the removed bullet is bulletfmt's, as
@@ -500,26 +515,13 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 			return notFound("topic '%s' not found in %s", topic, km)
 		}
 		body := content[st:en]
-		all := bulletStart.FindAllStringSubmatchIndex(body, -1)
-		titles := make([]string, len(all))
-		for i, m := range all {
-			titles[i] = body[m[2]:m[3]]
-		}
-		hits := bulletfmt.SelectTitle(titles, title)
-		switch {
-		case len(hits) == 0:
-			return notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
-		case len(hits) > 1:
-			named := make([]string, len(hits))
-			for i, h := range hits {
-				named[i] = "'" + titles[h] + "'"
-			}
-			return fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s: %s", ErrMultiMatch, len(hits), title, topic, km, strings.Join(named, ", "))
+		hit, err := selectBullet(body, title, topic, km)
+		if err != nil {
+			return err
 		}
 		// The tier entry is keyed by the stored title, not the typed one.
-		title = titles[hits[0]]
-		hit := all[hits[0]]
-		a := st + hit[0]
+		title = hit.Title
+		a := st + hit.Start
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Delete(topic, title); return err }); err != nil {
 			return err
 		}
@@ -528,7 +530,7 @@ func (s Store) Remove(scope, topic, title string) (RemoveResult, error) {
 		if _, err := s.FoldHits(scope); err != nil {
 			return err
 		}
-		next := bulletfmt.DeleteSpan(content, a, st+bulletfmt.EndOffset(body, hit[0]))
+		next := bulletfmt.DeleteSpan(content, a, st+bulletfmt.EndOffset(body, hit.Start))
 		if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 			return err
 		}
