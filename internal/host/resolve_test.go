@@ -77,6 +77,8 @@ func TestResolveLaunch(t *testing.T) {
 		{"no pane, dispatch herdr, both installed", "herdr", nil, []string{"herdr", "tmux"}, Launch{Herdr, true}, false},
 		{"no pane, dispatch herdr, not installed", "herdr", nil, []string{"tmux"}, Launch{}, true},
 		{"no pane, dispatch tmux, not installed", "tmux", nil, nil, Launch{}, true},
+		{"no pane, dispatch orca", "orca", nil, []string{"orca"}, Launch{Orca, false}, false},
+		{"no pane, dispatch orca, not installed", "orca", nil, []string{"herdr", "tmux"}, Launch{}, true},
 		{"TMUX", "", tmuxPane, []string{"tmux"}, Launch{Tmux, false}, false},
 		{"TMUX, dispatch herdr", "herdr", tmuxPane, []string{"herdr", "tmux"}, Launch{Tmux, false}, false},
 		{"herdr pane, dispatch tmux", "tmux", herdrPane, []string{"herdr", "tmux"}, Launch{Herdr, false}, false},

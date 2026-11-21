@@ -28,11 +28,4 @@ func TestOrcaResolutionIsExplicit(t *testing.T) {
 	if got := Resolve(Tmux, Kind("orca"), noenv, path); got != Tmux {
 		t.Fatalf("registry ignored: %q", got)
 	}
-	launch, err := ResolveLaunch(Kind("orca"), noenv, path)
-	if err != nil || launch != (Launch{Kind: Kind("orca")}) {
-		t.Fatalf("launch = %+v, %v", launch, err)
-	}
-	if _, err := ResolveLaunch(Kind("orca"), noenv, func(string) (string, error) { return "", errors.New("missing") }); err == nil {
-		t.Fatal("missing explicit orca silently fell back")
-	}
 }
