@@ -9,7 +9,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"unicode"
+
+	"github.com/l4ci/rota/internal/frontmatter"
 )
 
 // Skill is the embedded SKILL.md of one skill; ok is false for an unknown name.
@@ -96,30 +97,13 @@ func (s *Set) Stubbed() (*Set, error) {
 	return out, nil
 }
 
-// fenceSpace reports the characters Python's str.isspace() accepts: Go's
-// unicode.IsSpace plus the ASCII separators U+001C to U+001F.
-func fenceSpace(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }
-
 func stub(skill string, full []byte) ([]byte, error) {
-	// The fence rule is scripts/fmlite.py's: a first line of "---" and the next
-	// line of "---", each ignoring trailing whitespace as Python's str.rstrip()
-	// does (fenceSpace), so CRLF files, an NBSP after a fence and a closing
-	// fence at end of file are all front matter. The fixtures in
-	// test/fixtures/frontmatter pin both implementations to it.
-	lines := strings.Split(string(full), "\n")
-	end := -1
-	if strings.TrimRightFunc(lines[0], fenceSpace) == "---" {
-		for i := 1; i < len(lines); i++ {
-			if strings.TrimRightFunc(lines[i], fenceSpace) == "---" {
-				end = i
-				break
-			}
-		}
-	}
-	if end < 0 {
+	// The fence rule is frontmatter.Fence's, shared with scripts/fmlite.py.
+	bs, be, _, ok := frontmatter.Fence(string(full))
+	if !ok {
 		return nil, fmt.Errorf("skills: %s/SKILL.md has no frontmatter to keep in a stub", skill)
 	}
-	fm := strings.Join(lines[1:end], "\n")
+	fm := strings.TrimSuffix(string(full)[bs:be], "\n")
 	head := "---\n" + fm + "\n---\n\n"
 	return []byte(head + fmt.Sprintf("# %[1]s\n\nThis skill's text is served by the installed `rota` binary, so it always matches the verbs and flags that binary accepts. Run:\n\n```\nrota skills get %[1]s\n```\n\nand follow what it prints. Its first line names the base directory that holds the skill's files; relative links in the text resolve against it, and the footer lists their absolute paths. Reference files it cites: `rota skills get %[1]s --references` lists them, `rota skills get %[1]s --reference <file>` prints one.\n", skill)), nil
 }

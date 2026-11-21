@@ -8,12 +8,42 @@ package frontmatter
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
-var fmEnd = regexp.MustCompile(`(?m)^---[ \t\r\f\v]*$`)
+// fenceSpace reports the characters Python's str.isspace() accepts: Go's
+// unicode.IsSpace plus the ASCII separators U+001C to U+001F.
+func fenceSpace(r rune) bool { return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f) }
 
-func hasFM(text string) bool {
-	return strings.HasPrefix(text, "---\n") || strings.HasPrefix(text, "---\r\n")
+func isFence(line string) bool { return strings.TrimRightFunc(line, fenceSpace) == "---" }
+
+// Fence locates the front matter in text, the one fence rule every Go reader
+// shares and scripts/fmlite.py's: the first line is `---` and the next `---`
+// line closes it, each ignoring trailing whitespace as Python's str.rstrip()
+// does, so CRLF files, an NBSP after a fence and a closing fence at end of file
+// are all front matter. The fixtures in test/fixtures/frontmatter pin it.
+// text[blockStart:blockEnd] is the lines between the fences (each with its
+// newline), blockEnd is where the closing fence line starts, and
+// text[bodyStart:] follows it. ok is false when there is no closed front matter.
+func Fence(text string) (blockStart, blockEnd, bodyStart int, ok bool) {
+	nl := strings.IndexByte(text, '\n')
+	if nl < 0 || !isFence(text[:nl]) {
+		return 0, 0, 0, false
+	}
+	for pos := nl + 1; pos <= len(text); {
+		lineEnd, next := len(text), len(text)
+		if i := strings.IndexByte(text[pos:], '\n'); i >= 0 {
+			lineEnd, next = pos+i, pos+i+1
+		}
+		if isFence(text[pos:lineEnd]) {
+			return nl + 1, pos, next, true
+		}
+		if next == pos || lineEnd == len(text) {
+			break
+		}
+		pos = next
+	}
+	return 0, 0, 0, false
 }
 
 // Parse reads a flat
@@ -21,19 +51,12 @@ func hasFM(text string) bool {
 // strings; an inline list comes back as []string. It returns (nil, text)
 // when there is no frontmatter, and never fails. Keys keep file order.
 func Parse(text string) (map[string]any, []string, string) {
-	if !hasFM(text) {
+	bs, be, body0, ok := Fence(text)
+	if !ok {
 		return nil, nil, text
 	}
-	rest := ""
-	if i := strings.Index(text, "\n"); i >= 0 {
-		rest = text[i+1:]
-	}
-	loc := fmEnd.FindStringIndex(rest)
-	if loc == nil {
-		return nil, nil, text
-	}
-	block := rest[:loc[0]]
-	body := strings.TrimLeft(rest[loc[1]:], "\n")
+	block := text[bs:be]
+	body := strings.TrimLeft(text[body0:], "\n")
 	fm := map[string]any{}
 	var order []string
 	for _, raw := range strings.Split(strings.ReplaceAll(block, "\r\n", "\n"), "\n") {
@@ -76,16 +99,11 @@ func Str(fm map[string]any, key string) string {
 // UpdateField replaces the first `<field>: <value>` in the frontmatter slice and
 // reports whether it found one.
 func UpdateField(content, field, value string) (string, bool) {
-	if !hasFM(content) {
+	start, end, _, ok := Fence(content)
+	if !ok {
 		return content, false
 	}
-	start := strings.Index(content, "\n") + 1
-	rest := content[start:]
-	loc := fmEnd.FindStringIndex(rest)
-	if loc == nil {
-		return content, false
-	}
-	fm, after := rest[:loc[0]], rest[loc[0]:]
+	fm, after := content[start:end], content[end:]
 	pat := regexp.MustCompile(`(?m)^(` + regexp.QuoteMeta(field) + `:[ \t\r\f\v]*)\S+`)
 	done := false
 	newFM := pat.ReplaceAllStringFunc(fm, func(m string) string {
@@ -109,15 +127,11 @@ func SetField(content, field, value, after string) (string, bool) {
 	if updated, ok := UpdateField(content, field, value); ok {
 		return updated, true
 	}
-	if !hasFM(content) {
+	start, end, _, ok := Fence(content)
+	if !ok {
 		return content, false
 	}
-	start := strings.Index(content, "\n") + 1
-	loc := fmEnd.FindStringIndex(content[start:])
-	if loc == nil {
-		return content, false
-	}
-	fmText := content[start : start+loc[0]]
+	fmText := content[start:end]
 	eol := "\n"
 	if strings.Contains(fmText, "\r\n") {
 		eol = "\r\n"
@@ -130,6 +144,6 @@ func SetField(content, field, value, after string) (string, bool) {
 			return content[:at] + eol + line + content[at:], true
 		}
 	}
-	at := start + loc[0] // before the closing fence
+	at := end // before the closing fence
 	return content[:at] + line + eol + content[at:], true
 }
