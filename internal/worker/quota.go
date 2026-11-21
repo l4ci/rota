@@ -78,7 +78,7 @@ func (q *Quotas) MetersWith(ctx context.Context, root string, kinds []string, ex
 		if !ok {
 			continue
 		}
-		entries := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
+		entries := harness.AccountsFor(cfg, kind, home).Entries
 		for _, entry := range entries {
 			ref := QuotaAccount{kind, entry.Name}
 			refs, homes[ref] = append(refs, ref), entry.Dir
@@ -147,11 +147,11 @@ func (q *Quotas) List(ctx context.Context, root string) []harness.QuotaSnapshot 
 		if !displayOnly(kind) {
 			continue
 		}
-		hz, ok := harness.LookupAccounts(kind)
+		_, ok := harness.LookupAccounts(kind)
 		if !ok {
 			continue
 		}
-		entries := hz.Accounts(harness.ConfigFor(cfg, kind)).In(home).Entries
+		entries := harness.AccountsFor(cfg, kind, home).Entries
 		for _, entry := range entries {
 			refs = append(refs, QuotaAccount{kind, entry.Name})
 		}
@@ -232,7 +232,7 @@ func (q *Quotas) collect(ctx context.Context, e Env, cfg any, home string, refs 
 		if !ok {
 			continue
 		}
-		entries := hz.Accounts(harness.ConfigFor(cfg, ref.Kind)).In(home).Entries
+		entries := harness.AccountsFor(cfg, ref.Kind, home).Entries
 		if x, ok := extras[ref]; ok && ref.Name != "" && !slices.ContainsFunc(entries, func(en harness.AccountEntry) bool { return en.Name == ref.Name }) {
 			entries = append(entries, x)
 		}

@@ -249,7 +249,7 @@ type accountSource struct {
 
 func (a accountSource) Logins(kind string) []string {
 	var logins []string
-	for _, e := range harness.ResolveAccounts(kind).Accounts(harness.ConfigFor(a.c.deps().Config(a.root), kind)).Entries {
+	for _, e := range harness.AccountsFor(a.c.deps().Config(a.root), kind, "").Entries {
 		logins = append(logins, e.Name)
 	}
 	return logins

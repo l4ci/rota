@@ -118,11 +118,11 @@ func (a *Accounts) MetersWith(ctx context.Context, root string, extra []config.A
 	home, _ := e.Home()
 	var list []acct
 	for _, k := range kinds {
-		hz, ok := harness.LookupAccounts(k)
+		_, ok := harness.LookupAccounts(k)
 		if !ok {
 			continue
 		}
-		for _, en := range hz.Accounts(harness.ConfigFor(cfg, k)).In(home).Entries {
+		for _, en := range harness.AccountsFor(cfg, k, home).Entries {
 			list = append(list, acct{en.Name, en.Dir})
 		}
 	}

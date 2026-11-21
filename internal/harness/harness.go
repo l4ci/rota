@@ -487,6 +487,15 @@ func LookupAccounts(kind string) (Accounts, bool) {
 // ResolveAccounts falls back to Default for an unknown recorded kind.
 func ResolveAccounts(kind string) Accounts { return resolve(kind) }
 
+// AccountsFor is the account list of a kind read from the raw config, with a
+// leading ~ of each entry's Dir expanded against home. It owns the chain every
+// reader needs: resolve the kind's Accounts, read them through ConfigFor with
+// that same kind, then expand through In. A caller that only needs capability
+// bits (UsageMeter, WorkAccounts) still uses ResolveAccounts.
+func AccountsFor(raw any, kind, home string) AccountList {
+	return ResolveAccounts(kind).Accounts(ConfigFor(raw, kind)).In(home)
+}
+
 // OrchestratorAccounts is the Accounts capability of the default orchestrator
 // harness: the owner of the config-dir variable the orchestrator and its
 // keepalive supervisor read and set, so neither names it.

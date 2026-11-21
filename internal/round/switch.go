@@ -196,8 +196,7 @@ func (e Env) planSwitch(ctx context.Context, root string, be Board, o SwitchOpts
 func (e Env) switchPlacement(ctx context.Context, root string, o SwitchOpts, res *Switched) (Placement, error) {
 	cfg := e.Worker.Config(root)
 	home, _ := e.Worker.Home()
-	hz := harness.ResolveAccounts(res.ToKind)
-	all := hz.Accounts(harness.ConfigFor(cfg, res.ToKind)).In(home).Entries
+	all := harness.AccountsFor(cfg, res.ToKind, home).Entries
 	var names []string
 	for _, a := range all {
 		names = append(names, a.Name)
@@ -232,7 +231,7 @@ func (e Env) switchPlacement(ctx context.Context, root string, o SwitchOpts, res
 func (e Env) currentAccountLimit(ctx context.Context, root string, o SwitchOpts, res *Switched) error {
 	cfg := e.Worker.Config(root)
 	home, _ := e.Worker.Home()
-	all := harness.ResolveAccounts(res.ToKind).Accounts(harness.ConfigFor(cfg, res.ToKind)).In(home).Entries
+	all := harness.AccountsFor(cfg, res.ToKind, home).Entries
 	list := slices.DeleteFunc(slices.Clone(all), func(a harness.AccountEntry) bool { return a.Name != o.Account })
 	if len(list) == 0 {
 		return nil // not a configured login: Dispatch decides
