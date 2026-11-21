@@ -31,12 +31,12 @@ func defaultReapEnv(ctx context.Context, root string, d *Deps) (round.Env, reap.
 }
 
 func reapCommand() *Command {
-	return &Command{Name: "reap", Fence: fenceAllowed, Summary: "list (and with --apply remove) what a round left behind that nothing live owns", Verb: reapVerb}
+	return &Command{Name: "reap", Fence: fenceAllowed, Summary: "list (and with --apply remove) what a round left behind that nothing live owns, including your leaked rota-smoke/gate/review dirs in the system temp dir", Verb: reapVerb}
 }
 
 func reapVerb(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "only these kinds, comma-separated: "+strings.Join(reap.Kinds, ", "))
-	apply := fs.Bool("apply", false, "delete the candidates that hold no work (default: preview)")
+	apply := fs.Bool("apply", false, "delete the candidates that hold no work, in the system temp dir too unless --kind excludes systmp (default: preview)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
 			return Result{}, err
@@ -75,6 +75,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
 		}
 		in.ProcessUses = c.deps().ProcessUses
+		in.SystemTemp = c.deps().TempDir()
 		in.TempRoot, _ = rotatree.FindTempRoot(ctx, c.deps().Git, root)
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {

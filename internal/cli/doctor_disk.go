@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/doctor"
@@ -28,11 +27,11 @@ func statDisk(dir string) *doctor.Disk {
 // dirs a smoke or gate run leaked, and git worktrees whose directory is gone.
 // reap.TakeCensus does the counting, so the numbers match `rota reap`. It only
 // runs once the disk is low, because sizing the temp dirs walks them.
-func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, tmp *reap.Input, now time.Time) []string {
-	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, Tmp: tmp, Git: run, Now: now})
+func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, tmp *reap.Input, processUses func() ([]reap.ProcUse, error)) []string {
+	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, Tmp: tmp, ProcessUses: processUses, Git: run})
 	var out []string
 	if c.LeakedTemp.N > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s); safe to delete once no run is active", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size))))
+		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size))))
 	}
 	if c.StaleTmp.N > 0 {
 		out = append(out, fmt.Sprintf("%d entries under %s (%s) that `rota reap --kind tmp --apply` would remove; preview with `rota reap --kind tmp`", c.StaleTmp.N, tmp.TempRoot, strutil.HumanBytes(uint64(c.StaleTmp.Size))))
@@ -63,10 +62,9 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 	if cache := goCacheDir(d.Getenv, d.UserCacheDir); cache != "" && !sameVolume(cache, dir) {
 		in.CacheDisk = d.DiskUsage(cache)
 	}
-	now := d.Now()
 	in.ScanLeftovers = func() []string {
 		tmp, warn := d.reapTmpInput(ctx, root)
-		return append(doctorLeftovers(ctx, d.Git, root, d.TempDir(), tmp, now), warn...)
+		return append(doctorLeftovers(ctx, d.Git, root, d.TempDir(), tmp, d.ProcessUses), warn...)
 	}
 }
 
