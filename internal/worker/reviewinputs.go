@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/l4ci/rota/internal/change"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/reviewpolicy"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
@@ -122,7 +124,9 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 			src.Members = append(src.Members, key)
 		}
 	}
-	if key, ok := tracker.ParseKey(target.Issue); ok && o.Issues != nil && (policy.NeedsIssue() || cross.Active() || lenses.UsesLabels()) {
+	// The tier is not known here, so ask for the widest answer: a docs-tier diff
+	// that needs no issue is narrowed again in ResolveReviewDepth.
+	if key, ok := tracker.ParseKey(target.Issue); ok && o.Issues != nil && (reviewpolicy.NeedsIssue(policy, change.TierFull) || cross.Active() || lenses.UsesLabels()) {
 		issues, err := o.Issues()
 		if err != nil {
 			return nil, &ReviewDepthError{Stage: "issue-source", Msg: err.Error(), Err: err}
