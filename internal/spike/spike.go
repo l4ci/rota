@@ -174,8 +174,10 @@ func spikeBranches(run gitx.Runner, dir string) map[string]bool {
 // skipped. branchExists is checked in the spike's own sub-repo, or in dir
 // (the working directory) for a spike with no repo.
 func List(run gitx.Runner, root, dir string) ([]Entry, error) {
-	files := fsio.GlobDir(rotatree.File(root, rotatree.SpikesDir), "*.md")
-	sort.Strings(files)
+	docs, err := artifact.ListDocs(rotatree.File(root, rotatree.SpikesDir))
+	if err != nil {
+		return nil, err
+	}
 	var regs map[string]string
 	cache := map[string]map[string]bool{}
 	existing := func(repo string) map[string]bool {
@@ -199,16 +201,8 @@ func List(run gitx.Runner, root, dir string) ([]Entry, error) {
 		return s
 	}
 	out := []Entry{}
-	for _, f := range files {
-		text, err := fsio.ReadText(f)
-		if err != nil {
-			return nil, err
-		}
-		fm, _, _ := frontmatter.Parse(text)
-		if fm == nil {
-			continue
-		}
-		stem := strings.TrimSuffix(filepath.Base(f), ".md")
+	for _, d := range docs {
+		fm, stem := d.FM, d.Stem
 		e := Entry{
 			Name:    strutil.OrDefault(frontmatter.Str(fm, "name"), stem),
 			Branch:  strutil.OrDefault(frontmatter.Str(fm, "branch"), "spike/"+stem),

@@ -412,16 +412,13 @@ func (f *File) Complete(ref string, in CompleteInput) (bool, error) {
 			}
 			return errf(ErrNotFound, "[%s] not found", ref)
 		}
-		acceptanceRecord, err := f.completionAcceptance(ref, in)
+		acceptanceRecord, err := completionPreflight(ref, in,
+			func() (string, error) { return f.completionAcceptance(ref, in) },
+			func() (int, error) { return f.proofRows(ref) })
 		if err != nil {
 			return err
 		}
 		detailPath := DetailPath(f.Root, ref)
-		if in.Reason == "done" && !in.NoProof {
-			if err := requireProof(ref, func() (int, error) { return f.proofRows(ref) }); err != nil {
-				return err
-			}
-		}
 		line := content[m[0]:m[1]]
 		tagged = bulletTagged(line)
 		rest := ""
