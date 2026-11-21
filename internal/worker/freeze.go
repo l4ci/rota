@@ -188,15 +188,11 @@ func (runner gateRun) stepFreeze(result landing.GateResult, issue, pr string) (s
 		return struct{}{}, *g.res, done, err
 	}
 
-	r, err := landfreeze.Load(g.ctx, g.e.Git, g.root)
-	if err != nil {
-		g.verdict(landing.GateFreeze, landfreeze.UnreadableLine(err), landfreeze.ClearHint)
-		return finish(true, nil)
-	}
-	if r.Allows(g.target.Issue, g.pr) && (!r.Frozen() || r.Binds(g.o.Base)) {
+	d := landfreeze.Decide(g.ctx, g.e.Git, g.root, landfreeze.Subject{Base: g.o.Base, Issue: g.target.Issue, PR: g.pr})
+	if d.Admit {
 		return finish(false, nil)
 	}
-	g.verdict(landing.GateFreeze, r.Line(), "designate a repair with rota round freeze --repair-issue <id> or --repair-pr <pr>, then verify recovery")
+	g.verdict(landing.GateFreeze, d.Line, d.Hint)
 	return finish(true, nil)
 }
 

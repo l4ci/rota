@@ -381,16 +381,14 @@ func (e Env) Assign(ctx context.Context, root string, be Board, o AssignOpts) (r
 	if _, err := e.remote(root); err != nil {
 		return res, blocked(blockedby.Fetch, "%v", err)
 	}
-	frozen, err := landfreeze.Load(ctx, e.Git, root)
-	if err != nil {
-		return res, blocked(blockedby.Freeze, "%s", landfreeze.UnreadableLine(err))
-	}
-	if !frozen.Allows(o.ID, "") {
-		return res, blocked(blockedby.Freeze, "%s", frozen.Line())
+	// No Base: the item's base is resolved after the claim, so assign admits by
+	// repair designation alone (landfreeze.Decide).
+	if d := landfreeze.Decide(ctx, e.Git, root, landfreeze.Subject{Issue: o.ID}); !d.Admit {
+		return res, blocked(blockedby.Freeze, "%s", d.Line)
 	}
 	for _, id := range o.Bundle {
-		if !frozen.Allows(id, "") {
-			return res, blocked(blockedby.Freeze, "%s; unrelated bundle member %s", frozen.Line(), id)
+		if d := landfreeze.Decide(ctx, e.Git, root, landfreeze.Subject{Issue: id}); !d.Admit {
+			return res, blocked(blockedby.Freeze, "%s; unrelated bundle member %s", d.Line, id)
 		}
 	}
 	it, err := be.Get(o.ID)

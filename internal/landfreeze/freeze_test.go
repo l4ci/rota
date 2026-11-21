@@ -12,27 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/rotastate"
 )
 
-func TestRepairPRReferences(t *testing.T) {
-	for _, tc := range []struct {
-		repair, pr string
-		allowed    bool
-	}{
-		{"7", "https://github.com/o/r/pull/7", true},
-		{"#7", "https://github.com/o/r/pull/7", true},
-		{"007", "https://github.com/o/r/pull/7", true},
-		{"https://github.com/o/r/pull/7?diff=split", "https://github.com/o/r/pull/7", true},
-		{"https://github.com/other/repo/pull/7", "https://github.com/o/r/pull/7", false},
-		{"7", "https://github.com/o/r/pull/8", false},
-	} {
-		t.Run(tc.repair, func(t *testing.T) {
-			r := &Record{Active: true, RepairPR: tc.repair}
-			if got := r.Allows("", tc.pr); got != tc.allowed {
-				t.Fatalf("repair=%q PR=%q: allows=%v want %v", tc.repair, tc.pr, got, tc.allowed)
-			}
-		})
-	}
-}
-
 func TestFreezeRepairBacklogID(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "freeze.json")
 	r := &Record{Active: true, Base: "main", SHA: strings.Repeat("a", 40), RepairIssue: "B07"}
@@ -43,7 +22,7 @@ func TestFreezeRepairBacklogID(t *testing.T) {
 		t.Fatal(err)
 	}
 	stored, err := Read(p)
-	if err != nil || !stored.Allows("B07", "") || stored.Allows("B08", "") {
+	if err != nil || !stored.allows("B07", "") || stored.allows("B08", "") {
 		t.Fatalf("backlog repair must survive a read and exempt only B07: %+v %v", stored, err)
 	}
 	for _, bad := range []string{"12\nfoo", "B07 ", " B07", "B 07", "B07\u200b"} {
@@ -83,28 +62,6 @@ func TestFreezeLineSanitizesAndBoundsFields(t *testing.T) {
 	plain := (&Record{Base: "main", SHA: "0123456789012345678901234567890123456789"}).Line()
 	if strings.Contains(plain, "issue=") || strings.Contains(plain, "PR=") || !strings.Contains(plain, "none designated") {
 		t.Errorf("empty repair fields should be useful: %s", plain)
-	}
-}
-
-func TestRecordBinds(t *testing.T) {
-	cases := []struct {
-		name string
-		r    *Record
-		base string
-		want bool
-	}{
-		{"nil record", nil, "main", false},
-		{"active same base", &Record{Active: true, Base: "main"}, "main", true},
-		{"active other base", &Record{Active: true, Base: "main"}, "release", false},
-		{"inactive same base", &Record{Active: false, Base: "main"}, "main", false},
-		{"inactive other base", &Record{Active: false, Base: "main"}, "release", false},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := tc.r.Binds(tc.base); got != tc.want {
-				t.Fatalf("Binds(%q) = %v, want %v", tc.base, got, tc.want)
-			}
-		})
 	}
 }
 
@@ -190,5 +147,64 @@ func TestReadCorruptFreezeIsAnError(t *testing.T) {
 	}
 	if r, err := Read(filepath.Join(t.TempDir(), "absent.json")); r != nil || err != nil {
 		t.Fatalf("missing freeze = %v, %v; want nil, nil", r, err)
+	}
+}
+
+// freezeRunner serves a git runner whose common dir holds body as freeze.json
+// ("" writes none).
+func freezeRunner(t *testing.T, body string) git.Runner {
+	t.Helper()
+	common := t.TempDir()
+	if body != "" {
+		p := rotastate.File(common, "freeze.json")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return func(ctx context.Context, dir string, args ...string) (git.Result, error) {
+		return git.Result{Stdout: common + "\n"}, nil
+	}
+}
+
+// TestDecide is the one table for the freeze admission rule that gate, train
+// and round assign share.
+func TestDecide(t *testing.T) {
+	const sha = `"sha":"0123456789012345678901234567890123456789"`
+	active := `{"active":true,"base":"main",` + sha + `,"repairIssue":"13","repairPR":"https://github.com/o/r/pull/7"}`
+	for _, tc := range []struct {
+		name, body string
+		s          Subject
+		admit      bool
+		unreadable bool
+		hint       string
+	}{
+		{"no record", "", Subject{Base: "main", Issue: "1"}, true, false, ""},
+		{"inactive record", `{"active":false,"base":"main",` + sha + `}`, Subject{Base: "main", Issue: "1"}, true, false, ""},
+		{"unreadable", `{not json`, Subject{Base: "main", Issue: "1"}, false, true, ClearHint},
+		{"unrelated issue", active, Subject{Base: "main", Issue: "12"}, false, false, repairHint},
+		{"repair issue", active, Subject{Base: "main", Issue: "#13"}, true, false, ""},
+		{"repair PR by URL", active, Subject{Base: "main", PR: "7"}, true, false, ""},
+		{"same-number PR of another repo", active, Subject{Base: "main", PR: "https://github.com/other/repo/pull/7"}, false, false, repairHint},
+		{"repair on another base", active, Subject{Base: "release", Issue: "13"}, false, false, baseHint},
+		{"assign ignores base", active, Subject{Issue: "13"}, true, false, ""},
+		{"assign refuses unrelated", active, Subject{Issue: "12"}, false, false, repairHint},
+		{"queue on frozen base", active, Subject{Base: "main", Queue: true}, true, false, ""},
+		{"queue on other base", active, Subject{Base: "release", Queue: true}, false, false, baseHint},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := Decide(context.Background(), freezeRunner(t, tc.body), "/r", tc.s)
+			if d.Admit != tc.admit || d.Unreadable != tc.unreadable || d.Hint != tc.hint {
+				t.Fatalf("Decide(%+v) = %+v; want admit=%v unreadable=%v hint=%q", tc.s, d, tc.admit, tc.unreadable, tc.hint)
+			}
+			if !d.Admit && d.Line == "" {
+				t.Fatalf("refusal without a line: %+v", d)
+			}
+			if d.Frozen != (tc.body != "" && !strings.Contains(tc.body, `"active":false`)) {
+				t.Fatalf("Frozen = %v for %s", d.Frozen, tc.name)
+			}
+		})
 	}
 }
