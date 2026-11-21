@@ -515,3 +515,27 @@ func TestInitInANonHomeDirectoryIsUnchanged(t *testing.T) {
 		t.Errorf("exit %d: %s", code, errs)
 	}
 }
+
+// A verb path the tree lacks must fail when the entry is built, as gateDecls
+// and receipted verbs do, not when a user picks it (#4043).
+func TestPaletteVerbPanicsOnUnknownVerb(t *testing.T) {
+	root := &Command{Name: "rota", Subs: []*Command{{Name: "known"}}}
+	c := &Ctx{Deps: testDeps(), Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
+	defer func() {
+		r := recover()
+		msg, _ := r.(string)
+		if !strings.Contains(msg, "gone verb") {
+			t.Fatalf("want a panic naming the verb path, got %v", r)
+		}
+	}()
+	paletteVerb(c, root, "Gone", "", palette.Always, "gone", "verb")
+	t.Fatal("paletteVerb accepted a verb path that is not in the tree")
+}
+
+// Every shipped entry resolves against the real tree, in and out of $HOME.
+func TestPaletteEntriesBuildAgainstTree(t *testing.T) {
+	c := &Ctx{Deps: testDeps(), Stdin: strings.NewReader(""), Stdout: io.Discard, Stderr: io.Discard}
+	if n := len(paletteEntries(c, &paletteOutcome{})); n == 0 {
+		t.Fatal("no palette entries")
+	}
+}

@@ -28,11 +28,17 @@ import (
 // A verb with a --ui view opens it inside the palette instead: nothing here
 // names a screen, the entry follows the verb's own Command.View.
 func paletteVerb(c *Ctx, root *Command, label, hint string, scope palette.Scope, verb ...string) palette.Entry {
+	cmd := findVerb(root, verb)
+	if cmd == nil {
+		// Same rule as gateDecls and receipted verbs: a renamed verb fails the
+		// build of the table, not a click on its entry.
+		panic("palette entry " + label + " names " + strings.Join(verb, " ") + ", which is not in the tree")
+	}
 	e := palette.Entry{Label: label, Hint: hint, Scope: scope, Run: func() error {
 		paletteRun(c, root, verb, c.Stdin, c.Stdout, c.Stderr, nil)
 		return nil
 	}}
-	if cmd := findVerb(root, verb); cmd != nil && cmd.View != nil {
+	if cmd.View != nil {
 		e.View = func() (tui.Model, error) { return paletteView(c, root, verb) }
 	}
 	return e
