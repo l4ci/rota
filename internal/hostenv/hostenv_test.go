@@ -10,7 +10,7 @@ const prefixFile = "../../test/lib/host-env-prefixes"
 
 func TestIsCoversEveryPrefix(t *testing.T) {
 	for _, name := range []string{"HERDR_PANE_ID", "HC_SESSION", "ORCA_PANE", "TMUX", "TMUX_PANE"} {
-		if !is(name) || !IsKV(name+"=v") {
+		if !is(name) || !isKV(name+"=v") {
 			t.Errorf("%s not recognised as a host variable", name)
 		}
 	}

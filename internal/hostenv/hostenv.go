@@ -42,8 +42,8 @@ func Drop(name string) bool {
 	return is(name)
 }
 
-// IsKV is is for a KEY=value entry as os.Environ returns it.
-func IsKV(kv string) bool {
+// isKV is is for a KEY=value entry as os.Environ returns it.
+func isKV(kv string) bool {
 	k, _, _ := strings.Cut(kv, "=")
 	return is(k)
 }

@@ -19,7 +19,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 	t.Setenv("ROTA_KEEP_ME", "x")
 	hostenv.Scrub()
 	for _, kv := range os.Environ() {
-		if hostenv.IsKV(kv) {
+		if hostenv.Drop(strings.SplitN(kv, "=", 2)[0]) {
 			t.Errorf("host variable survived the scrub: %s", kv)
 		}
 	}
@@ -31,7 +31,7 @@ func TestScrubHostEnvDropsByPrefix(t *testing.T) {
 // A HERDR_ variable must not outlive package init, whatever the host sets.
 func TestNoHostVarAfterInit(t *testing.T) {
 	for _, kv := range os.Environ() {
-		if hostenv.IsKV(kv) {
+		if hostenv.Drop(strings.SplitN(kv, "=", 2)[0]) {
 			t.Errorf("host variable survived package init: %s", kv)
 		}
 	}
