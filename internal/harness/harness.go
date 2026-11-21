@@ -492,6 +492,8 @@ func ResolveAccounts(kind string) Accounts { return resolve(kind) }
 // reader needs: resolve the kind's Accounts, read them through ConfigFor with
 // that same kind, then expand through In. A caller that only needs capability
 // bits (UsageMeter, WorkAccounts) still uses ResolveAccounts.
+// An empty home leaves a ~ in an entry's Dir as written: a caller passing ""
+// must read only Name, Key or the entry count, never Dir.
 func AccountsFor(raw any, kind, home string) AccountList {
 	return ResolveAccounts(kind).Accounts(ConfigFor(raw, kind)).In(home)
 }

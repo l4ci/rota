@@ -296,6 +296,10 @@ func TestAccountsFor(t *testing.T) {
 		{"pool of another kind", Codex, cfg, []AccountEntry{{Name: "x", Dir: "/abs/x"}}},
 		{"kind without a configured pool", OpenCode, cfg, nil},
 		{"no config at all", Claude, cfgOf(t, ""), nil},
+		{"accounts of one kind keep config order", Claude, cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"b","dir":"/b"},{"kind":"claude","name":"a","dir":"/a"},{"kind":"claude","name":"c","dir":"~/c"}]}}`),
+			[]AccountEntry{{Name: "b", Dir: "/b"}, {Name: "a", Dir: "/a"}, {Name: "c", Dir: "/home/u/c"}}},
+		{"review.accounts stay out of the round list", Claude, cfgOf(t, `{"round":{"accounts":[{"kind":"claude","name":"w","dir":"/w"}]},"review":{"accounts":[{"kind":"claude","name":"r","dir":"/r"}]}}`),
+			[]AccountEntry{{Name: "w", Dir: "/w"}}},
 	} {
 		got := AccountsFor(c.raw, c.kind, "/home/u")
 		if len(got.Entries) != len(c.want) || (len(c.want) > 0 && !reflect.DeepEqual(got.Entries, c.want)) {
