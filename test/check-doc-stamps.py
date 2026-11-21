@@ -62,10 +62,10 @@ def stamp_rules(fm):
     if "verified-sha" in fm:
         return [], f"verified-sha: belongs in {STAMPS}, not in the doc"
     refs = fm.get("refs")
-    if isinstance(refs, (str, int)) and not isinstance(refs, bool):
-        return [], "refs: must be a block list (one `  - path` per line)"
-    if not refs or not all(isinstance(r, str) for r in refs):
+    if refs is None or refs == []:
         return [], "missing refs: (a list of repo paths)"
+    if not isinstance(refs, list) or not all(isinstance(r, str) for r in refs):
+        return [], "refs: must be a block list (one `  - path` per line)"
     return refs, None
 
 

@@ -40,6 +40,12 @@ class ParseRefsTest(unittest.TestCase):
     def test_scalar_refs_refused(self):
         self.assertIn("refs: must be a block list", self.parse("---\nrefs: internal/gate\n---\n")[1])
 
+    def test_bool_refs_refused(self):
+        self.assertIn("refs: must be a block list", self.parse("---\nrefs: true\n---\n")[1])
+
+    def test_nested_mapping_refs_refused(self):
+        self.assertIn("refs: must be a block list", self.parse("---\nrefs:\n  a: b\n---\n")[1])
+
     def test_unclosed_front_matter(self):
         self.assertEqual(self.parse("---\nrefs:\n  - a\n"), ([], "frontmatter is not closed with ---"))
 
