@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
-# Final cutover gate for A9 (#53, S7). Run after bin/ is deleted, as the last
-# check before the S7 PR leaves draft. Not part of smoke: it reads the tree,
-# not a verb.
+# Old-name guard plus init smoke. Runs on every merge gate (test/gate.sh). Not
+# part of smoke: it reads the tree, not a verb.
 #
-#   1. Nothing outside history and migration code uses the old name hv-skills,
-#      or the old binary name hv (#236).
+#   1. Nothing outside history and migration code uses the old product name
+#      hv-skills or the old binary name hv.
 #   2. `rota init` in an empty git repo works and `rota init check` exits 0.
 #
-# The check for legacy 4.x helper names went with the rest of the hv-skills
-# v3/v4 compatibility (#236).
-# Usage: bash test/grep-gate.sh   (ROTA_BIN overrides the binary it builds)
+# Every exclusion below is permanent and names why it exists. An exclusion that
+# no longer matches a hit is dead: delete it. test/grep_gate_test.py covers a
+# hit, an excluded path and a clean tree.
+# Usage: bash test/grep-gate.sh   (ROTA_BIN overrides the binary it builds;
+# GREP_GATE_REPO points the tree scan at another repo, for the harness test;
+# it also moves the init smoke there, so it needs ROTA_BIN set)
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$REPO"
+cd "${GREP_GATE_REPO:-$REPO}"
 fails=0
 bad() { printf '\033[31mFAIL\033[0m %s\n' "$1" >&2; fails=$((fails + 1)); }
 
@@ -26,16 +28,12 @@ OLD_NAME='hv-skills(?!-(?:start|end)\b)'
 OLD_SCOPE=(
   ':(exclude)CHANGELOG.md'
   ':(exclude)docs/contributing/contract/'
-  ':(exclude).rota/'
   ':(exclude)test/grep-gate.sh'
   # The "Coming from hv-skills" migration section names the predecessor.
   ':(exclude)docs/reference/installation.md'
-  ':(exclude)internal/migrate/'
   ':(exclude)internal/hvmigrate/'
-  ':(exclude)internal/legacystate/'
   # Legacy-format fixtures: a pre-rename block heading or .gitignore header.
   ':(exclude)internal/knowledge/knowledge_test.go'
-  ':(exclude)internal/initproj/init_test.go'
   ':(exclude)test/sections/04_skills.sh'
   ':(exclude)test/sections/99_knowledge_replace.sh'
   # Scrollback captured from real panes, where the checkout path shows.
@@ -50,12 +48,9 @@ fi
 
 # 1b. The old binary name (#236). hv became rota: skills /rota-*, state .rota/,
 # env ROTA_*, markers <!-- rota:... --> and rota-<key> blocks, module
-# github.com/l4ci/rota. What may still say hv: history, this repo's own state
-# and instructions until the migration dogfoods them, the legacy read side
-# (old markers, blocks and stamps are read until a project is migrated), the
-# migrate hv, and the files kit's and lea's
-# slices of #236 rewrite next (front-door docs; release, install and update).
-# Drop those slices' exclusions once they merge.
+# github.com/l4ci/rota. What may still say hv: history, this repo's tracked
+# state, the legacy read side (old markers, blocks and stamps are read until a
+# project is migrated), `rota migrate hv` and the fixtures that exercise it.
 SKILLS='brainstorm|capture|debug|decide|learn|orchestrate|pause|plan|qa|refactor|release|review|ship|spike|vision|work'
 HV_NAME="(?<![\\w.-])hv-(?:${SKILLS})(?![\\w-])|\\.hv/(?!bin\\b)|\\bHV_[A-Z]|\\bHV-(?:DONE|BLOCKED)\\b"
 HV_NAME+="|(?:<|\\\\u003c)!-- hv[:-]|github\\.com/l4ci/hv\\b|\`hv[ \`]|\"hv\"|\\bhv\\.version\\b"
@@ -63,19 +58,15 @@ HV_SCOPE=(
   ':(exclude)CHANGELOG.md'
   ':(exclude)docs/contributing/contract/'
   ':(exclude).rota/'
-  ':(exclude)AGENTS.md'
-  ':(exclude)CLAUDE.md'
-  ':(exclude).gitignore'
   ':(exclude)test/grep-gate.sh'
   # Legacy read side and stamp migration, with their tests and fixtures.
   ':(exclude)internal/marker/'
   ':(exclude)internal/section/'
-  ':(exclude)internal/round/move.go'
   ':(exclude)internal/cli/migrate_hv.go'
   ':(exclude)internal/cli/migrate_hv_test.go'
-  # Decisions writers repair legacy skill names in the preamble only.
-  ':(exclude)internal/knowledge/decisionwrite.go'
+  # Fixtures: decisions writers repair legacy skill names in the preamble only.
   ':(exclude)internal/cli/decisions_write_test.go'
+  # Fixtures for the migration and the legacy config and marker readers.
   ':(exclude)test/sections/98_migrate_hv.sh'
   ':(exclude)internal/round/move_test.go'
   ':(exclude)internal/config/fill.go'
@@ -88,16 +79,11 @@ HV_SCOPE=(
   ':(exclude)internal/config/schema.go'
   ':(exclude)internal/backlog/legacy_marker_test.go'
   ':(exclude)internal/backlog/issue_write_python_test.go'
-  ':(exclude)internal/cli/glossary_test.go'
-  ':(exclude)internal/cli/testdata/golden/TestInstructionsInitMatchGolden__*'
-  ':(exclude)test/sections/02_knowledge.sh'
   # Legacy /hv-decide preamble fixture: a decisions write must leave the header byte-identical (#3021).
   ':(exclude)internal/knowledge/decisions_preamble_test.go'
   # Legacy /hv-work and .hv/ text that `knowledge replace` rewrites, and an hv-skills milestone line.
   ':(exclude)test/sections/99_knowledge_replace.sh'
-  ':(exclude)test/sections/13_helpers.sh'
   ':(exclude)test/sections/66_agents_md.sh'
-  ':(exclude)internal/migrate/'
   ':(exclude)internal/hvmigrate/'
   ':(exclude)internal/legacystate/'
   # The "Coming from hv-skills" migration section names .hv/ and /hv-*.

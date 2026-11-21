@@ -4,6 +4,7 @@
 check_doc_stamps_test.py
 fast_tree_scans_test.py
 gate_retry_test.py
+grep_gate_test.py
 runner_leak_test.py
 site_sync_test.py
 validate_skills_test.py
