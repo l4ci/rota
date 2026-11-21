@@ -458,7 +458,7 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	}
 	hasSpec := res.HasSpec
 	list := verdict.Load(t.root).Branches[t.key]
-	missing := verdict.MissingReviews(res.Depth, hasSpec, verdict.Recorded(list, head))
+	missing := verdict.CoverageAt(list, head, verdict.Need{Depth: res.Depth, HasSpec: hasSpec}).Core
 	if len(missing) == 0 {
 		return ""
 	}

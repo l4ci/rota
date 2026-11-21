@@ -76,3 +76,36 @@ func TestBlockingGate(t *testing.T) {
 		})
 	}
 }
+
+func TestBlockingGateResolving(t *testing.T) {
+	const head = "bbbbbbb1234"
+	stale := Record{Kind: ReviewCross, Verdict: Fail, Sha: "aaaaaaa", Harness: "hx", Model: "m"}
+	boom := errors.New("cannot read depth")
+	for name, tc := range map[string]struct {
+		list    []Record
+		off     func() (bool, error)
+		blocked bool
+		relaxed bool
+		calls   int
+		err     error
+	}{
+		"stale cross FAIL, cross on":  {list: []Record{stale}, off: func() (bool, error) { return false, nil }, blocked: true, calls: 1},
+		"stale cross FAIL, cross off": {list: []Record{stale}, off: func() (bool, error) { return true, nil }, relaxed: true, calls: 1},
+		"resolver error returned":     {list: []Record{stale}, off: func() (bool, error) { return false, boom }, blocked: true, calls: 1, err: boom},
+		"nil resolver keeps block":    {list: []Record{stale}, blocked: true},
+		"no stale cross, no lookup":   {list: nil, off: func() (bool, error) { return true, nil }},
+		"FAIL at head, no lookup":     {list: []Record{{Kind: ReviewQuality, Verdict: Fail, Sha: head}}, off: func() (bool, error) { return true, nil }, blocked: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			calls := 0
+			var off func() (bool, error)
+			if tc.off != nil {
+				off = func() (bool, error) { calls++; return tc.off() }
+			}
+			d, err := BlockingGateResolving(tc.list, head, off)
+			if !errors.Is(err, tc.err) || d.Blocked != tc.blocked || (d.Relaxed != nil) != tc.relaxed || calls != tc.calls {
+				t.Fatalf("got %+v err %v calls %d; want blocked %v relaxed %v calls %d err %v", d, err, calls, tc.blocked, tc.relaxed, tc.calls, tc.err)
+			}
+		})
+	}
+}

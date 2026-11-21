@@ -76,10 +76,11 @@ func ReadinessOf(in ReadinessInput) Readiness {
 // trainBlocked uses the gate's rule, including its stale-cross relaxation.
 // Resolve review:none only when the shared decision asks for it.
 func trainBlocked(in ReadinessInput) bool {
-	d := verdict.BlockingGate(in.Records, in.Head, false)
-	if d.NeedsCrossOff && in.CrossNone != nil {
-		d = verdict.BlockingGate(in.Records, in.Head, in.CrossNone())
+	var resolve func() (bool, error)
+	if in.CrossNone != nil {
+		resolve = func() (bool, error) { return in.CrossNone(), nil }
 	}
+	d, _ := verdict.BlockingGateResolving(in.Records, in.Head, resolve)
 	return d.Blocked
 }
 
