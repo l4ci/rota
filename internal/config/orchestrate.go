@@ -196,7 +196,7 @@ func legacyVerifyPending(doc *jsonx.Object) bool {
 func Retired(env cfgdir.Env, root string) []string {
 	out := []string{}
 	cfg := Load(env, root)
-	if v, _ := Value(cfg, "autonomy.level"); validateEnum("autonomy.level", v) != nil {
+	if v, _ := Value(cfg, AutonomyLevelKey); validateEnum(AutonomyLevelKey, v) != nil {
 		b, _ := jsonx.MarshalCompact(v)
 		msg := "autonomy.level " + string(b) + " is not a level: set it to off, roundtrip or auto"
 		if v == "loop" {

@@ -28,6 +28,7 @@ const (
 const (
 	GitRemoteKey                     = "git.remote"
 	IssuesSourceKey                  = "issues.source"
+	AutonomyLevelKey                 = "autonomy.level"
 	UmbrellaEnabledKey               = "umbrella.enabled"
 	RoundDispatchKey                 = "round.dispatch"
 	RoundSlotsKey                    = "round.slots"
@@ -194,7 +195,7 @@ var Keys = []Key{
 	k("ship.uat", ScopeTaste, false, false, TypeBool, "Opt-in human acceptance walk-through: /rota-ship runs /rota-qa uat after review and before merge or PR. Never part of the round merge gate."),
 	k("qa.gate", ScopeTaste, "advisory", false, TypeEnum, "How /rota-ship treats a /rota-qa verdict. advisory surfaces findings and never blocks; blocking halts the ship on FAIL.", "advisory", "blocking"),
 	k("qa.afterWork", ScopeTaste, false, false, TypeBool, "Whether /rota-work runs /rota-qa after a cycle when touched files match a QA target's watch globs."),
-	k("autonomy.level", ScopeTaste, "off", false, TypeEnum, "How much rota chains on its own, in solo skills and rounds. off: skills suggest the next step and stop. roundtrip: one item runs brainstorm to ship with no process questions, then stops. auto: keeps taking the next ready item, and a round runs the autopilot tick; it stops only for a human-reserved decision, no recommendation, no ready item or a session limit. Manual gates and ship.mergeApproval hold at every level.", "off", "roundtrip", "auto"),
+	k(AutonomyLevelKey, ScopeTaste, "off", false, TypeEnum, "How much rota chains on its own, in solo skills and rounds. off: skills suggest the next step and stop. roundtrip: one item runs brainstorm to ship with no process questions, then stops. auto: keeps taking the next ready item, and a round runs the autopilot tick; it stops only for a human-reserved decision, no recommendation, no ready item or a session limit. Manual gates and ship.mergeApproval hold at every level.", "off", "roundtrip", "auto"),
 	k("docs.path", ScopeProject, "docs", true, TypePath, "Project-relative documentation folder that /rota-docs reads and writes."),
 	k("docs.autoCreate", ScopeTaste, false, false, TypeBool, "Whether the after-work docs flow writes proposed updates without waiting for approval."),
 	k("docs.afterWork", ScopeTaste, false, false, TypeBool, "Whether /rota-work, /rota-ship and /rota-release run the docs after-work flow when their primary action finishes."),

@@ -15,7 +15,7 @@ import (
 // AutonomyLevel is autonomy.level as the manual-gate audit records it: the
 // schema default when unset, and "off" for an empty or non-string value.
 func AutonomyLevel(cfg any) string {
-	if s := String(cfg, "autonomy.level"); s != "" {
+	if s := String(cfg, AutonomyLevelKey); s != "" {
 		return s
 	}
 	return "off"
@@ -97,7 +97,7 @@ func isAuto(o *jsonx.Object) bool {
 	if o == nil {
 		return false
 	}
-	v, _ := walk(o, "autonomy.level")
+	v, _ := walk(o, AutonomyLevelKey)
 	return v == "auto"
 }
 
@@ -178,7 +178,7 @@ func globalStale(dir string) bool {
 // global before the migration runs uses it to see the value the migration will
 // leave.
 func GlobalAutoStale(dir string, vals map[string]any) bool {
-	return vals["autonomy.level"] == "auto" && globalStale(dir)
+	return vals[AutonomyLevelKey] == "auto" && globalStale(dir)
 }
 
 // stampGlobal writes AutonomyLevelsSince to the global stamp file under dir
@@ -278,7 +278,7 @@ func raiseProjectStamp(root string) error {
 // A failure after a rewrite returns the Migration beside the error (#1524): the
 // files changed, and the stamp is still old, so a later fill finds no auto.
 func autonomySet(root, key string, set func() (SetResult, error)) (SetResult, error) {
-	if key != "autonomy.level" || !autonomyStale(readObject(configPath(root))) {
+	if key != AutonomyLevelKey || !autonomyStale(readObject(configPath(root))) {
 		return set()
 	}
 	am, err := migrateStaleAutonomy(root)

@@ -469,7 +469,7 @@ func rangeWant(min, max int) string {
 // strictEnumKeys are enum keys whose Choices are the whole set, so `config set`
 // refuses anything else. Other enum keys accept more than their listed choices
 // (a removed value still reads, a harness may be added), so they stay open.
-var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, "autonomy.level": true, "review.fileDeferred": true, "round.scopeOverlap": true}
+var strictEnumKeys = map[string]bool{"work.contextGuard": true, "plan.criticHarness": true, AutonomyLevelKey: true, "review.fileDeferred": true, "round.scopeOverlap": true}
 
 // CheckEnum reports whether value is one of the schema choices of an enum key,
 // for a loader that reads the key from a hand-edited file. Pass the raw
