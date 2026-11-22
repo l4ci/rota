@@ -2,7 +2,7 @@ package backlog
 
 import (
 	"errors"
-	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"strconv"
 	"unicode/utf8"
@@ -70,7 +70,6 @@ var ErrWrongBackend = errors.New("wrong backlog backend")
 var (
 	qualHashRe  = regexp.MustCompile(`\A([^` + pystr.SpaceClass + `#:]+)#(\p{Nd}+)\z`)
 	qualColonRe = regexp.MustCompile(`\A([^` + pystr.SpaceClass + `#:]+):([^` + pystr.SpaceClass + `]+)\z`)
-	itemRefRe   = regexp.MustCompile(`(?i)\A(?:#(\p{Nd}+)|([` + ItemLetters + `])?(\p{Nd}+))\z`)
 )
 
 // ParseRef parses an item reference: B7, b7, #7 or 7, optionally qualified
@@ -80,78 +79,24 @@ var (
 func ParseRef(s string) (Ref, error) {
 	s = pystr.Strip(s)
 	if m := qualHashRe.FindStringSubmatch(s); m != nil {
-		n, err := Atoi(m[2])
+		n, err := itemid.Atoi(m[2])
 		if err != nil {
 			return Ref{}, err
 		}
 		return Ref{Repo: m[1], Number: n}, nil
 	}
 	if m := qualColonRe.FindStringSubmatch(s); m != nil {
-		n, letter, err := resolveItemRef(m[2])
+		n, letter, err := itemid.ResolveItemRef(m[2])
 		if err != nil {
 			return Ref{}, err
 		}
 		return Ref{Repo: m[1], Letter: letter, Number: n}, nil
 	}
-	n, letter, err := resolveItemRef(s)
+	n, letter, err := itemid.ResolveItemRef(s)
 	if err != nil {
 		return Ref{}, err
 	}
 	return Ref{Letter: letter, Number: n}, nil
-}
-
-// resolveItemRef is the retired Python resolve_item_ref: "#42", "42" or "F42" give
-// (42, "") or (42, "F"); the letter is upper-cased.
-func resolveItemRef(ref string) (n int, letter string, err error) {
-	s := pystr.Strip(ref)
-	m := itemRefRe.FindStringSubmatch(s)
-	if m == nil {
-		return 0, "", fmt.Errorf("not an item reference: %q", s)
-	}
-	digits := m[1]
-	if digits == "" {
-		digits = m[3]
-	}
-	if n, err = Atoi(digits); err != nil {
-		return 0, "", err
-	}
-	if m[2] != "" {
-		letter = string(upper(m[2][0]))
-	}
-	return n, letter, nil
-}
-
-// resolveKey is resolveItemRef widened to a key-based tracker: a ref the item
-// grammar reads ("#42", "F42") gives the numbered key, and a tracker key
-// ("PROJ-123", "proj-123") gives itself. letter is "" for a key.
-func resolveKey(ref string) (key tracker.IssueKey, letter string, err error) {
-	if n, letter, err := resolveItemRef(ref); err == nil {
-		return tracker.NumKey(n), letter, nil
-	}
-	if k, ok := tracker.ParseKey(pystr.Strip(ref)); ok {
-		return k, "", nil
-	}
-	return "", "", fmt.Errorf("not an item reference: %q", pystr.Strip(ref))
-}
-
-func upper(b byte) byte {
-	if b >= 'a' && b <= 'z' {
-		return b - 'a' + 'A'
-	}
-	return b
-}
-
-// Atoi reads a run of Unicode decimal digits (Python's int() accepts them).
-func Atoi(digits string) (int, error) {
-	n := 0
-	for _, r := range digits {
-		d := pystr.DigitValue(r)
-		if n > (int(^uint(0)>>1)-d)/10 {
-			return 0, fmt.Errorf("number out of range: %s", digits)
-		}
-		n = n*10 + d
-	}
-	return n, nil
 }
 
 func decodeRune(s string) (rune, int) { return utf8.DecodeRuneInString(s) }

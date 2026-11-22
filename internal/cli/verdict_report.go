@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -67,7 +68,7 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 					add(id)
 				}
 			} else {
-				for _, id := range backlog.FindItemIDs(log, backlog.ItemLetters) {
+				for _, id := range backlog.FindItemIDs(log, itemid.ItemLetters) {
 					add(id)
 				}
 			}
@@ -122,7 +123,7 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 				add(id)
 			}
 		} else {
-			for _, id := range backlog.FindItemIDs(body, backlog.ItemLetters) {
+			for _, id := range backlog.FindItemIDs(body, itemid.ItemLetters) {
 				add(id)
 			}
 		}

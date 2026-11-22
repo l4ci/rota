@@ -35,10 +35,6 @@ var Types = []Type{
 	{"S", "", "", false, true, "", ""},
 }
 
-// ItemLetters are the letters of the types that appear as bullets in the open
-// backlog sections (ITEM_TYPES).
-const ItemLetters = "BFT"
-
 // OpenSections are the "## " headings that hold open items, in registry order.
 var OpenSections = []string{"Bugs", "Features", "Tasks"}
 

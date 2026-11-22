@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"slices"
 	"sort"
@@ -59,7 +60,7 @@ func nullStr(s string) any {
 
 // ---- backlog list ----------------------------------------------------------------
 
-var relatedIDRe = regexp.MustCompile(backlog.IDPattern(1))
+var relatedIDRe = regexp.MustCompile(itemid.IDPattern(1))
 
 func backlogList(fs *flag.FlagSet) RunFunc {
 	grep := fs.String("grep", "", "keep rows whose bullet contains this, case-insensitively")

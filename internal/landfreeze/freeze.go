@@ -8,11 +8,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/rotastate"
@@ -234,7 +234,7 @@ func positiveID(s string) bool {
 // and positive numbers or URLs for PRs. Issue whitespace is never normalized.
 func ValidateRepair(issue, pr string) error {
 	id := strings.TrimPrefix(issue, "#")
-	if issue != "" && (strutil.HasControl(issue) || (!positiveID(id) && !backlog.ValidID(id, backlog.FileIDDigits))) {
+	if issue != "" && (strutil.HasControl(issue) || (!positiveID(id) && !itemid.ValidID(id, itemid.FileIDDigits))) {
 		return fmt.Errorf("--repair-issue requires a positive issue number or backlog item ID")
 	}
 	if pr != "" {

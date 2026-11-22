@@ -3,9 +3,9 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"strings"
 
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/design"
 	"github.com/l4ci/rota/internal/exitcode"
@@ -86,7 +86,7 @@ func readBody(c *Ctx, file string) (string, error) {
 func idData(id string, changed any) *jsonx.Object {
 	d := jsonx.NewObject()
 	d.Set("id", id)
-	d.Set("type", backlog.ItemType(idOr(id)))
+	d.Set("type", itemid.ItemType(idOr(id)))
 	if changed != nil {
 		d.Set("changed", changed)
 	}

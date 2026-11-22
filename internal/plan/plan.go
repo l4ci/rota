@@ -7,6 +7,7 @@ package plan
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"strings"
 	"time"
@@ -50,8 +51,8 @@ type Store interface {
 type Ref struct {
 	Milestone string
 	Slice     bool
-	Unit      string           // the slice unit, S03
-	Item      backlog.IssueRef // the item of an item plan
+	Unit      string          // the slice unit, S03
+	Item      itemid.IssueRef // the item of an item plan
 }
 
 // UnitID is the unit of the plan: the slice unit or the item's ID.
@@ -71,7 +72,7 @@ func (r Ref) Kind() string {
 }
 
 var (
-	qualifiedRe = regexp.MustCompile(`^(` + backlog.MilestonePattern + `)-(?:(` + backlog.SlicePattern + `)|(` + backlog.IDPattern(1) + `))$`)
+	qualifiedRe = regexp.MustCompile(`^(` + backlog.MilestonePattern + `)-(?:(` + backlog.SlicePattern + `)|(` + itemid.IDPattern(1) + `))$`)
 	milestoneRe = regexp.MustCompile(`^` + backlog.MilestonePattern + `$`)
 )
 
@@ -85,12 +86,12 @@ func Resolve(key string) (Ref, bool) {
 		if m[2] != "" {
 			return Ref{Milestone: m[1], Slice: true, Unit: m[2]}, true
 		}
-		if it, err := backlog.ParseIssueRef(m[3]); err == nil {
+		if it, err := itemid.ParseIssueRef(m[3]); err == nil {
 			return Ref{Milestone: m[1], Item: it}, true
 		}
 		return Ref{}, false
 	}
-	if it, err := backlog.ParseIssueRef(key); err == nil {
+	if it, err := itemid.ParseIssueRef(key); err == nil {
 		return Ref{Item: it}, true
 	}
 	return Ref{}, false

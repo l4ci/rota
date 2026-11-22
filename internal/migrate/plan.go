@@ -1,6 +1,7 @@
 package migrate
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/milestone"
 	"os"
 	"path/filepath"
@@ -92,7 +93,7 @@ func planItems(root, backlogText string, warn func(string)) []*migItem {
 		it.title = pystr.Strip(strings.TrimRight(pystr.Strip(m[3]), "."))
 		for _, re := range []*regexp.Regexp{backlog.GHRefRe, backlog.GLRefRe} {
 			if r := re.FindStringSubmatch(rest); r != nil && it.adopt == 0 {
-				it.adopt, _ = backlog.Atoi(r[1])
+				it.adopt, _ = itemid.Atoi(r[1])
 			}
 		}
 		for _, name := range migOrder {
@@ -275,7 +276,7 @@ func tokenMatches(s string) []tokenMatch {
 	var out []tokenMatch
 	for i := 0; i < len(s); {
 		r, n := utf8.DecodeRuneInString(s[i:])
-		if n == 1 && strings.IndexByte(backlog.ItemLetters, s[i]) >= 0 {
+		if n == 1 && strings.IndexByte(itemid.ItemLetters, s[i]) >= 0 {
 			prev, _ := utf8.DecodeLastRuneInString(s[:i])
 			if i == 0 || !(pystr.IsWord(prev) || prev == '/' || prev == '-') {
 				j := i + 1
@@ -302,4 +303,4 @@ func tokenMatches(s string) []tokenMatch {
 	return out
 }
 
-var bracketedRe = backlog.BracketedIDRe
+var bracketedRe = itemid.BracketedIDRe

@@ -1,10 +1,10 @@
 package design
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 )
 
@@ -33,8 +33,8 @@ func (s notes) List() ([]Entry, error) {
 // CheckID: the item references the issue backend resolves, a number, a lettered
 // number or a tracker key.
 func (notes) CheckID(id string) error {
-	if _, err := backlog.ParseIssueRef(id); err != nil {
-		return exitcode.Errf(exitcode.ExitUsage, "ID must be an issue number or tracker key: N, #N, [%s]N or PROJ-123 (e.g. 233, #233, B7); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, id)
+	if _, err := itemid.ParseIssueRef(id); err != nil {
+		return exitcode.Errf(exitcode.ExitUsage, "ID must be an issue number or tracker key: N, #N, [%s]N or PROJ-123 (e.g. 233, #233, B7); designs are per-item, not per-slice or per-milestone, got %q", itemid.ItemLetters, id)
 	}
 	return nil
 }

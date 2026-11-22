@@ -5,6 +5,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -48,7 +49,7 @@ func (notes) CheckNew(Ref) error { return nil }
 // DesignRef: an item plan points at the item's own design note, a slice plan
 // at the note of the item it names.
 func (notes) DesignRef(slice bool, design string) (string, error) {
-	ref, err := backlog.ParseIssueRef(design)
+	ref, err := itemid.ParseIssueRef(design)
 	if err != nil {
 		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like 3, F3 or PROJ-123, got %q", design)
 	}

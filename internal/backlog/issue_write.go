@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"maps"
 	"regexp"
 	"slices"
@@ -105,7 +106,7 @@ func (b *Issues) require(ref string) (Issue, string, error) {
 
 // number is the issue number a ref spells, without asking the tracker (_number).
 func (b *Issues) number(ref string) (tracker.IssueKey, error) {
-	n, _, err := resolveKey(ref)
+	n, _, err := itemid.ResolveKey(ref)
 	if err != nil {
 		return "", errf(ErrNotFound, "%s", err.Error())
 	}
@@ -457,7 +458,7 @@ func noteParts(comments []tracker.Comment, kind string) ([]notePart, error) {
 		}
 		idx := 1
 		if nt.Part != "" {
-			if idx, err = Atoi(nt.Part); err != nil {
+			if idx, err = itemid.Atoi(nt.Part); err != nil {
 				return nil, err
 			}
 		}

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
@@ -42,7 +43,7 @@ func openDesign(c *Ctx, id string) (design.Store, *who, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	w := &who{ID: id, Type: backlog.ItemType(id)}
+	w := &who{ID: id, Type: itemid.ItemType(id)}
 	if issue {
 		return design.NewNotes(itemNotes(c, id, w), func(msg string) { c.Warn("%s", msg) }), w, nil
 	}
@@ -55,7 +56,7 @@ func openProof(c *Ctx, id string) (root string, st proof.Store, w *who, err erro
 	if err != nil {
 		return "", nil, nil, err
 	}
-	w = &who{ID: id, Type: backlog.ItemType(id)}
+	w = &who{ID: id, Type: itemid.ItemType(id)}
 	if issue {
 		open := itemNotes(c, id, w)
 		return root, proof.NewNotes(itemNoteLockDir(c, root), func() (artifact.Notes, error) {
@@ -123,7 +124,7 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 func fileProof(root string) proof.Store {
 	return proof.Files(proof.Sidecar{
 		Path: func(id string) (string, error) {
-			if !backlog.ValidID(id, backlog.FileIDDigits) {
+			if !itemid.ValidID(id, itemid.FileIDDigits) {
 				return "", exitcode.Errf(exitcode.ExitUsage, "ID must look like B07, F12 or T03, got %q", id)
 			}
 			return backlog.ProofPath(root, id), nil

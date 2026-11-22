@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,7 +27,7 @@ var (
 	GHRefRe  = regexp.MustCompile(`GH:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
 	GLRefRe  = regexp.MustCompile(`GL:[` + pystr.SpaceClass + `]*#(\p{Nd}+)`)
 	reposRe  = regexp.MustCompile(`Repos:[` + pystr.SpaceClass + `]*([^\n]+?)(?:[` + pystr.SpaceClass + `]+(?:Detail|Related|Milestone):|$)`)
-	bulletID = BracketedIDRe
+	bulletID = itemid.BracketedIDRe
 )
 
 type importedKey struct {
@@ -65,13 +66,13 @@ func ScanImported(root, forRepo string) []Imported {
 	scanLine := func(line, item, status string) {
 		repos := importedRepos(line)
 		for _, m := range GHRefRe.FindAllStringSubmatch(line, -1) {
-			n, err := Atoi(m[1])
+			n, err := itemid.Atoi(m[1])
 			if err == nil {
 				register("github", n, item, repos, status)
 			}
 		}
 		for _, m := range GLRefRe.FindAllStringSubmatch(line, -1) {
-			n, err := Atoi(m[1])
+			n, err := itemid.Atoi(m[1])
 			if err == nil {
 				register("gitlab", n, item, repos, status)
 			}

@@ -3,6 +3,7 @@ package backlog
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"slices"
 	"strings"
@@ -86,7 +87,7 @@ func itemFromCorpus(corpus, ref string) (*Item, bool) {
 		return nil, false
 	}
 	it := &Item{ID: ref, Fields: ParseFields(line), Line: line, Title: title}
-	if r, _ := utf8.DecodeRuneInString(ref); strings.ContainsRune(ItemLetters, r) {
+	if r, _ := utf8.DecodeRuneInString(ref); strings.ContainsRune(itemid.ItemLetters, r) {
 		it.Type = string(r)
 	}
 	if b, ok := ParseOpen("- " + line); ok {

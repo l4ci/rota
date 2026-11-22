@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"strings"
 	"testing"
 
@@ -36,8 +37,8 @@ func TestTypesMatchRegistry(t *testing.T) {
 			sections = append(sections, p[1])
 		}
 	}
-	if letters != ItemLetters {
-		t.Errorf("ItemLetters = %q, registry gives %q", ItemLetters, letters)
+	if letters != itemid.ItemLetters {
+		t.Errorf("itemid.ItemLetters = %q, registry gives %q", itemid.ItemLetters, letters)
 	}
 	if strings.Join(sections, ",") != strings.Join(OpenSections, ",") {
 		t.Errorf("OpenSections = %v, registry gives %v", OpenSections, sections)
@@ -58,7 +59,7 @@ func TestTypesMatchPython(t *testing.T) {
 			dirs[ty.Letter], sections[ty.Kind] = ty.Kind, ty.Section
 		}
 	}
-	golden.Check(t, map[string]any{"input": nil}, map[string]any{"items": ItemLetters, "countable": countable, "plannable": plannable,
+	golden.Check(t, map[string]any{"input": nil}, map[string]any{"items": itemid.ItemLetters, "countable": countable, "plannable": plannable,
 		"dir": dirs, "section": sections, "open": OpenSections})
 }
 

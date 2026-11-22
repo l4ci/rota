@@ -5,11 +5,11 @@
 package design
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"strings"
 	"time"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/section"
@@ -65,7 +65,7 @@ func Rm(s Store, id string) error { return verbs(s).Rm(id) }
 // stub carries it too, since a "#" would turn the front-matter id into a YAML
 // comment.
 func normID(id string) string {
-	if r, err := backlog.ParseIssueRef(id); err == nil {
+	if r, err := itemid.ParseIssueRef(id); err == nil {
 		return r.ID
 	}
 	return id
