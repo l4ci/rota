@@ -155,6 +155,22 @@ func TestLabelGitLab(t *testing.T) {
 	}
 }
 
+// changed matches label names by the tracker's own rule: GitHub folds case,
+// so removing Bug from an issue labelled bug changes it; GitLab matches
+// exactly, so there Bug is absent and nothing changes.
+func TestLabelChangedFollowsLabelRule(t *testing.T) {
+	ctx := context.Background()
+	rb := "api repos/{owner}/{repo}/issues/3"
+	f := &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"labels": [{"name": "bug"}]}`}, rb: {out: `{"labels": []}`}}}
+	if changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "Bug", false, false); err != nil || !changed {
+		t.Errorf("github remove Bug from bug: changed=%v err=%v", changed, err)
+	}
+	f = &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["bug"]}`}}}
+	if changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "Bug", false, false); err != nil || changed {
+		t.Errorf("gitlab remove Bug from bug: changed=%v err=%v", changed, err)
+	}
+}
+
 // TestInvalidConfigIsNotDefaulted: an invalid issues.source or forge.provider
 // fails the verbs built on it with ValidateConfig's error instead
 // of resolving as the default.
@@ -379,6 +395,34 @@ func TestLabelCloseOnJiraSource(t *testing.T) {
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("a forge CLI ran: %q", f.calls)
+	}
+}
+
+// On a Jira source label names match exactly, so removing Bug from an issue
+// labelled bug changes nothing (AC-2 of #4209).
+func TestLabelChangedExactOnJiraSource(t *testing.T) {
+	ctx := context.Background()
+	s := jiratest.New(t, jiratest.Options{})
+	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
+	})
+	env := (&forge{origin: gh}).env(t)
+	cfg, err := jsonx.Decode([]byte(`{"issues": {"source": "jira", "connection": "work", "jira": {"project": "PROJ"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Config = cfg
+	env.Opts = append(env.Opts, conn)
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, env.Config, "", conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := it.Create(ctx, "Widen", "", []string{"bug"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := Label(ctx, env, "", key, "Bug", false, false); err != nil || changed {
+		t.Errorf("jira remove Bug from bug: changed=%v err=%v", changed, err)
 	}
 }
 

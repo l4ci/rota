@@ -10,7 +10,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 
@@ -90,38 +89,43 @@ func (e Env) adapter(ctx context.Context, provider, dir string) (Forge, error) {
 
 // tracker is what label and close act on. tracker.ResolveIssueActor owns the
 // issues.source decision; this only turns its refusals into this verb's.
-func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, error) {
+// The actor is returned beside it: it owns the label-name rule.
+func (e Env) tracker(ctx context.Context, verb, dir string) (Forge, tracker.IssueActor, error) {
 	s, err := e.settings()
 	if err != nil {
-		return nil, err
+		return nil, tracker.IssueActor{}, err
 	}
 	a, err := tracker.ResolveIssueActor(ctx, s, dir, e.Opts...)
 	switch {
 	case errors.Is(err, tracker.ErrNoIssueActor):
-		return nil, noProvider(verb)
+		return nil, a, noProvider(verb)
 	case err != nil:
-		return nil, fmt.Errorf("cannot %s: %w", verb, err) // the origin names no forge
+		return nil, a, fmt.Errorf("cannot %s: %w", verb, err) // the origin names no forge
 	}
+	var f Forge
 	if e.Forge != nil {
-		return e.Forge(ctx, a.Source, dir)
+		f, err = e.Forge(ctx, a.Source, dir)
+	} else {
+		f, err = a.Adapter(ctx)
 	}
-	return a.Adapter(ctx)
+	return f, a, err
 }
 
 // ---- label ----------------------------------------------------------------
 
 // Label adds or removes one label on an upstream issue and reports whether it
 // changed anything. A label already there (or already absent) is a no-op:
-// changed is read from the issue first, and a failed read leaves it true.
-// autoCreate lets a missing label be created on the forge.
+// changed is read from the issue first, matching names by the tracker's own
+// label rule (case-folded on GitHub, Linear and Itsaplan), and a failed read
+// leaves it true. autoCreate lets a missing label be created on the forge.
 func Label(ctx context.Context, env Env, dir string, key tracker.IssueKey, label string, add, autoCreate bool) (bool, error) {
-	a, err := env.tracker(ctx, "label upstream issue", dir)
+	a, actor, err := env.tracker(ctx, "label upstream issue", dir)
 	if err != nil {
 		return false, err
 	}
 	changed := true
 	if is, err := a.Get(ctx, key, false); err == nil {
-		changed = slices.Contains(is.Labels, label) != add
+		changed = actor.HasLabel(is.Labels, label) != add
 	}
 	if add {
 		err = a.AddLabels(ctx, key, []string{label}, autoCreate)
@@ -149,7 +153,7 @@ func Close(ctx context.Context, env Env, dir string, key tracker.IssueKey, commi
 		body += " ([" + item + "])"
 	}
 	body += "\n\n" + marker.Line("shipped")
-	a, err := env.tracker(ctx, "close upstream issue", dir)
+	a, _, err := env.tracker(ctx, "close upstream issue", dir)
 	if err != nil {
 		return false, err
 	}
