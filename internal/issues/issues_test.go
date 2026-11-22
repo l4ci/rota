@@ -398,6 +398,34 @@ func TestLabelCloseOnJiraSource(t *testing.T) {
 	}
 }
 
+// On a Jira source label names match exactly, so removing Bug from an issue
+// labelled bug changes nothing (AC-2 of #4209).
+func TestLabelChangedExactOnJiraSource(t *testing.T) {
+	ctx := context.Background()
+	s := jiratest.New(t, jiratest.Options{})
+	conn := tracker.WithConnections(func(_ context.Context, name string) (connections.Connection, string, error) {
+		return connections.Connection{Name: name, Kind: connections.KindJira, Site: s.URL, User: "me@example.com", Deployment: connections.DeploymentCloud}, "tok", nil
+	})
+	env := (&forge{origin: gh}).env(t)
+	cfg, err := jsonx.Decode([]byte(`{"issues": {"source": "jira", "connection": "work", "jira": {"project": "PROJ"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	env.Config = cfg
+	env.Opts = append(env.Opts, conn)
+	it, err := tracker.NewIssueTrackerFromConfig(ctx, env.Config, "", conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := it.Create(ctx, "Widen", "", []string{"bug"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := Label(ctx, env, "", key, "Bug", false, false); err != nil || changed {
+		t.Errorf("jira remove Bug from bug: changed=%v err=%v", changed, err)
+	}
+}
+
 // With issues.source linear, label and close act on the Linear issue through
 // issues.connection, whatever the origin remote is.
 func TestLabelCloseOnLinearSource(t *testing.T) {

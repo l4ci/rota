@@ -80,28 +80,30 @@ func hasLabel(r labelRule, names []string, want string) bool {
 }
 
 // sourceLabelRule is the rule of the tracker an issues.source or forge provider
-// names. Every source IssueActor resolves is listed; any other matches exactly.
-func sourceLabelRule(source string) labelRule {
+// names, and whether the source is listed. TestSourceLabelRuleCoversSources
+// fails when a source an IssueActor can resolve is missing here.
+func sourceLabelRule(source string) (labelRule, bool) {
 	switch source {
 	case config.SourceGitHub:
-		return githubLabelRule
+		return githubLabelRule, true
 	case config.SourceGitLab:
-		return gitlabLabelRule
+		return gitlabLabelRule, true
 	case config.SourceLinear:
-		return linearLabelRule
+		return linearLabelRule, true
 	case config.SourceItsaplan:
-		return itsaplanLabelRule
+		return itsaplanLabelRule, true
 	case config.SourceJira:
-		return jiraLabelRule
+		return jiraLabelRule, true
 	}
-	return labelsExact
+	return labelsExact, false
 }
 
 // HasLabel reports whether names holds want under the label rule of the
 // tracker the actor resolved, so a caller outside this package never compares
-// label names itself.
+// label names itself. An unlisted source matches exactly.
 func (a IssueActor) HasLabel(names []string, want string) bool {
-	return hasLabel(sourceLabelRule(a.Source), names, want)
+	r, _ := sourceLabelRule(a.Source)
+	return hasLabel(r, names, want)
 }
 
 func orderedLabels(ls []Label) []Label {
