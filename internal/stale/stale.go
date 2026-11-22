@@ -65,7 +65,8 @@ type Report struct {
 // dated by the newest commit that changed one of its own lines (git blame), so
 // a recently edited sibling does not hide it. Open backlog items from todos
 // (the caller's selected backend; nil lists none) are dated by their Captured
-// field. SkippedUndated counts items without a usable
+// field. A knowledge file git cannot blame (untracked) gives none; a blame that
+// fails to run is an error. SkippedUndated counts items without a usable
 // Captured date (always 0 for the map and knowledge kinds).
 func FindReport(repo git.Repo, root, kind string, days int, today time.Time, todos TodoSource) (Report, error) {
 	var es []Entry
@@ -105,7 +106,10 @@ func findKnowledge(repo git.Repo, root string, days int, today time.Time) ([]Ent
 		return nil, err
 	}
 	dates, ok, err := repo.BlameLineDates(context.Background(), rotatree.Rel(rotatree.KnowledgeFile))
-	if err != nil || !ok {
+	if err != nil {
+		return nil, fmt.Errorf("blame %s: %w", rotatree.Rel(rotatree.KnowledgeFile), err)
+	}
+	if !ok {
 		return nil, nil
 	}
 	var out []Entry

@@ -970,3 +970,23 @@ func TestShipErrPreservesCleanupFailure(t *testing.T) {
 		t.Fatalf("nested merge error replaced cleanup error: %v", err)
 	}
 }
+
+func TestShipPlanRestoreLinePerBackend(t *testing.T) {
+	file := shipPlan("abc", "s", "main", 0, []string{"F03", "B01", "T02"}, false, false)
+	for _, w := range []string{
+		"Items:    F03 will be restored to BACKLOG.md (Features)\n",
+		"          B01 will be restored to BACKLOG.md (Bugs)\n",
+		"          T02 will be restored to BACKLOG.md (Tasks)\n",
+	} {
+		if !strings.Contains(file, w) {
+			t.Errorf("file plan lacks %q:\n%s", w, file)
+		}
+	}
+	tr := shipPlan("abc", "s", "main", 0, []string{"#12", "#7"}, false, true)
+	if strings.Contains(tr, "BACKLOG.md") {
+		t.Errorf("tracker plan names BACKLOG.md:\n%s", tr)
+	}
+	if !strings.Contains(tr, "Items:    #12 will be reopened (open on the tracker)\n          #7 will be reopened (open on the tracker)\n") {
+		t.Errorf("tracker plan lines:\n%s", tr)
+	}
+}
