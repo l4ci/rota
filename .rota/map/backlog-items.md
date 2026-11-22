@@ -1,8 +1,8 @@
 ---
 subsystem: backlog-items
 summary: backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, work-cycle rules, shared section/artifact helpers, blockedBy vocabulary
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -18,7 +18,7 @@ Depends on: tracker-issues (tracker, labels, marker, itembody), review-verdicts 
 - internal/artifact/docs.go:15 — `FileDocs` (`Update` :52, `Replace` :44); `section.Append` at internal/section/section.go:97
 - internal/cycle/branch.go:14 — `BranchName`; `Gate` at internal/cycle/gate.go:33, `Classify` at internal/cycle/siblings.go:29
 - internal/debugctr/debugctr.go:34 — `Open`, the fix-attempt counter; sessions: `debugsession.Put` internal/debugsession/session.go:32
-- internal/blockedby/blockedby.go:153 — `All`, the closed set of `blockedBy` values
+- internal/blockedby/blockedby.go:154 — `All`, the closed set of `blockedBy` values
 
 ## Key files / dirs
 - internal/backlog/ — body_edit.go (`BodyDoc`, `editBody`: the single read-modify-write seam for issue bodies), model.go, types.go, backend.go, capability.go, errors.go, itemid.go, locator.go, documents.go, report.go, acceptance.go, decision.go, imported.go, file.go/write.go/maintain.go (file side), issue.go/issue_write.go/issuerefs.go (issues side), umbrella.go/umbrella_milestones.go and route.go (sub-repo routing), milestones.go/milestone_store.go/milestone_items.go, capture.go, claims.go/claimlabel.go, ready.go, proofgate.go, completion_preflight.go, release_review.go, drift.go, view.go, shipped.go, rm.go, bullet.go; trackertest/ (fake tracker), testdata/golden
@@ -26,7 +26,7 @@ Depends on: tracker-issues (tracker, labels, marker, itembody), review-verdicts 
 - internal/plan/ — plan.go (Store), files.go, notes.go, check.go, size.go, uncertain.go, validatedocs.go, units.go, testdata/
 - internal/design/ — design.go, files.go (`.rota/designs/<ID>.md`), notes.go, testdata/
 - internal/spike/ — spike.go (`.rota/spikes/`, `spike/<name>` branches; `Finish` stamps `finished` with `frontmatter.SetField`)
-- internal/milestone/ — milestone.go, store.go, items.go, children.go, check.go, audit.go, capabilities.go, kind.go, decisions.go, shipped.go; testdata/fixture, testdata/golden
+- internal/milestone/ — milestone.go, store.go, items.go, children.go, check.go, audit.go, capabilities.go, kind.go, title.go (`Title`/`ParseTitle`: the "<id> — <title>" grammar), decisions.go, shipped.go; testdata/fixture, testdata/golden
 - internal/artifact/ — artifact.go (exit-coded Error, `Notes`), docs.go (`FileDocs`), verbs.go (`DocStore`), artifacttest/
 - internal/section/ — section.go (`Find`, `Replace`, `Append`, `Topics`, `Wrap`, `UpsertManaged`), testdata/
 - internal/status/ — status.go, repos.go
@@ -53,5 +53,5 @@ Go 1.22, stdlib only. Markdown with front matter (`frontmatter`); status and cou
 - SECTION_LIST=test/sections/06_backlog.sh bash test/runner.sh (also 55_backend, 61_milestones, 41_plan_validate_docs, 125_plan_check, 151_milestone_check, 36_debug_iron_law, 80_iron_law, 154_debug_session, 01_status)
 
 ## Concerns
-- backlog is ~9.5k non-test lines (17.8k with its 47 test files), still the largest package in this map; file, issue and umbrella backends live side by side in it.
+- backlog is ~9.5k non-test lines (17.9k with its 48 test files), still the largest package in this map; file, issue and umbrella backends live side by side in it.
 - backlog imports milestone; plan and design import backlog, milestone imports neither (it uses counter and artifact).

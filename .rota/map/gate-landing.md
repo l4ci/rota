@@ -1,8 +1,8 @@
 ---
 subsystem: gate-landing
 summary: manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -15,7 +15,7 @@ Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracke
 - internal/gate/gate.go:226 — `NewMergePolicy` (`ship.mergeApproval` none/all/paths)
 - internal/land/land.go:76 — `MergeLocal`, local merge with one abort attempt on failure
 - internal/land/land.go:146 — `MergeForge`, forge merge pinned to the verified head
-- internal/landfreeze/freeze.go:24 — freeze `Record`; `Allows` at :132
+- internal/landfreeze/freeze.go:24 — freeze `Record`; `Decide` at :174 (the one admission rule)
 - internal/postgate/postgate.go:54 — `Gate` (per-item bounce accounting); `Train` at :82; `Book` port at :17
 - internal/landing/verdict.go:77 — `ClassifyVerdict`, the single verdict-to-meaning table
 - internal/ship/merge.go:39 — `MergeBranch`; `MergePR` at :99; undo: `PlanUndo` internal/ship/undo.go:51, `ApplyUndo` :171
@@ -49,5 +49,5 @@ Go, stdlib only. Git and forge access through injected ports (`land.Git`, `ship.
 - SECTION_LIST=test/sections/77_manual_gates.sh bash test/runner.sh (also 08_ship, 35_undo, 14_release, 96_release_order, 104_gate_stale_merge, 107_gate_lock, 131_gate_closes, 172_round_freeze)
 
 ## Concerns
-- ship (about 860 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
+- ship (about 850 non-test lines) mixes unrelated rules (PR body, merge, undo, worktree clearing) in one package.
 - overlap.Shared and pathglob.Match both answer "entry vs file" with different `**` semantics, chosen by `pathglob.Flavour`.

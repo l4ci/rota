@@ -1,8 +1,8 @@
 ---
 subsystem: review-verdicts
 summary: typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, the test-audit report, failing-test-name parsing, golden records, Go test-path rules
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -15,7 +15,7 @@ Depends on: backlog-items (backlog, artifact, section, only `followup` imports b
 - internal/verdict/route.go:74 — `Route`, verdict to next step; `ProducerNext` :38, `DebugNext` :47
 - internal/verdict/missing.go:29 — `MissingReviews`, the missing-review-verdicts rule by review depth
 - internal/change/classify.go:88 — `Classify`, a diff to a `Tier`; `Policy` at :51
-- internal/reviewpolicy/reviewpolicy.go:71 — `Decide`, review depth; `MatchLenses` at :203
+- internal/reviewpolicy/reviewpolicy.go:71 — `Decide`, review depth; `MatchLenses` at :217
 - internal/proof/proof.go:64 — `Add`; `Proves` at :190, `Mark` at :198
 - internal/acceptance/acceptance.go:88 — `Parse`; `Coverage` at :203
 - internal/suiteaudit/inventory.go:64 — `Inventory`: test placement report; `ReadTelemetry` report.go:98 (recorded test costs); CLI internal/cli/testaudit.go:20 `rota test-audit`
@@ -33,7 +33,7 @@ Depends on: backlog-items (backlog, artifact, section, only `followup` imports b
 - internal/flakeledger/ — ledger.go (`.rota/flakes.jsonl`, `Rank`; writes via `fsio.AppendLine`, reads via `fsio.ReadLines`), retry.go, infrastructure-markers.txt
 - internal/followup/ — followup.go (`FileFollowUps`: files deferred review findings as one backlog item; imports acceptance, backlog, verdict, tracker; called by `rota verdict add --file-deferred` in internal/cli/verdict.go)
 - internal/golden/ — golden.go, testdata/; records live in `testdata/golden/<test>.json` of each using package
-- internal/gopath/ — gopath.go (`IsTestGo`, `IsProdGo`); used by config, stalebin, worker, reviewpolicy
+- internal/gopath/ — gopath.go (`IsTestGo`, `IsProdGo`); used by stalebin, worker, reviewpolicy
 
 ## Stack
 Go 1.22, stdlib only. Verdict store is a jsonx file (`rotatree.Verdicts`), gitignored; flake log is JSONL.
@@ -53,6 +53,6 @@ Go 1.22, stdlib only. Verdict store is a jsonx file (`rotatree.Verdicts`), gitig
 - SECTION_LIST=test/sections/78_verdicts.sh bash test/runner.sh (also 52_proof, 119_proof_record, 122_acceptance_ids, 124_test_ledger, 86_merge_approval)
 
 ## Concerns
-- verdict is ~1.9k non-test lines across 11 files; verdict.go still holds kinds, parsing, store and persistence together.
+- verdict is ~2.0k non-test lines across 11 files; verdict.go still holds kinds, parsing, store and persistence together.
 - golden is imported by about a dozen packages' tests, so a change to its record format touches all their testdata.
 - Review depth is decided in two places: `reviewpolicy.Decide` (config-driven) and `verdict.MissingReviews` (what depth demands).

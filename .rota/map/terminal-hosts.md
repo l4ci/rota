@@ -1,8 +1,8 @@
 ---
 subsystem: terminal-hosts
 summary: terminal host abstraction (herdr, herdr-core, tmux, Orca) that runs worker sessions, and the herdr pane layout (split/tabs)
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -12,9 +12,9 @@ Depends on: fsio, git, harness, pidlive, proc, shlex, strutil, tui, repos (layou
 ## Entry points
 - internal/host/host.go:383 — Host interface; :426 New(kind, Deps) builds the backend
 - internal/host/host.go:285 — Capabilities (what a backend can do); `CapabilitiesForKind` :341
-- internal/host/policy.go:222 — `kindPolicy`: per-kind capability overlay (InSessionRule, ServerProc, Probe, Health, SessionAttach)
+- internal/host/policy.go:245 — `kindPolicy`: per-kind overlay of Capabilities fields (InSessionRule, LaunchKindBound, Harness, Server, Attach, Diagnose, ...) from the `kindSpecs` table (:64, built in `init`); `PaneKinds` at :67 lists the pane kinds in resolution order
 - internal/host/resolve.go:30 — Resolve: pick the host kind; :79 ResolveLaunch
-- internal/host/herdr.go:31 — herdr backend; tmux.go:29 tmux; orca.go:17 Orca; core.go:23 herdr-core (`coreHost`)
+- internal/host/herdr.go:31 — herdr backend; tmux.go:29 `tmux`; orca.go:17 `orca`; core.go:23 herdr-core (`coreHost`)
 - internal/host/layout.go:26 — Layouter interface (pane moves)
 - internal/host/events.go:30 — Watcher interface (output events)
 - internal/layout/layout.go:459 — Arrange; :225 ToSplit and :344 ToTabs
@@ -25,7 +25,7 @@ Depends on: fsio, git, harness, pidlive, proc, shlex, strutil, tui, repos (layou
 - internal/layout/ — grid for a wide screen: left column 40% for the orchestrator (see package comment); state via layout.State
 
 ## Stack
-Go 1.22; shells out to herdr, tmux, Orca binaries only through Deps.Run (`Deps.Run` at host.go:81, default `proc.Run`); herdr-core is a separate socket transport (dials the inherited endpoint, never starts a server). Kinds (host.go:35): herdr, herdr-core, tmux, orca; `Solo` (host.go:31) is a round-level value with no pane and no Host.
+Go 1.22; shells out to herdr, tmux, Orca binaries only through Deps.Run (`Deps.Run` at host.go:81, default `proc.Run`); herdr-core is a separate socket transport (dials the inherited endpoint, never starts a server). Kinds (host.go:38): herdr, herdr-core, tmux, orca; `Solo` (host.go:31) is a round-level value with no pane and no Host.
 
 ## Conventions specific here
 - Invariants: SAFETY: closing a herdr tab, tmux window or Orca terminal kills live agents; nothing execs a binary directly, every command goes through Deps.Run, which tests replace with a fake; layout only moves panes (no restarts, nothing typed).
@@ -42,5 +42,4 @@ Go 1.22; shells out to herdr, tmux, Orca binaries only through Deps.Run (`Deps.R
 
 ## Concerns
 - host is about 7500 non-test lines; core.go (1017) is the biggest backend, herdr.go (383, plus herdr_kill/send/status.go) and orca.go (410, plus orca_*.go) are split by concern; hand-parsed dialog keys (`DialogKeys`, dialog.go:96) depend on harness prompt text.
-- Package comment still says it ports the old bin/hv-host-*.sh helpers.
 - host imports harness, and harness reads host facts through HostTraits: the seam is a copy of facts, not a shared type.

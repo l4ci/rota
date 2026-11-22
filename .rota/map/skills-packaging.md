@@ -1,8 +1,8 @@
 ---
 subsystem: skills-packaging
 summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -14,8 +14,8 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references
 - internal/skills/set.go:38 — `Embedded`: the embedded set; `Load` at :69
-- internal/skills/install.go:275 — `Set.Install`; `Update` at :293, `Uninstall` at :527, `Set.Status` at :636
-- internal/skills/get.go:132 — `Set.Serve`: one skill or reference by name (read side)
+- internal/skills/install.go:275 — `Set.Install`; `Update` at :293, package func `Uninstall` at :527, `Set.Status` at :636
+- internal/skills/get.go:116 — `Set.Serve`: one skill or reference by name (read side)
 - internal/cli/skills.go:21 — `skillsCommands`: the `rota skills` verbs
 - internal/prompts/store.go:85 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8
 - scripts/skills-docs.py:108 — `main`: regenerate the marked blocks from `docs/skills/*.md` (`--check` writes nothing)
@@ -31,7 +31,7 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 - `plugin/skills/rota-install/SKILL.md` — the Claude Code plugin's own skill; `.claude-plugin/{plugin,marketplace}.json`
 - `plugins/rota/.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json` — Codex plugin manifest and marketplace
 - `install.sh` — verifies minisign signature and sha256, installs the release binary
-- `scripts/` — `skills-docs.py`, `site-sync.py`, `skilldocs.py` (validated loader for docs/skills front matter and chains), `lanes.py` (skill lanes), `fmlite.py` (YAML-subset front matter reader), `codex-plugin.sh`; `videos.py` and `video_catalog.py` belong to the video pipeline
+- `scripts/` — `skills-docs.py`, `site-sync.py`, `skilldocs.py` (validated loader for docs/skills front matter and chains), `lanes.py` (skill lanes), `fmlite.py` (YAML-subset front matter reader), `codex-plugin.sh`, `rota-bin.sh` (prints a rota binary for skill checks: `ROTA_BIN` or a build of this checkout; used by `validate-skills.py` and `codex-plugin.sh`); `videos.py` and `video_catalog.py` belong to the video pipeline
 - `docs/skills/*.md` — front matter is the single source for skill lanes, summaries and chains; `docs/skills/README.md` holds chains
 
 ## Stack
@@ -47,12 +47,12 @@ Go 1.22 (`embed`, `io/fs`); Python 3 standard library only for scripts (no PyYAM
 - The prompt store never overwrites a malformed file and rejects a store written by a newer rota; saves carry an expected revision and conflict otherwise.
 
 ## Test commands
-- `go test ./internal/skills/ ./internal/prompts/ .` (root package tests: `plugin_test.go`, `skill_alignment_test.go`, `skill_autonomy_test.go`, `codex_plugin_test.go`, `plugin_hook_test.go`, `layout_test.go`, `skillfm_test.go`)
+- `go test ./internal/skills/ ./internal/prompts/ .` (root package tests: `plugin_test.go`, `skill_alignment_test.go`, `skill_autonomy_test.go`, `site_sync_test.go`, `codex_plugin_test.go`, `plugin_hook_test.go`, `layout_test.go`, `skillfm_test.go`)
 - `python3 test/validate-skills.py`
 - `bash test/doclint.sh` (runs `skills-docs.py --check` among its checks)
 - `python3 scripts/skills-docs.py --check`
 
 ## Concerns
 - The `references` symlinks under each `skills/rota-*/` break on platforms that drop symlinks; the Codex build copies them for that reason.
-- Skill prose is checked by regex rules (`PROSE_RULES` in `test/validate-skills.py`), so wording changes can fail the validator.
+- Skill prose is checked by regex rules (`prose_rules()` in `test/validate-skills.py`), so wording changes can fail the validator.
 - `internal/prompts` is tied to generated agents (workers) more than to skill packaging; placed here for lack of a closer subsystem among these five.
