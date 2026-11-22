@@ -341,3 +341,47 @@ func TestRecordsCarryOneMissingAndTemporaryRule(t *testing.T) {
 		}
 	}
 }
+
+// A registry move that fails must surface from every entry point that reads or
+// writes the registry, and leave the old file for the next call to retry.
+func TestEntryPointsReportAFailedLegacyMove(t *testing.T) {
+	calls := map[string]func(cfgdir.Env) error{
+		"Register": func(e cfgdir.Env) error { _, err := Register(e, t.TempDir(), time.Now()); return err },
+		"List":     func(e cfgdir.Env) error { _, err := List(e); return err },
+		"Cleanup":  func(e cfgdir.Env) error { _, err := Cleanup(e); return err },
+		"Remove":   func(e cfgdir.Env) error { _, err := Remove(e, t.TempDir()); return err },
+	}
+	for name, call := range calls {
+		t.Run(name, func(t *testing.T) {
+			x, env := isolate(t)
+			old := oldRegistry(t, x, `{"projects":[{"path":"/old","name":"old"}]}`)
+			// A regular file where the state dir must be blocks the move's MkdirAll.
+			if err := os.MkdirAll(filepath.Join(x, "state"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(x, "state", "rota"), nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := call(env); err == nil {
+				t.Fatal("a failed legacy move must be reported")
+			}
+			if _, err := os.Stat(old); err != nil {
+				t.Errorf("old registry must stay for the retry: %v", err)
+			}
+		})
+	}
+}
+
+func TestRegistryPathHasNoSideEffect(t *testing.T) {
+	x, env := isolate(t)
+	old := oldRegistry(t, x, `{"projects":[]}`)
+	if _, err := registryPath(env); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(old); err != nil {
+		t.Errorf("registryPath must not move the old registry: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err == nil {
+		t.Error("registryPath must not create the new registry")
+	}
+}
