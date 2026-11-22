@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
 )
 
@@ -76,6 +77,31 @@ func sameLabelName(r labelRule, a, b string) bool {
 // hasLabel reports whether names holds want under the rule.
 func hasLabel(r labelRule, names []string, want string) bool {
 	return slices.ContainsFunc(names, func(n string) bool { return sameLabelName(r, n, want) })
+}
+
+// sourceLabelRule is the rule of the tracker an issues.source or forge provider
+// names. Every source IssueActor resolves is listed; any other matches exactly.
+func sourceLabelRule(source string) labelRule {
+	switch source {
+	case config.SourceGitHub:
+		return githubLabelRule
+	case config.SourceGitLab:
+		return gitlabLabelRule
+	case config.SourceLinear:
+		return linearLabelRule
+	case config.SourceItsaplan:
+		return itsaplanLabelRule
+	case config.SourceJira:
+		return jiraLabelRule
+	}
+	return labelsExact
+}
+
+// HasLabel reports whether names holds want under the label rule of the
+// tracker the actor resolved, so a caller outside this package never compares
+// label names itself.
+func (a IssueActor) HasLabel(names []string, want string) bool {
+	return hasLabel(sourceLabelRule(a.Source), names, want)
 }
 
 func orderedLabels(ls []Label) []Label {

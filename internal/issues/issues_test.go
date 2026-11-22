@@ -155,6 +155,22 @@ func TestLabelGitLab(t *testing.T) {
 	}
 }
 
+// changed matches label names by the tracker's own rule: GitHub folds case,
+// so removing Bug from an issue labelled bug changes it; GitLab matches
+// exactly, so there Bug is absent and nothing changes.
+func TestLabelChangedFollowsLabelRule(t *testing.T) {
+	ctx := context.Background()
+	rb := "api repos/{owner}/{repo}/issues/3"
+	f := &forge{origin: gh, reply: map[string]reply{"issue view": {out: `{"labels": [{"name": "bug"}]}`}, rb: {out: `{"labels": []}`}}}
+	if changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "Bug", false, false); err != nil || !changed {
+		t.Errorf("github remove Bug from bug: changed=%v err=%v", changed, err)
+	}
+	f = &forge{origin: gl, reply: map[string]reply{"issue view": {out: `{"labels": ["bug"]}`}}}
+	if changed, err := Label(ctx, f.env(t), "", tracker.NumKey(3), "Bug", false, false); err != nil || changed {
+		t.Errorf("gitlab remove Bug from bug: changed=%v err=%v", changed, err)
+	}
+}
+
 // TestInvalidConfigIsNotDefaulted: an invalid issues.source or forge.provider
 // fails the verbs built on it with ValidateConfig's error instead
 // of resolving as the default.
