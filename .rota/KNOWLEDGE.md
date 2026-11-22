@@ -6,6 +6,7 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 
 ## Architecture: Helper conventions & invariants: Go verbs & fakes: Test fakes & isolation
 
+- **cli tests share one XDG_CONFIG_HOME pinning test.slots** — Every internal/cli test shares one process-wide XDG_CONFIG_HOME, and TestMain pins `test.slots` 1 there; init tests rely on that pin since #4092 seeds test.slots. `rota setup` runs runInit but is not seeded, so its global-offer tests still assert nothing is written (#4092). <!-- paths: ["internal/cli/*_test.go"] --> <!-- 2026-11-22 -->
 - **Raw go test can hang on the slot TMPDIR** — Inside a worker slot, TMPDIR points at .rota/tmp/slots/<slot>, under the main checkout, and a raw `go test` of internal/cli can hang there. Run package tests through `rota test run` or with `TMPDIR=/tmp` (reported on #4069). <!-- 2026-11-21 sha:cbff24fc -->
 - **Call wire before pool in round assign fixtures** — In internal/round tests, assignFixture.pool installs the account pool via Env.WithAccounts and wire rebuilds env.Worker from ws, dropping it. Call wire (e.g. to swap NewHost) before pool, or poolEntries panics on a nil *Accounts. (#3471) <!-- 2026-11-18 sha:fccc9ce3 -->
 - **Every test-built rota binary needs -tags rotatest** — Since #3364 the ROTA_TEST_NOW, TODAY, HOLDER_PID and LATEST_VERSION overrides exist only under the rotatest build tag. A test that builds its own binary and sets one of them needs -tags rotatest (cmd/rota/scenarios_config_test.go missed it and every update scenario went red); smoke section 169 builds untagged on purpose to pin the production path. <!-- paths: ["cmd/rota/*_test.go","test/lib.sh"] --> <!-- 2026-11-16 sha:5f969fa9 -->
@@ -245,6 +246,7 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 
 ## Rounds: Orchestration: Workers & relays: Slots & assignment
 
+- **Adopt an out-of-round PR by cherry-pick** — A PR opened outside the round (e.g. a subagent on a `sub/` branch) cannot be adopted: `round assign --accept-open-pr` refuses a PR owned by no slot and `round transfer` needs a slot already holding the issue. Close the PR and `round assign` with a `--settled-file` telling the worker to cherry-pick the commit onto its own branch (round 68, #4192/#4198/#4202/#4209). <!-- 2026-11-22 -->
 - **Same-task dispatch resets the slot's PR and relays** — Slot.Dispatch (internal/worker/slot.go) clears pr and reviewSeen and calls ResetRelays whenever a task is passed, even the task the slot already holds. A relaunch that keeps the assignment (round switch, a recovery dispatch) must capture PR(), Relays() and ReviewSeen() first and restore them, as transfer adopt does. (#3471) <!-- 2026-11-18 sha:fccc9ce3 -->
 
 - **Re-arm the watch after changing round.roster** — A running rota round watch --autopilot keeps the roster it loaded at start. After rota config set --local round.roster to shrink the round, the old watch still assigned the next review to a retired slot and started a new session there (round 50). Re-arm the watch right after any round.roster change, and close a retired slot's terminal only once it holds no work. <!-- 2026-11-05 -->
@@ -265,6 +267,7 @@ Use `/rota-learn` at the end of a session to capture new learnings. `/rota-work`
 
 ## Rounds: Orchestration: Workers & relays: Worker sessions
 
+- **herdr-core read has no unwrapped source** — herdr-core `terminal.read` takes only `terminal` and `lines` (history above the screen, default 0); unlike herdr `--source recent-unwrapped` it has no unwrapped source, so a wrapped DONE line reaches the poll classifier wrapped (#4093). <!-- 2026-11-22 -->
 - **Read panes with herdr-core read** — Under the herdr-core host, `herdr agent read` and `herdr pane read` fail (they talk to the herdr app socket). Read a worker pane with `herdr-core read <address>`, the address from `rota round status --json` (.data.slots[].address); wrap it in `timeout 20` since a read can hang. <!-- 2026-11-21 -->
 - **Per-slot TMPDIR is set at Spawn, not in SlotEnv** — internal/worker/slottmp.go sets TMPDIR (.rota/tmp/slots/<slot>, 0700) in the dispatch Spawn env; SlotEnv also feeds gate behaviour steps and envSetup, which keep their own temp dir. Orca refuses env keys off its allowlist, so TMPDIR joined it. Reap holds `slots` by registered-slot ownership, not the process scan (#3164). <!-- 2026-11-14 sha:4d9ab550 -->
 
