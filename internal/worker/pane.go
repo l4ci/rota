@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/harness"
 	"github.com/l4ci/rota/internal/pystr"
@@ -159,12 +160,82 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 				state, evidence, ok, stale = StateBlocked, ev, true, false
 			}
 		} else if m := doneRe.FindStringSubmatchIndex(rest); m != nil && m[0] == 0 {
-			if ev := strings.TrimSpace(rest[m[4]:m[5]]); !isPlaceholder(ev) {
+			ev := strings.TrimSpace(rest[m[4]:m[5]])
+			if !isPlaceholder(ev) {
+				ev = joinWrapped(lines, inRelay, i+strings.Count(rest[:m[5]], "\n"), ev)
 				state, evidence, ok, stale = StateDone, ev, true, false
 			}
 		}
 	}
 	return
+}
+
+// reWrapReply starts a line of the worker's own output.
+var reWrapReply = regexp.MustCompile(`^\s*[●⏺•]`)
+
+const noSentinelBase = "static pane, no sentinel"
+
+// noSentinelEvidence is the evidence of an idle static pane. When the text
+// holds a ROTA-DONE substring that was still not accepted, it says why, so
+// the orchestrator is not told "no sentinel" about a pane that shows one
+// (#4093): masked inside a relay echo, outside the read window, or a line the
+// sentinel pattern rejects (an unmatched prefix, or the brief's placeholder).
+func noSentinelEvidence(full, window []string, gutter bool, lines int) string {
+	has := func(ls []string) bool {
+		for _, l := range ls {
+			if strings.Contains(l, "ROTA-DONE") {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(full) {
+		return noSentinelBase
+	}
+	if !has(window) {
+		return noSentinelBase + ": ROTA-DONE is outside the last " + strconv.Itoa(lines) + " lines read"
+	}
+	inRelay := usagelimit.RelayMask(window, gutter, false)
+	for i, l := range window {
+		if strings.Contains(l, "ROTA-DONE") && !inRelay[i] {
+			return noSentinelBase + ": ROTA-DONE seen but not accepted (unmatched prefix or placeholder evidence)"
+		}
+	}
+	return noSentinelBase + ": ROTA-DONE seen only inside a relay echo (masked)"
+}
+
+// maxWrapJoins bounds how many continuation lines joinWrapped appends.
+const maxWrapJoins = 3
+
+// joinWrapped repairs a DONE line the terminal soft-wrapped (Core hands over
+// the screen as rendered, with no unwrapped read). A line is taken as wrapped
+// when it fills the pane width, seen as another line at least as long, and
+// the next line is one unindented token outside any relay. Only a one-token
+// evidence is extended, so prose after the sentinel is never glued on.
+func joinWrapped(lines []string, inRelay []bool, at int, ev string) string {
+	if ev == "" || strings.ContainsAny(ev, " \t") || at >= len(lines) {
+		return ev
+	}
+	full := utf8.RuneCountInString(lines[at])
+	wide := false
+	for j, l := range lines {
+		if j != at && utf8.RuneCountInString(l) >= full-1 {
+			wide = true
+			break
+		}
+	}
+	for n := 0; wide && n < maxWrapJoins && at+1 < len(lines); n++ {
+		next := lines[at+1]
+		if next == "" || strings.ContainsAny(next, " \t") || inRelay[at+1] || reWrapReply.MatchString(next) {
+			break
+		}
+		ev += next
+		at++
+		if utf8.RuneCountInString(next) < full-1 {
+			break
+		}
+	}
+	return ev
 }
 
 func firstMatch(res []*regexp.Regexp, s string) string {
@@ -197,6 +268,7 @@ func ClassifyFor(kind, text string, moved bool, lines int, native string) (state
 func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native string) (state, evidence string) {
 	rules := harness.RulesOf(p)
 	all := pystr.Splitlines(text)
+	full := all
 	if lines > 0 && len(all) > lines { // [-0:] is the whole list in Python
 		all = all[len(all)-lines:]
 	}
@@ -297,7 +369,7 @@ func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native str
 	if staleDone {
 		return StateIdle, staleDoneEvidence
 	}
-	return StateIdle, "static pane, no sentinel"
+	return StateIdle, noSentinelEvidence(full, all, rules.Gutter, lines)
 }
 
 // relayMarkerVisible: the pane capture holds pending relay k's opening line (or the legacy `[relay k]` line).

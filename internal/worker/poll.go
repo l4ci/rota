@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
@@ -43,6 +44,30 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 		return st, ev
 	}
 	return StateBusy, relayEchoEvidence
+}
+
+// sentinelScanLines bounds the wider read taken when the pane text mentions
+// ROTA-DONE but the default window did not yield a sentinel (#4093): a DONE
+// line followed by more filler than the window holds.
+const sentinelScanLines = 2000
+
+// widenForSentinel re-reads a pane up to sentinelScanLines when
+// the capture fills the window and no sentinel was accepted. It keeps the wider classification only when that finds a sentinel.
+func widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
+	if st == StateDone || st == StateBlocked || lines <= 0 || lines >= sentinelScanLines {
+		return st, ev
+	}
+	if !strings.HasPrefix(ev, noSentinelBase) || len(pystr.Splitlines(text)) < lines {
+		return st, ev
+	}
+	wide, err := readPane(ctx, h, t, sentinelScanLines)
+	if err != nil || !strings.Contains(wide, "ROTA-DONE") {
+		return st, ev
+	}
+	if ws, we := ClassifyFor(t.kind, wide, false, sentinelScanLines, native); ws == StateDone {
+		return ws, we
+	}
+	return st, ev
 }
 
 // relayHistoryLines bounds a recovery read when the first poll already missed
@@ -684,6 +709,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
+			st, ev = widenForSentinel(ctx, h, t, st, ev, first[t.name], lines, native)
 			t.relayMarker = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
 			targets[i].relayMarker = t.relayMarker
 			st, ev = e.gateRelayCapture(ctx, h, &t, st, ev, first[t.name], lines)
@@ -699,6 +725,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
+		st, ev = widenForSentinel(ctx, h, t, st, ev, second, lines, native)
 		t.relayMarker = t.relayPending > 0 && relayMarkerVisible(second, lines, t.relayPending)
 		targets[i].relayMarker = t.relayMarker
 		t.relayObserved = t.relayObserved || t.relayMarker

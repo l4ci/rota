@@ -48,6 +48,7 @@ func coreFixture(t *testing.T) (Host, *coreFake) {
 }
 
 type coreFake struct {
+	readLines          []any // `lines` of each terminal.read, in order
 	mu                 sync.Mutex
 	slept, readyAfter  int // Sleep calls so far; the one at which a starting session turns idle
 	screen, status     string
@@ -124,6 +125,7 @@ func (f *coreFake) serve(c net.Conn) {
 			}
 			v = term("t2")
 		case "terminal.read":
+			f.readLines = append(f.readLines, q.Params["lines"])
 			v = map[string]any{"text": f.screen, "complete": true, "how": "screen"}
 		case "terminal.send":
 			if f.sendError != "" || f.sendErrorCode != 0 {
@@ -1232,5 +1234,24 @@ func TestCoreAdapterClearSpawnIntentUsesSavedEndpoint(t *testing.T) {
 	}
 	if _, e = hc.d.FS.ReadFile(path); !errors.Is(e, os.ErrNotExist) {
 		t.Fatalf("intent under saved endpoint not removed: %v", e)
+	}
+}
+
+// #4093: Core's terminal.read has no unwrapped source, so the adapter passes
+// the caller's line count through unchanged: the widened sentinel scan's
+// bound reaches Core as `lines`.
+func TestCoreReadPaneSendsLinesParam(t *testing.T) {
+	h, f := coreFixture(t)
+	s := coreSpawn(t, h)
+	f.mu.Lock()
+	f.readLines = nil
+	f.mu.Unlock()
+	if _, e := h.ReadPane(context.Background(), "dana", s, 2000); e != nil {
+		t.Fatal(e)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.readLines) != 1 || f.readLines[0] != float64(2000) {
+		t.Fatalf("terminal.read lines = %v, want [2000]", f.readLines)
 	}
 }
