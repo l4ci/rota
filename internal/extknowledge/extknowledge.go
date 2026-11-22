@@ -31,8 +31,8 @@ var (
 	ErrBusy       = errors.New("clone is busy with another knowledge operation")
 	ErrDiverged   = errors.New("clone has diverged from its remote")
 	ErrOffline    = errors.New("remote not reachable")
-	ErrNotFound   = errors.New("not found")
-	ErrMultiMatch = errors.New("matches several bullets")
+	ErrNotFound   = bulletfmt.ErrNotFound
+	ErrMultiMatch = bulletfmt.ErrMultiMatch
 	ErrPush       = errors.New("push failed")
 	ErrPolicy     = errors.New("invalid policy")
 	ErrContent    = bulletfmt.ErrInvalid

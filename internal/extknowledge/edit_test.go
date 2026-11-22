@@ -89,23 +89,17 @@ func TestRemovePushes(t *testing.T) {
 	}
 }
 
-func TestRemoveCaseOnlyTwinsNamesBoth(t *testing.T) {
-	f := editFixture(t, "")
-	gittest.Commit(t, f.a, "twin", "topics/go.md", editGo+"- **LEGACY** — Again. <!-- 2026-08-03 -->\n")
-	gittest.Run(t, f.a, "push", "-q")
-	_, err := f.clone().Remove(context.Background(), RmIn{Topic: "Go", Title: "legacy"})
-	if !errorsIs(err, ErrMultiMatch) || !strings.Contains(err.Error(), `"Legacy"`) || !strings.Contains(err.Error(), `"LEGACY"`) {
-		t.Fatalf("err = %v", err)
-	}
-}
-
 func TestRemoveSeveralWithTitleIsMultiMatch(t *testing.T) {
 	f := editFixture(t, "")
 	gittest.Commit(t, f.a, "dup", "topics/go.md", editGo+"- **Legacy** — Again. <!-- 2026-08-03 -->\n")
 	gittest.Run(t, f.a, "push", "-q")
 	before := goFile(t, f)
-	if _, err := f.clone().Remove(context.Background(), RmIn{Topic: "Go", Title: "Legacy"}); !errorsIs(err, ErrMultiMatch) {
+	_, err := f.clone().Remove(context.Background(), RmIn{Topic: "Go", Title: "Legacy"})
+	if !errorsIs(err, ErrMultiMatch) {
 		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(err.Error(), `"Go"`) {
+		t.Fatalf("err %q does not name the topic", err)
 	}
 	if goFile(t, f) != before {
 		t.Fatal("file changed")

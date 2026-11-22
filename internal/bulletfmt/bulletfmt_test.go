@@ -47,29 +47,43 @@ func TestEnd(t *testing.T) {
 	}
 }
 
-func TestSelectTitle(t *testing.T) {
+func TestResolveTitle(t *testing.T) {
 	titles := []string{"Alpha", "beta", "ALPHA", "", "Gamma"}
 	cases := []struct {
 		name, want string
-		hits       []int
+		idx        int
+		err        error
+		named      []string
 	}{
-		{"exact case", "Gamma", []int{4}},
-		{"other case", "gamma", []int{4}},
-		{"padded", "  GAMMA ", []int{4}},
-		{"case-only twins both hit", "alpha", []int{0, 2}},
-		{"none", "delta", nil},
-		{"blank never matches an untitled entry", "", nil},
+		{"exact case", "Gamma", 4, nil, nil},
+		{"other case", "gamma", 4, nil, nil},
+		{"padded", "  GAMMA ", 4, nil, nil},
+		{"case-only twins refuse and name both", "alpha", -1, ErrMultiMatch, []string{"'Alpha'", "'ALPHA'"}},
+		{"none", "delta", -1, ErrNotFound, nil},
+		{"blank never matches an untitled entry", "", -1, ErrNotFound, nil},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := SelectTitle(titles, c.want)
-			if len(got) != len(c.hits) {
-				t.Fatalf("SelectTitle(%q) = %v, want %v", c.want, got, c.hits)
+			idx, err := ResolveTitle(titles, c.want)
+			if !errors.Is(err, c.err) || (c.err == nil) != (err == nil) {
+				t.Fatalf("ResolveTitle(%q) err = %v, want %v", c.want, err, c.err)
 			}
-			for i := range got {
-				if got[i] != c.hits[i] {
-					t.Fatalf("SelectTitle(%q) = %v, want %v", c.want, got, c.hits)
+			if idx != c.idx {
+				t.Fatalf("ResolveTitle(%q) = %d, want %d", c.want, idx, c.idx)
+			}
+			if err == nil {
+				return
+			}
+			if !strings.Contains(err.Error(), "'"+strings.TrimSpace(c.want)+"'") {
+				t.Errorf("error %q does not name the wanted title", err)
+			}
+			for _, n := range c.named {
+				if !strings.Contains(err.Error(), n) {
+					t.Errorf("error %q does not name hit %s", err, n)
 				}
+			}
+			if errors.Is(err, ErrNotFound) && errors.Is(err, ErrMultiMatch) {
+				t.Errorf("error is both classes")
 			}
 		})
 	}

@@ -44,6 +44,9 @@ func TestHitAppendReadContract(t *testing.T) {
 					if _, _, err := s.hit(tc.typed); !errors.Is(err, want) {
 						t.Fatalf("Hit(%q) error = %v, want %v", tc.typed, err, want)
 					}
+					if _, _, err := s.hit(tc.typed); !strings.Contains(err.Error(), "Arch") {
+						t.Fatalf("Hit(%q) error %q does not name the topic", tc.typed, err)
+					}
 					if _, err := os.Stat(s.log()); !os.IsNotExist(err) {
 						t.Fatalf("refused hit left a log: %v", err)
 					}
