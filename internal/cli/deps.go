@@ -185,7 +185,6 @@ func defaultDeps() *Deps {
 		Proc:             proc.Run,
 		QuotaExchange:    proc.Duplex,
 		ReviewRemoveAll:  os.RemoveAll,
-		ProcessUses:      func() ([]reap.ProcUse, error) { return reap.ReadProcUses("/proc", os.Getuid()) },
 		Getenv:           os.Getenv,
 		Getwd:            os.Getwd,
 		UserHomeDir:      os.UserHomeDir,
@@ -212,6 +211,7 @@ func defaultDeps() *Deps {
 		Signals:          newSignals(),
 	}
 	d.TrainPlan = planTrainNudge
+	d.ProcessUses = d.processUsesReader("/proc", os.Getuid())
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
 	// The defaults carry the disk loader themselves, so a direct caller of the
 	// hook never sees a nil Config.
@@ -637,4 +637,15 @@ func failData(err error) Result {
 		return Result{Data: e.Data}
 	}
 	return Result{}
+}
+
+// processUsesReader picks the process-table reader at wiring time: the /proc
+// reader where procRoot exists (Linux), else lsof (macOS, no /proc). Fail
+// closed either way: the lsof path errors when lsof is missing, fails or lists
+// nothing. d.Proc is read at call time, so a test swapping it counts.
+func (d *Deps) processUsesReader(procRoot string, uid int) func() ([]reap.ProcUse, error) {
+	if _, err := os.Stat(procRoot); err == nil {
+		return func() ([]reap.ProcUse, error) { return reap.ReadProcUses(procRoot, uid) }
+	}
+	return func() ([]reap.ProcUse, error) { return reap.ReadLsofUses(context.Background(), d.Proc, uid) }
 }
