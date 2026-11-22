@@ -1,8 +1,8 @@
 ---
 subsystem: config-and-setup
 summary: layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -13,7 +13,7 @@ Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, s
 
 ## Entry points
 - internal/config/config.go:24 — `Load`: schema default < global < project `config.json` < `config.local.json`
-- internal/config/keys.go:122 — `Key`: schema row (type, scope, default); `ScopeOf` at :356
+- internal/config/keys.go:125 — `Key`: schema row (type, scope, default); `ScopeOf` at :362
 - internal/config/orchestrate.go:30 — `Migrate`: round-key, accounts, merges and scope steps (preview or apply); `Reconcile` at :81, `Diagnose` at :119
 - internal/initproj/init.go:70 — `Init`: seed `.rota/` in a directory
 - internal/projects/projects.go:93 — `Register`: add a project to the machine-wide registry

@@ -1,8 +1,8 @@
 ---
 subsystem: knowledge-and-map
 summary: project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -16,11 +16,11 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - internal/knowledge/query.go:26 — `Store.Query`: topic read by scope with tier filtering
 - internal/knowledge/ops.go:73 — `Store.Add`: write a bullet (title, body, date, sha, paths)
 - internal/extknowledge/fresh.go:127 — `Clone.Freshen`: bounded fetch and fast-forward before a read
-- internal/extknowledge/read.go:189 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:86
+- internal/extknowledge/read.go:183 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:74
 - internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :55, `WriteIndex` :77, `Slugify` :14
-- internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :176
-- internal/stale/stale.go:72 — `FindReport`: stale entries by kind (`Kinds` at :26: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
-- internal/frontmatter/frontmatter.go:23 — `Parse`: frontmatter map, list keys and body; `SetField` at :108
+- internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :171
+- internal/stale/stale.go:70 — `FindReport`: stale entries by kind (`Kinds` at :24: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
+- internal/frontmatter/frontmatter.go:53 — `Parse`: frontmatter map, list keys and body; `Fence` at :28, `SetField` at :126
 
 ## Key files / dirs
 - `internal/knowledge/` — `scope.go` (Store, `Umbrella`, `ErrScope`), `query.go`, `ops.go`, `paths.go` (path-scoped bullets, matched with `pathglob.Match`), `tier.go` (sidecar, tiers provisional/confirmed/deprecated), `bullet.go` (on `bulletfmt`), `hit.go` and `hitbuffer.go` (gitignored `knowledge-hits.jsonl`), `decisions.go`/`decisionwrite.go`/`decisionentry.go`, `glossary.go`, `block.go`, `instructions.go` with `skills_block.md`, `which.go`
@@ -48,4 +48,4 @@ Go 1.22, standard library; markdown and JSON files on disk. `extknowledge` shell
 
 ## Concerns
 - `knowledge` and `extknowledge` both implement topic query, add and hit with different storage; changes to bullet format touch both (shared rendering now in `bulletfmt`).
-- `stale.FindReport` kind `todo` lists open items through the caller-supplied `TodoSource` (stale.go:51; any `backlog.Backend` satisfies it), so staleness follows the backend the project selected, issue tracker included; a nil source lists none. Items without a usable Captured date are skipped, and `FindReport` counts them in `SkippedUndated`.
+- `stale.FindReport` kind `todo` lists open items through the caller-supplied `TodoSource` (stale.go:52; any `backlog.Backend` satisfies it), so staleness follows the backend the project selected, issue tracker included; a nil source lists none. Items without a usable Captured date are skipped, and `FindReport` counts them in `SkippedUndated`.

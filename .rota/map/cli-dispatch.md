@@ -1,8 +1,8 @@
 ---
 subsystem: cli-dispatch
 summary: the rota command dispatcher, exit-code contract, error translation, per-verb gates and support fence, and the terminal UI (bare-rota palette, --ui screens)
-touched: 2026-11-20
-last_mapped_commit: 394b73c9c13b7ed81d37a069763e1b19c9a5482d
+touched: 2026-11-22
+last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
 ---
 
 ## Purpose
@@ -48,5 +48,5 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 - `go vet ./...`
 
 ## Concerns
-- `internal/cli` is the largest package (about 402 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
+- `internal/cli` is the largest package (about 404 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
 - `internal/cli/doctor.go`, `reap.go`, `migrate*.go`, `hook.go` are thin verbs over packages mapped in other files; the logic is not here.
