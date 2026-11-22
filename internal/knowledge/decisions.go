@@ -1,10 +1,10 @@
 package knowledge
 
 import (
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
 	"github.com/l4ci/rota/internal/topicmatch"

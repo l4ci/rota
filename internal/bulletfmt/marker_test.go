@@ -30,16 +30,6 @@ func TestCutMarker(t *testing.T) {
 	}
 }
 
-func TestCount(t *testing.T) {
-	text := "intro\n- **A** — one <!-- 2026-01-01 -->\n  - nested\n- **B** — wrapped\n  continued\n  - also nested\n\n- **C** — three\n"
-	if got := Count(text); got != 3 {
-		t.Errorf("Count = %d, want 3", got)
-	}
-	if got := Count(""); got != 0 {
-		t.Errorf("Count(\"\") = %d, want 0", got)
-	}
-}
-
 func TestCountSharedFixture(t *testing.T) {
 	b, err := os.ReadFile("testdata/count.md")
 	if err != nil {
@@ -47,5 +37,8 @@ func TestCountSharedFixture(t *testing.T) {
 	}
 	if got := Count(string(b)); got != 3 {
 		t.Errorf("Count(fixture) = %d, want 3", got)
+	}
+	if got := Count(""); got != 0 {
+		t.Errorf("Count(\"\") = %d, want 0", got)
 	}
 }

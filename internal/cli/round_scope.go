@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/round"
 )
@@ -34,8 +35,8 @@ func roundScope(fs *flag.FlagSet) RunFunc {
 			if l = strings.TrimSpace(l); l != "" {
 				last = l
 			}
-			if strings.HasPrefix(l, "- ") || strings.HasPrefix(l, "* ") {
-				entries = append(entries, l[2:])
+			if item, ok := bulletfmt.CutMarker(l, bulletfmt.DashStar); ok {
+				entries = append(entries, item)
 			}
 		}
 		if last != scopeToken {

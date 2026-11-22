@@ -1,11 +1,11 @@
 package milestone
 
 import (
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/itembody"
 )
 

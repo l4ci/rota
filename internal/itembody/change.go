@@ -1,9 +1,10 @@
 package itembody
 
 import (
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 var (

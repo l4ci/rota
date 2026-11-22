@@ -2,11 +2,11 @@ package round
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"sort"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itembody"
 )

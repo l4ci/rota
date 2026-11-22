@@ -3,10 +3,10 @@ package knowledge
 import (
 	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"os"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 )
 

@@ -2,9 +2,10 @@ package itembody
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // TryItHeadRe matches a "Try it" heading: the commands a user would run to

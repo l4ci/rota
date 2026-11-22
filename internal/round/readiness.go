@@ -3,7 +3,6 @@ package round
 import (
 	"context"
 	"fmt"
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/strutil"
@@ -14,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/exitmap"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/overlap"

@@ -2,9 +2,9 @@ package knowledge
 
 import (
 	"fmt"
-	"github.com/l4ci/rota/internal/bulletfmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
