@@ -2093,3 +2093,45 @@ func TestCallBoundsEveryHostCommandByCallTimeout(t *testing.T) {
 		t.Fatalf("cmd = %+v, want herdr ping with Timeout %s", got, CallTimeout)
 	}
 }
+
+// A folder-trust dialog at launch is answered with the accepting keys, then
+// the boot wait continues to the booted pane.
+func TestTmuxSpawnAnswersStartupDialog(t *testing.T) {
+	trust := readFixture(t, "trust-dialog-2.1.288.txt")
+	answered := false
+	f := &fake{handler: func(_ string, a []string) Result {
+		switch a[0] {
+		case "capture-pane":
+			if answered {
+				return Result{Stdout: "? for shortcuts"}
+			}
+			return Result{Stdout: trust}
+		case "send-keys":
+			if a[len(a)-1] == "Enter" {
+				answered = true
+			}
+		}
+		return Result{}
+	}}
+	if _, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 10}); err != nil {
+		t.Fatalf("Spawn = %v", err)
+	}
+	if !answered {
+		t.Errorf("dialog never answered:\n%s", f.log())
+	}
+}
+
+// A dialog that keeps coming back is reported as a dialog, not a boot timeout.
+func TestTmuxSpawnStuckDialogNamed(t *testing.T) {
+	trust := readFixture(t, "trust-dialog-2.1.288.txt")
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "capture-pane" {
+			return Result{Stdout: trust}
+		}
+		return Result{}
+	}}
+	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 20})
+	if err == nil || !strings.Contains(err.Error(), "startup dialog") || strings.Contains(err.Error(), "did not come up") {
+		t.Errorf("err = %v", err)
+	}
+}
