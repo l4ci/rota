@@ -289,18 +289,7 @@ func workClassify(ctx context.Context, r git.Repo, ids []string) (tool []string,
 	if res.ExitCode != 0 {
 		return nil, nil, nil, Unavailable("git status failed: %s", strings.TrimSpace(res.Stderr))
 	}
-	var paths []string
-	entries := strings.Split(res.Stdout, "\x00")
-	for i := 0; i < len(entries); i++ {
-		e := entries[i]
-		if len(e) < 4 {
-			continue
-		}
-		paths = append(paths, e[3:])
-		if e[0] == 'R' || e[0] == 'C' {
-			i++ // the rename's source path follows
-		}
-	}
+	paths := git.StatusPaths(res.Stdout)
 	if len(paths) == 0 {
 		return nil, artifacts, nil, nil
 	}
