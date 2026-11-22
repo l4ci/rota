@@ -558,3 +558,41 @@ func TestResetStillCutsAMissingTaskBranchFromTheBase(t *testing.T) {
 		t.Errorf("HEAD = %s, want base %s", got, want)
 	}
 }
+
+// milestoneProject is taskBranchProject plus origin/milestone/M02 cut from
+// main's tip; a commit made afterwards lands on main only (activation, #4122).
+func milestoneProject(t *testing.T) string {
+	t.Helper()
+	b, _ := taskBranchProject(t)
+	gittest.Run(t, b, "push", "-q", "origin", "main:refs/heads/milestone/M02")
+	gittest.Run(t, b, "fetch", "-q", "origin")
+	return b
+}
+
+// A slot parked on main carries a commit that is on origin/main but not on the
+// milestone branch it is reset onto: that commit is merged, not unmerged work.
+func TestResetFromIgnoresCommitsOnThePlainBase(t *testing.T) {
+	b := milestoneProject(t)
+	commitIn(t, wt(b), "activation.txt")
+	gittest.Run(t, wt(b), "push", "-q", "origin", "HEAD:main")
+	if _, err := (Env{Config: diskConfig}).ResetFrom(b, "w1", "", "park/w1", "origin/milestone/M02", false); err != nil {
+		t.Fatalf("slot with a base-only commit refused: %v", err)
+	}
+}
+
+// A commit on neither the project base nor the milestone is still unmerged,
+// and the refusal does not offer a reap that re-provisioning would undo.
+func TestResetFromStillRefusesUnpushedWork(t *testing.T) {
+	b := milestoneProject(t)
+	commitIn(t, wt(b), "activation.txt")
+	gittest.Run(t, wt(b), "push", "-q", "origin", "HEAD:main")
+	commitIn(t, wt(b), "mine.txt")
+	_, err := (Env{Config: diskConfig}).ResetFrom(b, "w1", "", "park/w1", "origin/milestone/M02", false)
+	we, ok := err.(*exitcode.Error)
+	if !ok || we.Exit != exitcode.ExitRefused {
+		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(we.Message, "1 commit(s) not on origin/milestone/M02") || !strings.Contains(we.Message, "add mine.txt") || strings.Contains(we.Message, "add activation.txt") || strings.Contains(we.Message, "pool reap") || !strings.Contains(we.Message, "nor on the project base") {
+		t.Errorf("message = %s", we.Message)
+	}
+}

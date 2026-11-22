@@ -259,3 +259,26 @@ func TestReconcileSkipsARetargetWhoseBranchIsMissing(t *testing.T) {
 		t.Errorf("want a warning naming the missing branch: %v", out.Report.Warnings)
 	}
 }
+
+// Activation commits land on main only, after milestone/M01 was cut. A slot
+// provisioned from main carries that commit; assign must still take the first
+// try instead of refusing it as unmerged work (#4122).
+func TestAssignAcceptsASlotCarryingTheActivationCommit(t *testing.T) {
+	f, origin := milestoneFixture(t)
+	writeFile(t, filepath.Join(f.root, "activation"), "a")
+	gittest.Run(t, f.root, "add", "activation")
+	gittest.Run(t, f.root, "commit", "-q", "-m", "activate M01")
+	gittest.Run(t, f.root, "push", "-q", origin, "main")
+	gittest.Run(t, f.root, "fetch", "-q", "origin")
+	reg := worker.LoadRegistryTolerant(f.root)
+	for _, s := range reg.Slots() {
+		gittest.Run(t, s.Worktree(), "merge", "-q", "--ff-only", "main")
+	}
+	res, err := f.assign("12", "", nil)
+	if err != nil {
+		t.Fatalf("assign refused a slot whose only extra commit is on main: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(f.root, ".worktrees", res.Agent, "milestone-only")); err != nil {
+		t.Errorf("the branch must be cut from the milestone branch: %v", err)
+	}
+}
