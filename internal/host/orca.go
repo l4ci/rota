@@ -284,10 +284,7 @@ func (o *orca) recorded(t orcaTerminal) (string, orcaHandle, bool) {
 	if e != nil {
 		return t.ID, orcaHandle{}, false
 	}
-	files, e := o.d.FS.Glob(filepath.Join(dir, "agent-*.pid.json"))
-	if e != nil {
-		return t.ID, orcaHandle{}, false
-	}
+	files := o.d.FS.Glob(dir, "agent-*.pid.json")
 	var candidates []string
 	for _, f := range files {
 		b, e := o.d.FS.ReadFile(f)

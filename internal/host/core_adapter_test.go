@@ -24,9 +24,14 @@ import (
 // The fake speaks actual named Core RPC, with no executable dependency.
 func coreFixture(t *testing.T) (Host, *coreFake) {
 	t.Helper()
+	return coreFixtureAt(t, t.TempDir())
+}
+
+// coreFixtureAt is coreFixture with the ownership records kept in dir.
+func coreFixtureAt(t *testing.T, dir string) (Host, *coreFake) {
+	t.Helper()
 	f := &coreFake{screen: "› \n", styled: "\x18\x1b[H\x1b[2J› \x1b[1;3H\x1b[?9001l", cols: 100, rows: 30, status: "idle", pid: 42, core: "fixture-core", state: "live", events: make(chan map[string]any, 8), labels: map[string]string{"herdr.space": "s1", "herdr.tab": "parent-tab"}}
 	t.Cleanup(func() { close(f.events) })
-	dir := t.TempDir()
 	d := Deps{Run: func(context.Context, proc.Cmd) (Result, error) {
 		return Result{}, fmt.Errorf("unexpected executable")
 	}, Getenv: func(k string) string {
@@ -699,6 +704,16 @@ func TestCoreAdapterWorkerCreationName(t *testing.T) {
 				t.Fatalf("name lacks unique ownership suffix: %q", name)
 			}
 		})
+	}
+}
+
+// A glob metacharacter in the state dir must not hide the ownership records.
+func TestCoreAdapterSnapshotStateDirWithBracket(t *testing.T) {
+	h, _ := coreFixtureAt(t, filepath.Join(t.TempDir(), "state [core]"))
+	s := coreSpawn(t, h)
+	a, e := h.Capabilities().Snapshotter.Snapshot(context.Background())
+	if e != nil || len(a) != 1 || a[0].Handle() != s {
+		t.Fatalf("snapshot missed records under a bracketed dir: %v %v", a, e)
 	}
 }
 

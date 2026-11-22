@@ -49,12 +49,12 @@ func (f redirectedFS) CreateTemp(dir, pattern string) (string, error) {
 	return f.unpath(p), nil
 }
 func (f redirectedFS) Remove(p string) error { return f.OSFileSystem.Remove(f.path(p)) }
-func (f redirectedFS) Glob(pattern string) ([]string, error) {
-	paths, err := f.OSFileSystem.Glob(f.path(pattern))
+func (f redirectedFS) Glob(dir, pattern string) []string {
+	paths := f.OSFileSystem.Glob(f.path(dir), pattern)
 	for i, p := range paths {
 		paths[i] = f.unpath(p)
 	}
-	return paths, err
+	return paths
 }
 func (f redirectedFS) Locked(p string, wait time.Duration, fn func() error) error {
 	return f.OSFileSystem.Locked(f.path(p), wait, fn)
@@ -67,7 +67,7 @@ func TestOrcaLifecycleWithInjectedFileSystem(t *testing.T) {
 	for _, metadata := range []string{"directory", "relative gitdir", "absolute gitdir"} {
 		t.Run(metadata, func(t *testing.T) {
 			files := redirectedFS{t: t, logical: filepath.Join(t.TempDir(), "virtual"), backing: t.TempDir()}
-			f := newOrcaFakeAt(filepath.Join(files.logical, "worker with 'quote'"))
+			f := newOrcaFakeAt(filepath.Join(files.logical, "worker [ben] with 'quote'"))
 			f.fs = files
 			if err := files.MkdirAll(f.cwd, 0700); err != nil {
 				t.Fatal(err)
@@ -102,9 +102,9 @@ func TestOrcaLifecycleWithInjectedFileSystem(t *testing.T) {
 			if !strings.Contains(f.command, "CODEX_HOME=") || !strings.Contains(f.command, "sh -c ") || !strings.Contains(f.command, "exec codex") {
 				t.Fatalf("unsafe launch: %s", f.command)
 			}
-			pids, err := files.Glob(filepath.Join(gitdir, "rota-orca", "agent-*.pid"))
-			if err != nil || len(pids) != 1 {
-				t.Fatalf("PID files=%v error=%v", pids, err)
+			pids := files.Glob(filepath.Join(gitdir, "rota-orca"), "agent-*.pid")
+			if len(pids) != 1 {
+				t.Fatalf("PID files=%v", pids)
 			}
 			pid := pids[0]
 			for suffix, want := range map[string]string{"": "123\n", ".json": handle, ".ready": "ready", ".tree": `{"version":1,"processes":[{"pid":123,"start":123},{"pid":456}]}`} {
