@@ -10,6 +10,7 @@
 package projects
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -53,45 +54,67 @@ func Temporary(env cfgdir.Env, root string) bool {
 
 const registryName = "projects.json"
 
-// file is the registry path. The first call after an upgrade moves a registry
-// left in the config dir (migrate).
-func file(env cfgdir.Env) (string, error) {
+// registryPath is the registry path. It has no side effect: the legacy move
+// runs in openRegistry.
+func registryPath(env cfgdir.Env) (string, error) {
 	d, err := cfgdir.StateDir(env)
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(d, registryName)
+	return filepath.Join(d, registryName), nil
+}
+
+// openRegistry returns the registry path after moving a registry left in the
+// config dir by a pre-#1184 rota (migrate). Register, List and prune call it
+// first. A failed move is returned (see migrate for the one case that is not) and leaves the old file in place, so the
+// next call retries it.
+func openRegistry(env cfgdir.Env) (string, error) {
+	path, err := registryPath(env)
+	if err != nil {
+		return "", err
+	}
 	if old, err := cfgdir.Dir(env); err == nil {
-		migrate(filepath.Join(old, registryName), path)
+		if err := migrate(filepath.Join(old, registryName), path); err != nil {
+			return "", fmt.Errorf("move the projects registry to %s: %w", path, err)
+		}
 	}
 	return path, nil
 }
 
-// migrate moves the pre-#1184 registry old to path. The old lock sidecar stays:
-// another process may still hold or wait on it during the upgrade. A registry
-// already in the state dir wins: the old copy is just removed. A failure
-// leaves the old file in place and the move is retried on the next call.
-func migrate(old, path string) {
+// migrate moves the pre-#1184 registry old to path, under the registry lock
+// so a racing process cannot move or overwrite it half way. The old lock
+// sidecar stays: another process may still hold or wait on it during the
+// upgrade. Both files are checked again once the lock is held. An old registry
+// that is gone by then was moved by the winner and is not an error. A registry
+// already in the state dir wins: the old copy is just removed, and a failed
+// removal is only a warning, since nothing is lost and the next call retries.
+// Any other failure is returned.
+func migrate(old, path string) error {
 	if _, err := os.Stat(old); err != nil {
-		return
+		return nil
 	}
-	if _, err := os.Stat(path); err == nil {
-		os.Remove(old)
-		return
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
 	}
-	if os.MkdirAll(filepath.Dir(path), 0o755) != nil {
-		return
-	}
-	if fsio.MoveFilePreserveMode(old, path) != nil {
-		return
-	}
+	return fsio.Locked(path, fsio.LockTimeout, func() error {
+		if _, err := os.Stat(old); err != nil {
+			return nil
+		}
+		if _, err := os.Stat(path); err == nil {
+			if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "warning: cannot remove the superseded projects registry %s: %v\n", old, err)
+			}
+			return nil
+		}
+		return fsio.MoveFilePreserveMode(old, path)
+	})
 }
 
 // Register adds root to the registry, or refreshes its lastSeen when it is
 // already there. It is keyed by realpath, so a symlinked checkout does not
 // register twice. added says whether the entry is new.
 func Register(env cfgdir.Env, root string, now time.Time) (added bool, err error) {
-	path, err := file(env)
+	path, err := openRegistry(env)
 	if err != nil {
 		return false, err
 	}
@@ -147,7 +170,7 @@ func record(env cfgdir.Env, it any) (Project, bool) {
 // List returns the registered projects sorted by name then path, with Missing
 // set for a path that is gone. An absent or unreadable registry is empty.
 func List(env cfgdir.Env) ([]Project, error) {
-	path, err := file(env)
+	path, err := openRegistry(env)
 	if err != nil {
 		return nil, err
 	}
@@ -176,7 +199,7 @@ func List(env cfgdir.Env) ([]Project, error) {
 // what it removed in registry order. An absent registry removes nothing and is
 // not created; entries that are not records are kept untouched.
 func prune(env cfgdir.Env, drop func(Project) bool) ([]Project, error) {
-	path, err := file(env)
+	path, err := openRegistry(env)
 	if err != nil {
 		return nil, err
 	}
