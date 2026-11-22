@@ -53,14 +53,41 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 // line followed by more filler than the window holds.
 const sentinelScanLines = 2000
 
-// widened remembers, per slot, the window text a wider read already covered.
-var widened sync.Map // slot\x00handle -> [32]byte
+// widenMemo remembers, per slot, the window text a successful wider read
+// already covered. It lives on the Env of one wait loop, which re-classifies
+// the same idle pane every pass; a nil memo remembers nothing.
+type widenMemo struct {
+	mu   sync.Mutex
+	seen map[string][32]byte
+}
+
+func (m *widenMemo) covered(key string, sum [32]byte) bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	prev, ok := m.seen[key]
+	return ok && prev == sum
+}
+
+func (m *widenMemo) remember(key string, sum [32]byte) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.seen == nil {
+		m.seen = map[string][32]byte{}
+	}
+	m.seen[key] = sum
+}
 
 // widenForSentinel re-reads a pane up to sentinelScanLines when
 // the capture fills the window, no sentinel was accepted and the pane changed
 // since the last wider read. It keeps the wider classification only when that
 // finds a sentinel.
-func widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
+func (e Env) widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
 	if st == StateDone || st == StateBlocked || lines <= 0 || lines >= sentinelScanLines {
 		return st, ev
 	}
@@ -70,12 +97,15 @@ func widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, te
 	// An idle pane that has not changed since the last wider read has nothing
 	// new to find: a wait loop re-classifies the same text every pass.
 	key, sum := t.name+"\x00"+t.handle, sha256.Sum256([]byte(text))
-	if prev, ok := widened.Load(key); ok && prev == sum {
+	if e.widen.covered(key, sum) {
 		return st, ev
 	}
-	widened.Store(key, sum)
 	wide, err := readPane(ctx, h, t, sentinelScanLines)
-	if err != nil || !strings.Contains(wide, "ROTA-DONE") {
+	if err != nil {
+		return st, ev // a failed read is retried on the next pass
+	}
+	e.widen.remember(key, sum)
+	if !strings.Contains(wide, "ROTA-DONE") {
 		return st, ev
 	}
 	if ws, we := ClassifyFor(t.kind, wide, false, sentinelScanLines, native); ws == StateDone {
@@ -723,7 +753,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
-			st, ev = widenForSentinel(ctx, h, t, st, ev, first[t.name], lines, native)
+			st, ev = e.widenForSentinel(ctx, h, t, st, ev, first[t.name], lines, native)
 			t.relayMarker = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
 			targets[i].relayMarker = t.relayMarker
 			st, ev = e.gateRelayCapture(ctx, h, &t, st, ev, first[t.name], lines)
@@ -739,7 +769,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
-		st, ev = widenForSentinel(ctx, h, t, st, ev, second, lines, native)
+		st, ev = e.widenForSentinel(ctx, h, t, st, ev, second, lines, native)
 		t.relayMarker = t.relayPending > 0 && relayMarkerVisible(second, lines, t.relayPending)
 		targets[i].relayMarker = t.relayMarker
 		t.relayObserved = t.relayObserved || t.relayMarker

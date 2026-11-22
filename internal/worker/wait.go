@@ -71,6 +71,7 @@ type WaitResult struct {
 // herdr's scrollback reads can differ for a moment, which is how a finished
 // worker reads as moving. The re-check is a poll and is reported as one.
 func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, error) {
+	e.widen = &widenMemo{}
 	e = e.WithDefaults()
 	if o.Lines <= 0 {
 		o.Lines = 60

@@ -74,12 +74,17 @@ type wideHost struct {
 	*fakeHost
 	recent, wide string
 	asked        []int
+	wideFails    int // wide reads that fail before one succeeds
 }
 
 func (h *wideHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
 func (h *wideHost) ReadPane(_ context.Context, _, _ string, lines int) (string, error) {
 	h.asked = append(h.asked, lines)
 	if lines > 60 {
+		if h.wideFails > 0 {
+			h.wideFails--
+			return "", context.DeadlineExceeded
+		}
 		return h.wide, nil
 	}
 	return h.recent, nil
@@ -110,8 +115,10 @@ func TestPollWidensWindowForDoneBeyondIt(t *testing.T) {
 func TestPollWidensOncePerUnchangedPane(t *testing.T) {
 	dir, f := pollRegistry(t, "herdr")
 	h := &wideHost{fakeHost: f, recent: strings.Repeat("● idle once\n", 60), wide: strings.Repeat("● nothing\n", 90)}
+	env := envWith(h)
+	env.widen = &widenMemo{}
 	for i := 0; i < 3; i++ {
-		if _, err := envWith(h).Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60}); err != nil {
+		if _, err := env.Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -123,5 +130,24 @@ func TestPollWidensOncePerUnchangedPane(t *testing.T) {
 	}
 	if wide != 1 {
 		t.Fatalf("%d wide reads over 3 polls of an unchanged pane, want 1", wide)
+	}
+}
+
+// A failed wider read is not remembered: the next pass of an unchanged pane retries it.
+func TestPollRetriesFailedWideRead(t *testing.T) {
+	dir, f := pollRegistry(t, "herdr")
+	h := &wideHost{fakeHost: f, recent: strings.Repeat("● retry\n", 60), wide: "ROTA-DONE w1 issues:#7\n" + strings.Repeat("● retry\n", 80), wideFails: 1}
+	env := envWith(h)
+	env.widen = &widenMemo{}
+	var last string
+	for i := 0; i < 2; i++ {
+		res, err := env.Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60})
+		if err != nil {
+			t.Fatal(err)
+		}
+		last = res.Slots[0].State
+	}
+	if last != StateDone {
+		t.Fatalf("second poll state %s, want DONE after the failed read", last)
 	}
 }

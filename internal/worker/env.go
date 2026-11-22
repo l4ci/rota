@@ -64,6 +64,8 @@ func (e Env) runGitErr(ctx context.Context, dir string, args ...string) (string,
 // field has a production default; tests replace them, and NewHost above all:
 // this round runs inside herdr and tmux, so no test may reach the real ones.
 type Env struct {
+	// widen memoises the wider sentinel read across one wait loop (Wait sets it).
+	widen *widenMemo
 	// Ctx bounds every git call and is cancelled on SIGINT/SIGTERM by the
 	// CLI. Nil means context.Background().
 	Ctx context.Context
