@@ -2,6 +2,7 @@ package round
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"sort"
 	"strings"
 
@@ -33,10 +34,11 @@ func touchEntries(body string) []touchEntry {
 	var out []touchEntry
 	for _, l := range strings.Split(sec, "\n") {
 		l = strings.TrimSpace(l)
-		if !strings.HasPrefix(l, "- ") && !strings.HasPrefix(l, "* ") {
+		item, ok := bulletfmt.CutMarker(l, bulletfmt.DashStar)
+		if !ok {
 			continue
 		}
-		raw := strings.TrimSpace(l[2:])
+		raw := strings.TrimSpace(item)
 		norm := itembody.Entry(raw)
 		if norm == "" {
 			continue

@@ -3,6 +3,7 @@ package knowledge
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"os"
 	"strings"
 
@@ -354,7 +355,7 @@ func (s Store) SupersedeDecision(topic, title, newTitle, body, date string) (boo
 }
 
 func decisionBlockStart(body string) bool {
-	if strings.HasPrefix(body, "- ") || strings.HasPrefix(body, "* ") || strings.HasPrefix(body, "+ ") || strings.HasPrefix(body, "```") || strings.HasPrefix(body, "~~~") {
+	if _, ok := bulletfmt.CutMarker(body, bulletfmt.AnyMarker); ok || strings.HasPrefix(body, "```") || strings.HasPrefix(body, "~~~") {
 		return true
 	}
 	i := 0

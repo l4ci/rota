@@ -1,6 +1,7 @@
 package knowledge
 
 import (
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"strings"
 
@@ -58,7 +59,7 @@ func (s Store) DecisionsStats() ([]Stat, error) {
 	}
 	var stats = []Stat{}
 	for _, t := range decisionSections(ActiveDecisions(content)) {
-		stats = append(stats, Stat{t.Name, len(bulletLine.FindAllStringIndex(t.Body, -1)), len(t.Body)})
+		stats = append(stats, Stat{t.Name, bulletfmt.Count(t.Body), len(t.Body)})
 	}
 	return stats, nil
 }

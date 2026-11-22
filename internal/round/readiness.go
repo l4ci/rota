@@ -3,6 +3,7 @@ package round
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/strutil"
@@ -177,10 +178,11 @@ func footprint(body, extra string, tracked, shared []string) []string {
 	if sec, ok := itembody.Section(body, itembody.FilesHeadRe); ok {
 		for _, line := range strings.Split(sec, "\n") {
 			line = strings.TrimSpace(line)
-			if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+			item, ok := bulletfmt.CutMarker(line, bulletfmt.DashStar)
+			if !ok {
 				continue
 			}
-			line = strings.TrimSpace(line[2:])
+			line = strings.TrimSpace(item)
 			if line == "" {
 				continue
 			}

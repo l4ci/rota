@@ -1,6 +1,7 @@
 package milestone
 
 import (
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -29,10 +30,11 @@ func Capabilities(body string) []Capability {
 	var out []Capability
 	for _, line := range strings.Split(sec, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+		item, ok := bulletfmt.CutMarker(line, bulletfmt.DashStar)
+		if !ok {
 			continue
 		}
-		rest, kind := line[2:], "modified"
+		rest, kind := item, "modified"
 		if m := capTagRe.FindStringSubmatchIndex(rest); m != nil {
 			kind = strings.ToLower(rest[m[2]:m[3]])
 			rest = rest[:m[0]]

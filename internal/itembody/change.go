@@ -1,6 +1,7 @@
 package itembody
 
 import (
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"regexp"
 	"strings"
 )
@@ -53,8 +54,8 @@ func ParseChange(body string) Change {
 		if line == "" {
 			continue
 		}
-		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
-			line = strings.TrimSpace(line[2:])
+		if item, ok := bulletfmt.CutMarker(line, bulletfmt.DashStar); ok {
+			line = strings.TrimSpace(item)
 		}
 		if first {
 			first = false
