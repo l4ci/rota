@@ -59,7 +59,7 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 	// A bundled slot's PR closes the lead and every member: collect each one the
 	// body leaves open, so one refusal names them all.
 	var open []tracker.IssueKey
-	for i, key := range in.Keys {
+	for _, key := range in.Keys {
 		if in.Issues.ClosesIssue(key, in.Source) {
 			continue
 		}
@@ -67,8 +67,9 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 		if err != nil {
 			return stepOutcome{Broke: fmt.Sprintf("could not read %s to check for the %s label: %v", key.Ref(), PartialSliceLabel, err), Notes: out.Notes}
 		}
-		// a member closed since the assign has left the bundle (the lead, keys[0], stays)
-		if i > 0 && is.State == "closed" {
+		// an issue closed since the assign (a member, or a lead whose number only
+		// matched the branch) has nothing left for the body to close
+		if is.State == "closed" {
 			continue
 		}
 		if !slices.Contains(is.Labels, PartialSliceLabel) {
