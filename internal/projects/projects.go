@@ -66,7 +66,7 @@ func registryPath(env cfgdir.Env) (string, error) {
 
 // openRegistry returns the registry path after moving a registry left in the
 // config dir by a pre-#1184 rota (migrate). Register, List and prune call it
-// first. A failed move is returned and leaves the old file in place, so the
+// first. A failed move is returned (see migrate for the one case that is not) and leaves the old file in place, so the
 // next call retries it.
 func openRegistry(env cfgdir.Env) (string, error) {
 	path, err := registryPath(env)
@@ -81,21 +81,33 @@ func openRegistry(env cfgdir.Env) (string, error) {
 	return path, nil
 }
 
-// migrate moves the pre-#1184 registry old to path. The old lock sidecar stays:
-// another process may still hold or wait on it during the upgrade. A registry
-// already in the state dir wins: the old copy is just removed. An absent old
-// registry is not an error.
+// migrate moves the pre-#1184 registry old to path, under the registry lock
+// so a racing process cannot move or overwrite it half way. The old lock
+// sidecar stays: another process may still hold or wait on it during the
+// upgrade. Both files are checked again once the lock is held. An old registry
+// that is gone by then was moved by the winner and is not an error. A registry
+// already in the state dir wins: the old copy is just removed, and a failed
+// removal is only a warning, since nothing is lost and the next call retries.
+// Any other failure is returned.
 func migrate(old, path string) error {
 	if _, err := os.Stat(old); err != nil {
 		return nil
 	}
-	if _, err := os.Stat(path); err == nil {
-		return os.Remove(old)
-	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	return fsio.MoveFilePreserveMode(old, path)
+	return fsio.Locked(path, fsio.LockTimeout, func() error {
+		if _, err := os.Stat(old); err != nil {
+			return nil
+		}
+		if _, err := os.Stat(path); err == nil {
+			if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+				fmt.Fprintf(os.Stderr, "warning: cannot remove the superseded projects registry %s: %v\n", old, err)
+			}
+			return nil
+		}
+		return fsio.MoveFilePreserveMode(old, path)
+	})
 }
 
 // Register adds root to the registry, or refreshes its lastSeen when it is

@@ -1,6 +1,7 @@
 package projects
 
 import (
+	"fmt"
 	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
@@ -383,5 +384,51 @@ func TestRegistryPathHasNoSideEffect(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(x, "state", "rota", "projects.json")); err == nil {
 		t.Error("registryPath must not create the new registry")
+	}
+}
+
+// A superseded legacy copy that cannot be removed is a warning: the state
+// registry already holds the data, so every entry point still works.
+func TestFailedRemovalOfSupersededLegacyCopyIsNotFatal(t *testing.T) {
+	x, env := isolate(t)
+	proj := t.TempDir()
+	if _, err := Register(env, proj, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// A non-empty directory in place of the old file makes os.Remove fail.
+	old := filepath.Join(x, "config", "rota", "projects.json")
+	if err := os.MkdirAll(filepath.Join(old, "keep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ps, err := List(env)
+	if err != nil || len(ps) != 1 || ps[0].Path != repos.Realpath(proj) {
+		t.Fatalf("List must still work: %+v, %v", ps, err)
+	}
+	if _, err := Register(env, proj, time.Now()); err != nil {
+		t.Errorf("Register must still work: %v", err)
+	}
+}
+
+// Racing first calls after an upgrade: one process moves the registry, the
+// others find it gone or already in place. None may fail or lose entries.
+func TestConcurrentFirstCallsMoveTheLegacyRegistryOnce(t *testing.T) {
+	x, env := isolate(t)
+	proj := t.TempDir()
+	oldRegistry(t, x, `{"projects":[{"path":"`+proj+`","name":"p","lastSeen":"2026-01-01T00:00:00Z"}]}`)
+	const n = 8
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func() {
+			ps, err := List(env)
+			if err == nil && (len(ps) != 1 || ps[0].Path != proj) {
+				err = fmt.Errorf("registry content lost: %+v", ps)
+			}
+			errs <- err
+		}()
+	}
+	for i := 0; i < n; i++ {
+		if err := <-errs; err != nil {
+			t.Error(err)
+		}
 	}
 }
