@@ -178,9 +178,15 @@ func (r Repo) DirtyPaths(ctx context.Context) (paths []string, ok bool, err erro
 	if err != nil || res.ExitCode != 0 {
 		return nil, false, err
 	}
-	// Each entry is "XY <path>"; a rename or copy is followed by its source as
-	// a bare entry, which is not a dirty path of its own.
-	ents := strings.Split(res.Stdout, "\x00")
+	return StatusPaths(res.Stdout), true, nil
+}
+
+// StatusPaths parses `git status --porcelain -z` output into the changed
+// paths: each entry is "XY <path>", and a rename or copy in either column is
+// followed by its source as a bare entry, which is not a dirty path of its own.
+func StatusPaths(out string) []string {
+	var paths []string
+	ents := strings.Split(out, "\x00")
 	for i := 0; i < len(ents); i++ {
 		ent := ents[i]
 		if len(ent) < 4 {
@@ -191,7 +197,7 @@ func (r Repo) DirtyPaths(ctx context.Context) (paths []string, ok bool, err erro
 			i++
 		}
 	}
-	return paths, true, nil
+	return paths
 }
 
 // HasHead reports whether the repo has a first commit.
