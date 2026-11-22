@@ -94,8 +94,12 @@ func TestRemoveSeveralWithTitleIsMultiMatch(t *testing.T) {
 	gittest.Commit(t, f.a, "dup", "topics/go.md", editGo+"- **Legacy** — Again. <!-- 2026-08-03 -->\n")
 	gittest.Run(t, f.a, "push", "-q")
 	before := goFile(t, f)
-	if _, err := f.clone().Remove(context.Background(), RmIn{Topic: "Go", Title: "Legacy"}); !errorsIs(err, ErrMultiMatch) {
+	_, err := f.clone().Remove(context.Background(), RmIn{Topic: "Go", Title: "Legacy"})
+	if !errorsIs(err, ErrMultiMatch) {
 		t.Fatalf("err = %v", err)
+	}
+	if !strings.Contains(err.Error(), `"Go"`) {
+		t.Fatalf("err %q does not name the topic", err)
 	}
 	if goFile(t, f) != before {
 		t.Fatal("file changed")
