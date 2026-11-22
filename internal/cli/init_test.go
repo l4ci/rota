@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -386,5 +388,82 @@ func TestInitWritesNoMachineKeys(t *testing.T) {
 		if len(rows) != 1 || get(rows[0], "source") != src {
 			t.Errorf("%s: %v, want source %s", key, env, src)
 		}
+	}
+}
+
+// init seeds an unset global test.slots to the roster size (#4092) and never
+// overwrites a value the machine already has, 1 included.
+func TestInitSeedsGlobalTestSlots(t *testing.T) {
+	var rosterSize int
+	run := func(t *testing.T, seed string) (cfgDir, text string) {
+		t.Helper()
+		d := doctorDeps(t, map[string]string{"git": `case "$1" in remote) exit 2;; esac; exit 0`})
+		xdg := t.TempDir()
+		t.Setenv("XDG_CONFIG_HOME", xdg)
+		t.Setenv("ROTA_CONFIG_DIR", "")
+		cfgDir = filepath.Join(xdg, "rota")
+		if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if seed != "" {
+			if err := os.WriteFile(filepath.Join(cfgDir, "config.json"), []byte(seed), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		dir, _ := filepath.EvalSymlinks(t.TempDir())
+		code, out, _ := rotaInWith(t, d, dir, "init")
+		if code != 0 {
+			t.Fatalf("init %d %s", code, out)
+		}
+		_, rout, _ := rotaInWith(t, d, dir, "config", "show", "round.roster", "--json")
+		var shown struct {
+			Data struct {
+				Entries []struct{ Value []any } `json:"entries"`
+			} `json:"data"`
+		}
+		_ = json.Unmarshal([]byte(rout), &shown)
+		if len(shown.Data.Entries) == 1 {
+			rosterSize = len(shown.Data.Entries[0].Value)
+		}
+		_, dout, _ := rotaInWith(t, d, dir, "doctor", "--json")
+		_, c := doctorData(t, dout)
+		if seed == "" {
+			if c["test"]["status"] != "pass" {
+				t.Errorf("doctor test line after init: %v", c["test"])
+			}
+		}
+		return cfgDir, out
+	}
+	slots := func(t *testing.T, cfgDir string) any {
+		t.Helper()
+		vals, err := config.LoadGlobal(cfgDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return vals["test.slots"]
+	}
+	t.Run("unset is seeded to the roster size", func(t *testing.T) {
+		cfgDir, out := run(t, "")
+		if got := slots(t, cfgDir); fmt.Sprint(got) != fmt.Sprint(rosterSize) {
+			t.Errorf("test.slots %v, want roster size %d", got, rosterSize)
+		}
+		if !strings.Contains(out, "test.slots") {
+			t.Errorf("init output does not say so: %s", out)
+		}
+	})
+	for _, seed := range []string{`{"test":{"slots":1}}`, `{"test":{"slots":2}}`} {
+		t.Run("kept "+seed, func(t *testing.T) {
+			cfgDir, out := run(t, seed)
+			want := "1"
+			if strings.Contains(seed, "2") {
+				want = "2"
+			}
+			if got := slots(t, cfgDir); fmt.Sprint(got) != want {
+				t.Errorf("test.slots %v, want %v kept", got, want)
+			}
+			if strings.Contains(out, "test.slots") {
+				t.Errorf("init reported a seed over an existing value: %s", out)
+			}
+		})
 	}
 }

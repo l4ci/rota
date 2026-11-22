@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/l4ci/rota/internal/agents"
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -100,14 +102,15 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 		if err := refuseHomeInit(c, "init", *force); err != nil {
 			return Result{}, err
 		}
-		return runInit(c, *noBlocks)
+		return runInit(c, *noBlocks, true)
 	}
 }
 
 // runInit is `rota init` on the working directory: seed, fill and stamp the
 // config, run the managed blocks. `rota setup` runs it too, so whatever init
-// gains (the project registry, #24) reaches both.
-func runInit(c *Ctx, noBlocks bool) (Result, error) {
+// gains (the project registry, #24) reaches both. seedSlots is `rota init`
+// only: setup asks before it writes the global config, so it never seeds.
+func runInit(c *Ctx, noBlocks, seedSlots bool) (Result, error) {
 	dir, err := initDir(c)
 	if err != nil {
 		return Result{}, err
@@ -128,6 +131,9 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		return Result{}, err
 	}
 	warnings = append(warnings, cfg.warnings...)
+	if seedSlots {
+		cfg.slotsSeeded = seedTestSlots(c, dir)
+	}
 	changed = changed || cfg.changed()
 	cfg.report(data, &lines)
 	if !noBlocks {
@@ -208,6 +214,8 @@ type initConfigResult struct {
 	filled   []string
 	stamped  string
 	warnings []string
+	// slotsSeeded is the global test.slots init wrote, 0 when it wrote none.
+	slotsSeeded int
 }
 
 func (r initConfigResult) changed() bool {
@@ -217,6 +225,10 @@ func (r initConfigResult) changed() bool {
 func (r initConfigResult) report(data *jsonx.Object, lines *[]string) {
 	data.Set("configFilled", jsonx.Strings(r.filled))
 	data.Set("versionStamped", r.stamped)
+	data.Set("testSlotsSeeded", r.slotsSeeded)
+	if r.slotsSeeded > 0 {
+		*lines = append(*lines, fmt.Sprintf("seeded global test.slots: %d (round roster size)", r.slotsSeeded))
+	}
 	if len(r.filled) > 0 {
 		*lines = append(*lines, "config filled: "+strings.Join(r.filled, ", "))
 	}
@@ -328,4 +340,42 @@ func initIssueSource(c *Ctx, root string) error {
 	_, err := config.Set(root, config.IssuesSourceKey, source)
 	c.configWritten()
 	return err
+}
+
+// testSlotsKey and testSlotsMax mirror the key registry's test.slots entry and
+// its 1..64 bounds (internal/config/keys.go).
+const (
+	testSlotsKey = "test.slots"
+	testSlotsMax = 64
+)
+
+// seedTestSlots fills an unset global test.slots with the effective roster
+// size, so the roster's workers do not queue on a single test slot (#4092).
+// The key is machine scope while the roster is the project's, so this writes
+// outside the project: it only fills a missing value, any present one (1
+// included) is the machine's call. A roster of one matches the key default and
+// writes nothing. Best effort: an unreadable global config or round config
+// leaves the key alone. It returns the value written, 0 for none.
+func seedTestSlots(c *Ctx, root string) int {
+	env := c.deps().projectsEnv()
+	dir, err := cfgdir.Dir(env)
+	if err != nil {
+		return 0
+	}
+	vals, err := config.LoadGlobal(dir)
+	if err != nil {
+		return 0
+	}
+	if _, set := vals[testSlotsKey]; set {
+		return 0
+	}
+	settings, ok := c.deps().tolerantRoundSettings(root)
+	if !ok || len(settings.Roster) < 2 {
+		return 0
+	}
+	n := min(len(settings.Roster), testSlotsMax)
+	if _, err := config.SetGlobal(dir, testSlotsKey, strconv.Itoa(n)); err != nil {
+		return 0
+	}
+	return n
 }

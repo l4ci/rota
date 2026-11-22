@@ -152,7 +152,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		res, err := runInit(c, false)
+		res, err := runInit(c, false, false)
 		if err != nil {
 			return res, err
 		}

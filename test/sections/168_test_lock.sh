@@ -11,7 +11,9 @@ mkdir -p "$TLP/.rota"
 # different repo, but strip the mark so these runs queue the way a developer's do.
 tlrun() { ( cd "$TLP" && env -u ROTA_TEST_LOCK_HELD "$ROTA_BIN" "$@" ); }
 
-printf '%s\n' '{"test":{"fast":["sleep 2"]}}' > "$TLP/.rota/config.json"
+# Pin one slot: `rota init` in an earlier section seeds the shared smoke HOME's global
+# test.slots to the roster size (#4092), so the default is not 1 here.
+printf '%s\n' '{"test":{"slots":1,"fast":["sleep 2"]}}' > "$TLP/.rota/config.json"
 tlrun test run fast >/dev/null 2>"$TMP_TL/first.err" &
 FIRST=$!
 # Wait until the first run records itself as the holder.
