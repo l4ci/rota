@@ -102,14 +102,15 @@ func initVerb(fs *flag.FlagSet) RunFunc {
 		if err := refuseHomeInit(c, "init", *force); err != nil {
 			return Result{}, err
 		}
-		return runInit(c, *noBlocks)
+		return runInit(c, *noBlocks, true)
 	}
 }
 
 // runInit is `rota init` on the working directory: seed, fill and stamp the
 // config, run the managed blocks. `rota setup` runs it too, so whatever init
-// gains (the project registry, #24) reaches both.
-func runInit(c *Ctx, noBlocks bool) (Result, error) {
+// gains (the project registry, #24) reaches both. seedSlots is `rota init`
+// only: setup asks before it writes the global config, so it never seeds.
+func runInit(c *Ctx, noBlocks, seedSlots bool) (Result, error) {
 	dir, err := initDir(c)
 	if err != nil {
 		return Result{}, err
@@ -130,6 +131,9 @@ func runInit(c *Ctx, noBlocks bool) (Result, error) {
 		return Result{}, err
 	}
 	warnings = append(warnings, cfg.warnings...)
+	if seedSlots {
+		cfg.slotsSeeded = seedTestSlots(c, dir)
+	}
 	changed = changed || cfg.changed()
 	cfg.report(data, &lines)
 	if !noBlocks {
@@ -246,7 +250,6 @@ func initConfig(c *Ctx, root string) (initConfigResult, error) {
 		return r, err
 	}
 	r.filled = rec.Filled
-	r.slotsSeeded = seedTestSlots(c, root)
 	if rec.Source.Changed {
 		r.warnings = append(r.warnings, "migrated backlog.backend and issues.provider to issues.source "+rec.Source.Source)
 	}

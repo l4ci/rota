@@ -47,6 +47,12 @@ func TestMain(m *testing.M) {
 	// may write the developer's real ~/.local/state/rota.
 	os.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "xdg"))
 	os.Setenv("XDG_STATE_HOME", filepath.Join(dir, "xstate"))
+	// `rota init` seeds an unset global test.slots from the roster (#4092).
+	// Pin it here so no init in this process rewrites the shared global config
+	// that later tests read; the seeding test uses its own XDG_CONFIG_HOME.
+	if err := os.MkdirAll(filepath.Join(dir, "xdg", "rota"), 0o755); err == nil {
+		os.WriteFile(filepath.Join(dir, "xdg", "rota", "config.json"), []byte(`{"test":{"slots":1}}`), 0o644)
+	}
 	// Fixture repos commit and merge: the identity comes from here, not from
 	// the developer's (or CI's missing) global git config. t@x, not gittest's
 	// default: the goldens hold commit hashes made under it.
