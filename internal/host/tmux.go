@@ -76,17 +76,20 @@ var tmuxKeys = map[string]string{"enter": "Enter", "up": "Up", "down": "Down"}
 // dialog is answered with DialogKeys, up to maxBootDialogs times; a pane that
 // still shows one after that, or at the timeout, is a *DialogError.
 func (t *tmux) waitReady(ctx context.Context, window string, timeout int) (bool, error) {
-	answered := 0
+	answered, last := 0, ""
 	for waited := 0; waited < timeout; waited += 2 {
 		p := t.pane(ctx, window)
 		if looksBooted(p) {
 			return true, nil
 		}
-		if keys, ok := DialogKeys(p); ok {
+		// The same pane text as the last answered dialog is a slow redraw, not
+		// a new dialog: wait for it instead of burning another answer.
+		if keys, ok := DialogKeys(p); ok && p != last {
 			if answered == maxBootDialogs {
-				return false, &DialogError{First: firstLine(p)}
+				return false, &DialogError{First: dialogTitle(p)}
 			}
 			answered++
+			last = p
 			args := []string{"send-keys", "-t", window}
 			for _, k := range keys {
 				args = append(args, tmuxKeys[k])
@@ -95,14 +98,20 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) (bool,
 		}
 		t.d.settle(2 * time.Second)
 	}
-	if d, ok := ReadDialog(t.pane(ctx, window)); ok {
-		return false, &DialogError{First: d.First}
+	if p := t.pane(ctx, window); dialogOpen(p) {
+		return false, &DialogError{First: dialogTitle(p)}
 	}
 	return false, nil
 }
 
-// firstLine is the first non-blank line of the pane.
-func firstLine(p string) string {
+func dialogOpen(p string) bool { _, ok := ReadDialog(p); return ok }
+
+// dialogTitle is the dialog's own title line, the same on every path, and the
+// first non-blank line of the pane when ReadDialog does not recognise it.
+func dialogTitle(p string) string {
+	if d, ok := ReadDialog(p); ok {
+		return d.First
+	}
 	for _, l := range strings.Split(p, "\n") {
 		if l = strings.TrimSpace(l); l != "" {
 			return l

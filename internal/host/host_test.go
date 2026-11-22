@@ -2121,7 +2121,19 @@ func TestTmuxSpawnAnswersStartupDialog(t *testing.T) {
 	}
 }
 
-// A dialog that keeps coming back is reported as a dialog, not a boot timeout.
+// answers counts the Enter-ending send-keys calls made after the launch.
+func (f *fake) answers() int {
+	n := 0
+	for _, c := range strings.Split(f.log(), "\n") {
+		if strings.Contains(c, "send-keys") && strings.HasSuffix(c, "Enter") && !strings.Contains(c, "C-m") {
+			n++
+		}
+	}
+	return n
+}
+
+// A dialog that never goes away is answered once (a slow redraw does not burn
+// another answer) and reported at the timeout as the dialog, by its title.
 func TestTmuxSpawnStuckDialogNamed(t *testing.T) {
 	trust := readFixture(t, "trust-dialog-2.1.288.txt")
 	f := &fake{handler: func(_ string, a []string) Result {
@@ -2131,7 +2143,55 @@ func TestTmuxSpawnStuckDialogNamed(t *testing.T) {
 		return Result{}
 	}}
 	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 20})
-	if err == nil || !strings.Contains(err.Error(), "startup dialog") || strings.Contains(err.Error(), "did not come up") {
+	var de *DialogError
+	if !errors.Is(err, ErrDialogOpen) || !errors.As(err, &de) || de.First != "Accessing workspace:" {
+		t.Fatalf("err = %v", err)
+	}
+	if n := f.answers(); n != 1 {
+		t.Errorf("answers = %d, want 1:\n%s", n, f.log())
+	}
+}
+
+// Fresh dialogs after maxBootDialogs answers fail the launch by title.
+func TestTmuxSpawnDialogCapNamed(t *testing.T) {
+	trust := readFixture(t, "trust-dialog-2.1.288.txt")
+	polls := 0
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "capture-pane" {
+			polls++
+			return Result{Stdout: trust + fmt.Sprintf("\n\nredraw %d\n", polls)}
+		}
+		return Result{}
+	}}
+	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 20})
+	var de *DialogError
+	if !errors.Is(err, ErrDialogOpen) || !errors.As(err, &de) || de.First != "Accessing workspace:" {
+		t.Fatalf("err = %v", err)
+	}
+	if n := f.answers(); n != 2 {
+		t.Errorf("answers = %d, want 2", n)
+	}
+}
+
+// A dialog with no accepting option gets no keys and is named at the timeout.
+func TestTmuxSpawnUnanswerableDialogGetsNoKeys(t *testing.T) {
+	pane := "Accessing workspace:\n\n ❯ 1. Maybe\n   2. Later\n\n Enter to confirm · Esc to cancel\n"
+	f := &fake{handler: func(_ string, a []string) Result {
+		if a[0] == "capture-pane" {
+			return Result{Stdout: pane}
+		}
+		return Result{}
+	}}
+	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 6})
+	if !errors.Is(err, ErrDialogOpen) {
 		t.Errorf("err = %v", err)
+	}
+	if n := f.answers(); n != 0 {
+		t.Errorf("answers = %d, want 0", n)
+	}
+	for _, c := range strings.Split(f.log(), "\n") {
+		if strings.Contains(c, "send-keys") && !strings.Contains(c, "C-m") {
+			t.Errorf("unexpected keys: %s", c)
+		}
 	}
 }
