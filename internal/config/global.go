@@ -52,8 +52,8 @@ func SaveGlobal(root, dir string) ([]string, bool, AutonomyMigration, error) {
 	// An auto from a project stamped before the split is one-hop: copy it as
 	// roundtrip, since MergeGlobal stamps the global as current (#1101).
 	var am AutonomyMigration
-	if vals["autonomy.level"] == "auto" && autonomyStale(cfg) {
-		vals["autonomy.level"] = "roundtrip"
+	if vals[AutonomyLevelKey] == "auto" && autonomyStale(cfg) {
+		vals[AutonomyLevelKey] = "roundtrip"
 		am.GlobalRewrite = true
 	}
 	// An unparseable global reads as empty here: MergeGlobal refuses it below.
@@ -147,7 +147,7 @@ func MergeGlobal(dir string, vals map[string]any) ([]string, error) {
 		return nil, err
 	}
 	saved := []string{}
-	_, stamp := vals["autonomy.level"]
+	_, stamp := vals[AutonomyLevelKey]
 	err := updateGlobal(dir, stamp, func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
@@ -214,7 +214,7 @@ func SetGlobal(dir, key, raw string) (SetResult, error) {
 	}
 	return setAt(GlobalPath(dir), globalNotObject(dir), key, raw,
 		func(path string, def any, mutate func(any) (any, error)) error {
-			return updateGlobal(dir, key == "autonomy.level", mutate)
+			return updateGlobal(dir, key == AutonomyLevelKey, mutate)
 		})
 }
 

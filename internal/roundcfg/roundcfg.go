@@ -289,7 +289,7 @@ func FromConfig(cfg any) (Settings, error) {
 	if s.ArchitectureIdleMinHours, err = config.Int(cfg, config.RoundArchitectureIdleMinHoursKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}
-	s.Autopilot = config.String(cfg, "autonomy.level") == "auto"
+	s.Autopilot = config.String(cfg, config.AutonomyLevelKey) == "auto"
 	if s.AutopilotCap, err = config.Int(cfg, config.RoundAutopilotCapKey, 0, config.MaxInt); err != nil {
 		return s, err
 	}

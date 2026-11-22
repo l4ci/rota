@@ -256,7 +256,7 @@ var Prompts = []Prompt{
 		"herdr-core": "Codex workers in the current Herdr App Core runtime",
 		"orca":       "worker terminals in a running Orca app (explicit only)",
 	}},
-	{Key: "autonomy.level", Title: "How much may rota chain on its own?", Help: map[string]string{
+	{Key: AutonomyLevelKey, Title: "How much may rota chain on its own?", Help: map[string]string{
 		"off":       "skills only suggest the next step",
 		"roundtrip": "run one item from brainstorm to ship, then stop",
 		"auto":      "keep taking the next ready item; rounds run the autopilot",

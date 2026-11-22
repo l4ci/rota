@@ -154,7 +154,7 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		sg.Set("items", sig.Items)
 		sg.Set("files", sig.Files)
 		sg.Set("debugCycles", sig.DebugCycles)
-		autonomy := config.String(cfg, "autonomy.level")
+		autonomy := config.String(cfg, config.AutonomyLevelKey)
 
 		data := jsonx.Obj("branch", branch, "base", base, "commit", commit, "status", st, "items", items, "signals", sg,
 			"learn", learnObj, "docs", docsObj, "release", relObj, "autonomy", autonomy, "changed", done)
