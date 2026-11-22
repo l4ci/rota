@@ -44,7 +44,7 @@ func (p *preflight) roleInTrackedConfig() (Result, error) {
 // support. It reads round.role alone, so a bad unrelated round.* key cannot
 // open the fence, and a role it cannot read refuses rather than runs.
 func (p *preflight) supportRole() (Result, error) {
-	if roundcfg.MayRun(roundcfg.RoleSupport, p.g.Fence) {
+	if roundcfg.MayRun(roundcfg.RoleSupport, p.fence) {
 		return Result{}, nil
 	}
 	root, ok := p.project()

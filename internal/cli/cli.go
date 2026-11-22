@@ -461,7 +461,7 @@ func execute(ctx context.Context, root *Command, deps *Deps, args []string, stdi
 	}
 	physicalCwd(c)
 	gates := gatesFor(chain)
-	if res, err := runGates(c, gates); err != nil {
+	if res, err := runGates(c, gates, chain[len(chain)-1].Fence); err != nil {
 		return failWith(c, stdout, err, res)
 	}
 	// An unregistered --repo is exit 3 on every repo-scoped verb, ahead of
