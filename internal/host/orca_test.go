@@ -90,7 +90,7 @@ func (f *orcaFake) run(_ context.Context, cmd proc.Cmd) (Result, error) {
 		if dir == "" {
 			dir = filepath.Join(f.cwd, ".git", "rota-orca")
 		}
-		files, _ := f.fs.Glob(filepath.Join(dir, "agent-*.pid"))
+		files := f.fs.Glob(dir, "agent-*.pid")
 		for _, file := range files {
 			if err := f.fs.WriteFile(file, []byte("123\n"), 0600); err != nil {
 				return Result{}, err
