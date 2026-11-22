@@ -138,7 +138,7 @@ func (c *Counter) RecordAttempt(hypothesis, commit string) (int, error) {
 		a.Set("started_at", c.nowISO())
 		a.Set("hypothesis", hypothesis)
 		a.Set("commit", commit)
-		a.Set("outcome", "pending")
+		a.Set("outcome", outcomePending)
 		o.Set("attempts", append(list, a))
 		return nil
 	})
@@ -156,7 +156,7 @@ func (c *Counter) closeLast(outcome string, mutate func(o *jsonx.Object)) (attem
 			return exitcode.Errf(exitcode.ExitRefused, "no attempts recorded yet")
 		}
 		last := asObj(list[len(list)-1])
-		if v, _ := last.Get("outcome"); v != "pending" {
+		if v, _ := last.Get("outcome"); v != outcomePending {
 			s, _ := v.(string)
 			return exitcode.Errf(exitcode.ExitRefused, "last attempt outcome is '%s', not 'pending'", s)
 		}
@@ -218,22 +218,102 @@ func (c *Counter) Raw() (string, error) {
 	return string(b), err
 }
 
-// State is the parsed state file.
-func (c *Counter) State() (*jsonx.Object, error) {
+// Attempt is one recorded fix attempt.
+type Attempt struct {
+	N          int
+	StartedAt  string
+	Hypothesis string
+	Commit     string
+	Outcome    string
+	EndedAt    string
+}
+
+// Pending reports whether the attempt is still open.
+func (a Attempt) Pending() bool { return a.Outcome == outcomePending }
+
+const outcomePending = "pending"
+
+// Session is a typed snapshot of the state file. Callers read it instead of
+// the file's snake_case keys.
+type Session struct {
+	Session          string
+	BugID            string
+	StartedAt        string
+	FailedFixes      int
+	HypothesisCycles int
+	Attempts         []Attempt
+}
+
+// Pending is the open attempt: the last one, when its outcome is pending.
+func (s *Session) Pending() (Attempt, bool) {
+	if len(s.Attempts) == 0 {
+		return Attempt{}, false
+	}
+	last := s.Attempts[len(s.Attempts)-1]
+	return last, last.Pending()
+}
+
+// Load reads the state file into a Session; exit 3 without a session file.
+func (c *Counter) Load() (*Session, error) {
 	if err := c.require(); err != nil {
 		return nil, err
 	}
-	return asObj(fsio.LoadJSON(c.Path, c.def())), nil
+	o := asObj(fsio.LoadJSON(c.Path, c.def()))
+	str := func(o *jsonx.Object, k string) string { s, _ := mustGet(o, k).(string); return s }
+	s := &Session{
+		Session:          str(o, "session"),
+		BugID:            str(o, "bug_id"),
+		StartedAt:        str(o, "started_at"),
+		FailedFixes:      intOf(mustGet(o, "failed_fixes")),
+		HypothesisCycles: intOf(mustGet(o, "hypothesis_cycles")),
+	}
+	for _, av := range attemptsOf(o) {
+		a := asObj(av)
+		s.Attempts = append(s.Attempts, Attempt{
+			N: intOf(mustGet(a, "n")), StartedAt: str(a, "started_at"), Hypothesis: str(a, "hypothesis"),
+			Commit: str(a, "commit"), Outcome: str(a, "outcome"), EndedAt: str(a, "ended_at"),
+		})
+	}
+	return s, nil
+}
+
+// BugID is the item the session tracks; exit 3 without a session file.
+func (c *Counter) BugID() (string, error) {
+	s, err := c.Load()
+	if err != nil {
+		return "", err
+	}
+	return s.BugID, nil
+}
+
+// HypothesisCycles is the session's hypothesis-cycle count; exit 3 without a session file.
+func (c *Counter) HypothesisCycles() (int, error) {
+	s, err := c.Load()
+	if err != nil {
+		return 0, err
+	}
+	return s.HypothesisCycles, nil
+}
+
+// PendingAttempt is the session's open attempt. ok is false when there is
+// none (no attempts, or the last one is closed); exit 3 without a session file.
+func (c *Counter) PendingAttempt() (a Attempt, ok bool, err error) {
+	s, err := c.Load()
+	if err != nil {
+		return Attempt{}, false, err
+	}
+	a, ok = s.Pending()
+	return a, ok, nil
 }
 
 // Summary is the Iron Law halt note. The caller decides what an empty
-// attempt list means; Summary renders whatever the state holds.
-func (c *Counter) Summary(o *jsonx.Object) (md, bugID string, failed int) {
-	bugID = "?"
-	if v, ok := o.Get("bug_id"); ok {
-		bugID, _ = v.(string)
+// attempt list means; Summary renders whatever the session holds.
+func (s *Session) Summary() (md, bugID string, failed int) {
+	bugID = s.BugID
+	if bugID == "" {
+		bugID = "?"
 	}
-	failed = intOf(mustGet(o, "failed_fixes"))
+	failed = s.FailedFixes
 	plural := "s"
 	if failed == 1 {
 		plural = ""
@@ -246,17 +326,16 @@ func (c *Counter) Summary(o *jsonx.Object) (md, bugID string, failed int) {
 		"## Attempts",
 		"",
 	}
-	for _, av := range attemptsOf(o) {
-		a := asObj(av)
-		hyp, _ := mustGet(a, "hypothesis").(string)
+	for _, a := range s.Attempts {
+		hyp := a.Hypothesis
 		if utf8.RuneCountInString(hyp) > 120 {
 			hyp = string([]rune(hyp)[:117]) + "..."
 		}
-		commit := "unknown"
-		if v, ok := a.Get("commit"); ok {
-			commit, _ = v.(string)
+		commit := a.Commit
+		if commit == "" {
+			commit = "unknown"
 		}
-		lines = append(lines, strconv.Itoa(intOf(mustGet(a, "n")))+". "+commit+" — "+hyp)
+		lines = append(lines, strconv.Itoa(a.N)+". "+commit+" — "+hyp)
 	}
 	lines = append(lines,
 		"",

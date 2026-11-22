@@ -610,19 +610,9 @@ func debugVerdict(fs *flag.FlagSet) RunFunc {
 // `debug counter summary` still lists outcomes. No session file or no
 // pending attempt is not an error: it returns 0.
 func closeCounterAttempt(ctr *debugctr.Counter, v string) (int, error) {
-	st, err := ctr.State()
-	if err != nil {
-		return 0, nil // no session file
-	}
-	attempts, _ := st.Get("attempts")
-	list, _ := attempts.([]any)
-	if len(list) == 0 {
-		return 0, nil
-	}
-	if last, ok := list[len(list)-1].(*jsonx.Object); ok {
-		if o, _ := last.Get("outcome"); o != "pending" {
-			return 0, nil
-		}
+	pending, ok, err := ctr.PendingAttempt()
+	if err != nil || !ok {
+		return 0, nil // no session file, or no pending attempt
 	}
 	if v == verdict.Pass {
 		n, err := ctr.Pass()
@@ -631,7 +621,7 @@ func closeCounterAttempt(ctr *debugctr.Counter, v string) (int, error) {
 	if _, err := ctr.Fail(); err != nil {
 		return 0, ignoreRefused(err)
 	}
-	return len(list), nil
+	return pending.N, nil
 }
 
 // ignoreRefused drops a counter refusal: another call closed the attempt

@@ -95,8 +95,8 @@ func TestSummaryBytes(t *testing.T) {
 	}
 	c.RecordAttempt(long, "abc")
 	c.Fail()
-	st, _ := c.State()
-	md, bug, failed := c.Summary(st)
+	st, _ := c.Load()
+	md, bug, failed := st.Summary()
 	trunc := ""
 	for i := 0; i < 117; i++ {
 		trunc += "é"
@@ -172,5 +172,48 @@ func TestTimestampsComeFromTheInjectedClock(t *testing.T) {
 	raw, _ := os.ReadFile(c.Path)
 	if !strings.Contains(string(raw), `"started_at": "2031-07-09T23:59:01+00:00"`) {
 		t.Errorf("init did not stamp the clock:\n%s", raw)
+	}
+}
+
+func TestPendingAttemptRule(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	if _, _, err := c.PendingAttempt(); exitOf(err) != 3 {
+		t.Fatalf("no session file: %v", err)
+	}
+	c.Init("B07")
+	if _, ok, err := c.PendingAttempt(); err != nil || ok {
+		t.Fatalf("no attempts: ok=%v err=%v", ok, err)
+	}
+	c.RecordAttempt("h1", "c1")
+	a, ok, _ := c.PendingAttempt()
+	if !ok || a.N != 1 || a.Hypothesis != "h1" || a.Commit != "c1" || a.Outcome != "pending" {
+		t.Fatalf("open attempt: ok=%v %+v", ok, a)
+	}
+	c.Fail()
+	if _, ok, _ := c.PendingAttempt(); ok {
+		t.Fatal("a closed last attempt is not pending")
+	}
+	c.RecordAttempt("h2", "c2")
+	if a, ok, _ := c.PendingAttempt(); !ok || a.N != 2 {
+		t.Fatalf("second attempt: ok=%v %+v", ok, a)
+	}
+}
+
+func TestBugIDAndCycles(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	if _, err := c.BugID(); exitOf(err) != 3 {
+		t.Fatalf("bug id without file: %v", err)
+	}
+	if _, err := c.HypothesisCycles(); exitOf(err) != 3 {
+		t.Fatalf("cycles without file: %v", err)
+	}
+	c.Init("B07")
+	c.IncCycle()
+	c.IncCycle()
+	if id, err := c.BugID(); err != nil || id != "B07" {
+		t.Fatalf("bug id %q %v", id, err)
+	}
+	if n, err := c.HypothesisCycles(); err != nil || n != 2 {
+		t.Fatalf("cycles %d %v", n, err)
 	}
 }
