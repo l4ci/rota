@@ -155,3 +155,23 @@ func TestOrcaLifecycleWithInjectedFileSystem(t *testing.T) {
 		})
 	}
 }
+
+// A glob metacharacter in the worktree path must not hide the PID records.
+// This drives the real OSFileSystem: redirectedFS swaps the directory away.
+func TestOrcaSnapshotWorktreeWithBracket(t *testing.T) {
+	f := newOrcaFakeAt(filepath.Join(t.TempDir(), "worker [ben]"))
+	if err := os.MkdirAll(filepath.Join(f.cwd, ".git"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	f.pidDir = filepath.Join(f.cwd, ".git", "rota-orca")
+	f.screens = []string{"user@host $", "model: loading\n› Ask Codex to do anything", orcaEmptyReady}
+	h := New(Orca, f.deps())
+	handle, err := h.Spawn(context.Background(), SpawnOpts{Session: "r", Slot: "ben", Cwd: f.cwd, Launch: "codex", Env: []string{"ROTA_SLOT=ben"}, BootTimeout: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	agents, err := New(Orca, f.deps()).Capabilities().Snapshotter.Snapshot(context.Background())
+	if err != nil || len(agents) != 1 || agents[0].Handle() != handle || strings.HasPrefix(agents[0].Handle(), "term") {
+		t.Fatalf("snapshot=%+v handle=%q error=%v", agents, handle, err)
+	}
+}
