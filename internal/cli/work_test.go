@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -246,5 +247,29 @@ func TestWorkStartTrackerClaimedByOther(t *testing.T) {
 	}
 	if gittest.Run(t, root, "branch", "--list", "rota/*") != "" {
 		t.Fatal("a branch was created")
+	}
+}
+
+func TestWorkClassifyListsRenameDestinationsOnly(t *testing.T) {
+	root := workRepo(t, "")
+	write(t, filepath.Join(root, "old unstaged.txt"), "unstaged rename source content\n")
+	write(t, filepath.Join(root, "old staged é.txt"), "staged rename source content\n")
+	gittest.Run(t, root, "add", "--", "old unstaged.txt", "old staged é.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "add rename sources")
+	// Unstaged rename (" R"): intent-to-add the destination, drop the source.
+	if err := os.Rename(filepath.Join(root, "old unstaged.txt"), filepath.Join(root, "new unstaged.txt")); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, root, "add", "-N", "--", "new unstaged.txt")
+	// Staged rename ("R ").
+	gittest.Run(t, root, "mv", "old staged é.txt", "new staged é.txt")
+
+	tool, artifacts, user, err := workClassify(context.Background(), testDeps().Repo(root), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"new staged é.txt", "new unstaged.txt"}
+	if !reflect.DeepEqual(user, want) || len(tool) != 0 || len(artifacts) != 0 {
+		t.Fatalf("tool %q artifacts %v user %q, want user %q", tool, artifacts, user, want)
 	}
 }
