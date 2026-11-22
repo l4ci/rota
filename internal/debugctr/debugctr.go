@@ -226,6 +226,8 @@ type Attempt struct {
 	Commit     string
 	Outcome    string
 	EndedAt    string
+
+	raw *jsonx.Object // the attempt as stored, so absent keys stay distinguishable from empty
 }
 
 // Pending reports whether the attempt is still open.
@@ -242,6 +244,8 @@ type Session struct {
 	FailedFixes      int
 	HypothesisCycles int
 	Attempts         []Attempt
+
+	raw *jsonx.Object // the file as stored
 }
 
 // Pending is the open attempt: the last one, when its outcome is pending.
@@ -266,12 +270,13 @@ func (c *Counter) Load() (*Session, error) {
 		StartedAt:        str(o, "started_at"),
 		FailedFixes:      intOf(mustGet(o, "failed_fixes")),
 		HypothesisCycles: intOf(mustGet(o, "hypothesis_cycles")),
+		raw:              o,
 	}
 	for _, av := range attemptsOf(o) {
 		a := asObj(av)
 		s.Attempts = append(s.Attempts, Attempt{
 			N: intOf(mustGet(a, "n")), StartedAt: str(a, "started_at"), Hypothesis: str(a, "hypothesis"),
-			Commit: str(a, "commit"), Outcome: str(a, "outcome"), EndedAt: str(a, "ended_at"),
+			Commit: str(a, "commit"), Outcome: str(a, "outcome"), EndedAt: str(a, "ended_at"), raw: a,
 		})
 	}
 	return s, nil
@@ -286,15 +291,6 @@ func (c *Counter) BugID() (string, error) {
 	return s.BugID, nil
 }
 
-// HypothesisCycles is the session's hypothesis-cycle count; exit 3 without a session file.
-func (c *Counter) HypothesisCycles() (int, error) {
-	s, err := c.Load()
-	if err != nil {
-		return 0, err
-	}
-	return s.HypothesisCycles, nil
-}
-
 // PendingAttempt is the session's open attempt. ok is false when there is
 // none (no attempts, or the last one is closed); exit 3 without a session file.
 func (c *Counter) PendingAttempt() (a Attempt, ok bool, err error) {
@@ -306,12 +302,35 @@ func (c *Counter) PendingAttempt() (a Attempt, ok bool, err error) {
 	return a, ok, nil
 }
 
+// Show is the session as `counter show --json` renders it: camelCase keys,
+// only those the file holds.
+func (s *Session) Show() *jsonx.Object {
+	pick := func(src *jsonx.Object, keys [][2]string) *jsonx.Object {
+		d := jsonx.NewObject()
+		for _, k := range keys {
+			if v, ok := src.Get(k[0]); ok {
+				d.Set(k[1], v)
+			}
+		}
+		return d
+	}
+	d := pick(s.raw, [][2]string{{"session", "session"}, {"bug_id", "bugId"}, {"started_at", "startedAt"},
+		{"failed_fixes", "failedFixes"}, {"hypothesis_cycles", "hypothesisCycles"}})
+	atts := []any{}
+	for _, a := range s.Attempts {
+		atts = append(atts, pick(a.raw, [][2]string{{"n", "n"}, {"started_at", "startedAt"}, {"hypothesis", "hypothesis"},
+			{"commit", "commit"}, {"outcome", "outcome"}, {"ended_at", "endedAt"}}))
+	}
+	d.Set("attempts", atts)
+	return d
+}
+
 // Summary is the Iron Law halt note. The caller decides what an empty
 // attempt list means; Summary renders whatever the session holds.
 func (s *Session) Summary() (md, bugID string, failed int) {
-	bugID = s.BugID
-	if bugID == "" {
-		bugID = "?"
+	bugID = "?"
+	if v, ok := s.raw.Get("bug_id"); ok {
+		bugID, _ = v.(string)
 	}
 	failed = s.FailedFixes
 	plural := "s"
@@ -331,9 +350,9 @@ func (s *Session) Summary() (md, bugID string, failed int) {
 		if utf8.RuneCountInString(hyp) > 120 {
 			hyp = string([]rune(hyp)[:117]) + "..."
 		}
-		commit := a.Commit
-		if commit == "" {
-			commit = "unknown"
+		commit := "unknown"
+		if v, ok := a.raw.Get("commit"); ok {
+			commit, _ = v.(string)
 		}
 		lines = append(lines, strconv.Itoa(a.N)+". "+commit+" — "+hyp)
 	}

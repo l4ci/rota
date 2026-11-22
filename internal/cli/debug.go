@@ -354,21 +354,7 @@ func runCounterShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	d := jsonx.NewObject()
-	d.Set("session", st.Session)
-	d.Set("bugId", st.BugID)
-	d.Set("startedAt", st.StartedAt)
-	d.Set("failedFixes", st.FailedFixes)
-	d.Set("hypothesisCycles", st.HypothesisCycles)
-	atts := []any{}
-	for _, a := range st.Attempts {
-		out := jsonx.Obj("n", a.N, "startedAt", a.StartedAt, "hypothesis", a.Hypothesis, "commit", a.Commit, "outcome", a.Outcome)
-		if a.EndedAt != "" {
-			out.Set("endedAt", a.EndedAt)
-		}
-		atts = append(atts, out)
-	}
-	d.Set("attempts", atts)
+	d := st.Show()
 	return Result{Data: d, Text: raw}, nil
 }
 

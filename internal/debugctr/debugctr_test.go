@@ -204,8 +204,8 @@ func TestBugIDAndCycles(t *testing.T) {
 	if _, err := c.BugID(); exitOf(err) != 3 {
 		t.Fatalf("bug id without file: %v", err)
 	}
-	if _, err := c.HypothesisCycles(); exitOf(err) != 3 {
-		t.Fatalf("cycles without file: %v", err)
+	if _, err := c.Load(); exitOf(err) != 3 {
+		t.Fatalf("load without file: %v", err)
 	}
 	c.Init("B07")
 	c.IncCycle()
@@ -213,7 +213,40 @@ func TestBugIDAndCycles(t *testing.T) {
 	if id, err := c.BugID(); err != nil || id != "B07" {
 		t.Fatalf("bug id %q %v", id, err)
 	}
-	if n, err := c.HypothesisCycles(); err != nil || n != 2 {
-		t.Fatalf("cycles %d %v", n, err)
+	if s, err := c.Load(); err != nil || s.HypothesisCycles != 2 {
+		t.Fatalf("cycles %+v %v", s, err)
+	}
+}
+
+// A partial file (older helper, hand edit) keeps absent keys absent in Show
+// and renders the old Summary fallbacks.
+func TestLoadPartialFile(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	os.MkdirAll(filepath.Dir(c.Path), 0o777)
+	os.WriteFile(c.Path, []byte(`{"failed_fixes": 2, "attempts": [{"n": 1, "outcome": "pending", "hypothesis": "h"}]}`), 0o666)
+	s, err := c.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FailedFixes != 2 || s.BugID != "" || s.HypothesisCycles != 0 || len(s.Attempts) != 1 {
+		t.Fatalf("mapping: %+v", s)
+	}
+	if a, ok := s.Pending(); !ok || a.N != 1 || a.Hypothesis != "h" || a.Commit != "" {
+		t.Fatalf("pending: %v %+v", ok, a)
+	}
+	d := s.Show()
+	if _, ok := d.Get("bugId"); ok {
+		t.Error("show emitted bugId for a file without bug_id")
+	}
+	if v, _ := d.Get("failedFixes"); intOf(v) != 2 {
+		t.Errorf("failedFixes %v", v)
+	}
+	att := asObj(mustGet(d, "attempts").([]any)[0])
+	if _, ok := att.Get("commit"); ok {
+		t.Error("show emitted commit for an attempt without one")
+	}
+	md, bug, _ := s.Summary()
+	if bug != "?" || !strings.Contains(md, "1. unknown — h") {
+		t.Errorf("fallbacks: %q\n%s", bug, md)
 	}
 }
