@@ -106,7 +106,7 @@ func (c Clone) tally(topics []Topic) (map[string]hitTally, int, error) {
 // Hit records that an agent used the bullet titled title under topic, and
 // returns the title the bullet is stored under (the log is keyed by it, not by
 // the typed one) and the hits that bullet now has on this machine. The bullet
-// is picked by the shared title rule (bulletfmt.SelectTitle): case-insensitive,
+// is picked by the shared title rule (bulletfmt.ResolveTitle): case-insensitive,
 // and a title two bullets share up to case is ErrMultiMatch. It reads the clone
 // as it is and appends one line to the hits log: no fetch, no write to the
 // clone. ErrNotFound when the topic or the bullet is not in the base.
@@ -125,18 +125,11 @@ func (c Clone) Hit(topic, title, project string) (string, int, error) {
 			titles = append(titles, b.Title)
 		}
 	}
-	hits := bulletfmt.SelectTitle(titles, title)
-	if len(hits) == 0 {
-		return "", 0, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, topic, title)
+	i, err := bulletfmt.ResolveTitle(titles, title)
+	if err != nil {
+		return "", 0, fmt.Errorf("%w (in %q)", err, topic)
 	}
-	if len(hits) > 1 {
-		named := make([]string, len(hits))
-		for i, h := range hits {
-			named[i] = fmt.Sprintf("%q", titles[h])
-		}
-		return "", 0, fmt.Errorf("%w: several bullets in %q are titled %q: %s", ErrMultiMatch, topic, title, strings.Join(named, ", "))
-	}
-	title = titles[hits[0]]
+	title = titles[i]
 	topics, err := c.Topics()
 	if err != nil {
 		return "", 0, err

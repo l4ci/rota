@@ -142,20 +142,40 @@ func HasSpanTitle(spans []Span, title string) bool {
 	return false
 }
 
-// SelectTitle is the one title-selection rule both knowledge stores apply:
-// it returns the indexes of titles equal to want, ignoring case and
+// ErrNotFound and ErrMultiMatch are the classes ResolveTitle refuses with. Both
+// knowledge stores alias them as their own sentinels, so one errors.Is covers
+// either store.
+var (
+	ErrNotFound   = errors.New("not found")
+	ErrMultiMatch = errors.New("matches several bullets")
+)
+
+// ResolveTitle is the one title lookup both knowledge stores apply: it returns
+// the index of the one entry of titles equal to want, ignoring case and
 // surrounding whitespace. An empty entry (a bullet with no bold title) never
-// matches. More than one index means the title is ambiguous, and the caller
-// refuses and names every hit.
-func SelectTitle(titles []string, want string) []int {
-	want = strings.ToLower(strings.TrimSpace(want))
+// matches. No match is ErrNotFound; several (titles that differ only in case)
+// are ErrMultiMatch and the message names every hit. Callers add where the
+// bullets sit by wrapping the error with %w.
+func ResolveTitle(titles []string, want string) (int, error) {
+	typed := strings.TrimSpace(want)
+	key := strings.ToLower(typed)
 	var hits []int
 	for i, t := range titles {
-		if t != "" && strings.ToLower(t) == want {
+		if t != "" && strings.ToLower(t) == key {
 			hits = append(hits, i)
 		}
 	}
-	return hits
+	switch len(hits) {
+	case 0:
+		return -1, fmt.Errorf("%w: no bullet titled '%s'", ErrNotFound, typed)
+	case 1:
+		return hits[0], nil
+	}
+	named := make([]string, len(hits))
+	for i, h := range hits {
+		named[i] = "'" + titles[h] + "'"
+	}
+	return -1, fmt.Errorf("%w: %d bullets titled '%s': %s", ErrMultiMatch, len(hits), typed, strings.Join(named, ", "))
 }
 
 // continues reports whether a line continues the bullet above it: it is

@@ -349,9 +349,8 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	home, _, _ := skillsDirs(c, a)
-	codexOff := home == "" && (a.agent == "" || a.agent == "all") && (a.scope == "" || a.scope == skills.User)
-	rep, err := set.Status(roots, version.Get().Version)
+	home, claudeDirs, _ := skillsDirs(c, a)
+	rep, err := set.Status(roots, skills.UnavailableAgents(a.scope, a.agent, home, claudeDirs), version.Get().Version)
 	if err != nil {
 		return Result{}, skillsErr(err)
 	}
@@ -373,11 +372,7 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 			o.Set("changed", jsonx.Strings(r.Changed))
 			line += "current"
 			if !r.Current {
-				want := rep.Digest
-				if r.Mode == skills.ModeStub {
-					want = rep.StubDigest
-				}
-				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(want))
+				line = fmt.Sprintf("%sstale (installed %s, rota %s)", strings.TrimSuffix(line, "current"), short(r.Digest), short(r.Want))
 				if len(r.Changed) > 0 {
 					line += ": " + strings.Join(r.Changed, ", ")
 				}
@@ -396,9 +391,13 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		rootsData = append(rootsData, o)
 	}
 	data := jsonx.Obj("version", rep.Version, "digest", rep.Digest, "stubDigest", rep.StubDigest, "roots", rootsData)
-	if codexOff {
-		data.Set("unavailable", jsonx.Strings([]string{skills.Codex}))
-		text = append(text, skills.Codex+": unavailable (HOME unset, so no Codex user root)")
+	if len(rep.Unavailable) > 0 {
+		var agents []string
+		for _, u := range rep.Unavailable {
+			agents = append(agents, u.Agent)
+			text = append(text, u.Agent+": unavailable ("+u.Reason+")")
+		}
+		data.Set("unavailable", jsonx.Strings(agents))
 	}
 	return withWarnings(withSkipped(Result{Data: data, Text: strings.Join(text, "\n")}, skipped), warnings), nil
 }
@@ -586,7 +585,7 @@ func skillsNeedUpdate(c *Ctx) bool {
 	if err != nil {
 		return true
 	}
-	rep, err := set.Status(roots, version.Get().Version)
+	rep, err := set.Status(roots, nil, version.Get().Version)
 	if err != nil {
 		return true
 	}

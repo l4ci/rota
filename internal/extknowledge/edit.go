@@ -65,18 +65,11 @@ func (c Clone) remove(ctx context.Context, in RmIn) (WriteResult, error) {
 	for i, b := range bs {
 		titles[i] = b.Title
 	}
-	hits := bulletfmt.SelectTitle(titles, in.Title)
-	if len(hits) > 1 {
-		named := make([]string, len(hits))
-		for i, h := range hits {
-			named[i] = fmt.Sprintf("%q", titles[h])
-		}
-		return WriteResult{}, fmt.Errorf("%w: several bullets in %q are titled %q: %s", ErrMultiMatch, in.Topic, in.Title, strings.Join(named, ", "))
+	i, err := bulletfmt.ResolveTitle(titles, in.Title)
+	if err != nil {
+		return WriteResult{}, fmt.Errorf("%w (in %q)", err, in.Topic)
 	}
-	if len(hits) == 0 {
-		return WriteResult{}, fmt.Errorf("%w: no bullet in %q is titled %q", ErrNotFound, in.Topic, in.Title)
-	}
-	e.lines = bulletfmt.DeleteBullet(e.lines, bs[hits[0]].Line)
+	e.lines = bulletfmt.DeleteBullet(e.lines, bs[i].Line)
 	return e.land(ctx, fmt.Sprintf("knowledge: remove %q from %s", strings.TrimSpace(in.Title), in.Topic))
 }
 

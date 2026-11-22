@@ -141,10 +141,7 @@ func (diskOwners) Cycles(root string) []Cycle {
 }
 
 func (diskOwners) Repo(dir string) string {
-	if r, err := repos.Which(dir); err == nil {
-		return r.Name
-	}
-	return ""
+	return repos.VerdictRepo(projectRoot(dir), dir, "")
 }
 
 // projectRoot is the project whose .rota/ holds the state of the checkout in
