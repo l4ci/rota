@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/l4ci/rota/internal/bulletfmt"
 )
 
 // TryItHeadRe matches a "Try it" heading: the commands a user would run to
@@ -34,10 +36,10 @@ func ParseTryIt(body string) (steps []TryStep, ok bool, err error) {
 	first := strings.Count(body[:loc[1]], "\n") + 1 // the line the section text starts on
 	for i, raw := range strings.Split(sec, "\n") {
 		line := strings.TrimSpace(raw)
-		bullet := strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ")
 		text := line
+		item, bullet := bulletfmt.CutMarker(line, bulletfmt.DashStar)
 		if bullet {
-			text = strings.TrimSpace(line[2:])
+			text = strings.TrimSpace(item)
 		}
 		if rest, isExpect := strings.CutPrefix(text, "expect:"); isExpect {
 			sub := unquote(rest)

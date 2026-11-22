@@ -5,6 +5,7 @@
 package itembody
 
 import (
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/section"
 	"regexp"
 	"sort"
@@ -85,10 +86,11 @@ func Entries(section string) []string {
 	var entries []string
 	for _, line := range strings.Split(section, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+		item, ok := bulletfmt.CutMarker(line, bulletfmt.DashStar)
+		if !ok {
 			continue
 		}
-		e := Entry(line[2:])
+		e := Entry(item)
 		if e == "" {
 			continue
 		}
@@ -187,10 +189,11 @@ func BulletPaths(section string, pathLike bool) []string {
 	var out []string
 	for _, line := range strings.Split(section, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "* ") {
+		item, ok := bulletfmt.CutMarker(line, bulletfmt.DashStar)
+		if !ok {
 			continue
 		}
-		line = strings.TrimSpace(line[2:])
+		line = strings.TrimSpace(item)
 		line = strings.TrimPrefix(strings.TrimPrefix(line, "[ ] "), "[x] ")
 		// backticked tokens, plus the bare words outside the backticks
 		var toks []string

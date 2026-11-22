@@ -60,7 +60,7 @@ func TestCorruptManifestRefusedByUninstallUpdateStatus(t *testing.T) {
 			t.Errorf("uninstall %q: no error", body)
 		}
 		sameTree(t, r.Path, before)
-		if _, err := s.Status([]Root{r}, "1"); err == nil {
+		if _, err := s.Status([]Root{r}, nil, "1"); err == nil {
 			t.Errorf("status %q: no error", body)
 		}
 		sameTree(t, r.Path, before)
@@ -76,7 +76,7 @@ func TestMissingManifestStillSkipped(t *testing.T) {
 	if res, err := s.Update([]Root{r}, Options{}); err != nil || len(res) != 0 {
 		t.Fatalf("%+v %v", res, err)
 	}
-	if rep, err := s.Status([]Root{r}, "1"); err != nil || rep.Roots[0].Installed {
+	if rep, err := s.Status([]Root{r}, nil, "1"); err != nil || rep.Roots[0].Installed {
 		t.Fatalf("%+v %v", rep, err)
 	}
 }
