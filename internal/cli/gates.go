@@ -36,18 +36,10 @@ type Gates struct {
 	// verbs that repair it, refuse it on their own (init), never load it, or
 	// load it and degrade silently (hook, skills). Inherited.
 	ConfigExempt bool
-	// Fence is the verb's own Command.Fence, copied here for the fence gate.
-	// Never inherited.
-	Fence roundcfg.FenceClass
 }
 
-// neverInherited names the Gates fields merge leaves out of a group's policy.
-// A field is either folded by merge or listed here: TestGatesMergeCoversEveryField fails otherwise.
-var neverInherited = map[string]bool{"Fence": true}
-
 // merge folds the group policy g under child: a boolean is set when either
-// side sets it, and a non-default RoundKeys policy of child beats g's. Fence
-// is the verb's own and never inherited, so the result leaves it zero.
+// side sets it, and a non-default RoundKeys policy of child beats g's.
 func (g Gates) merge(child Gates) Gates {
 	out := Gates{
 		LegacyExempt:      g.LegacyExempt || child.LegacyExempt,
@@ -74,7 +66,6 @@ func gatesFor(chain []*Command) Gates {
 			g = g.merge(cmd.Gates)
 		}
 	}
-	g.Fence = chain[len(chain)-1].Fence
 	return g
 }
 
@@ -84,6 +75,8 @@ func gatesFor(chain []*Command) Gates {
 type preflight struct {
 	c *Ctx
 	g Gates
+	// fence is the verb's own Command.Fence, never inherited from a group.
+	fence roundcfg.FenceClass
 
 	rootDone bool
 	root     string
@@ -129,8 +122,8 @@ func (p *preflight) config(root string) any {
 // runGates is the gate sequence: the legacy state directory stop, a corrupt config, the old round keys, a
 // role in the tracked config, an unnamed support machine, the support fence.
 // A gate's refusal ends the sequence with its error and result.
-func runGates(c *Ctx, g Gates) (Result, error) {
-	p := &preflight{c: c, g: g}
+func runGates(c *Ctx, g Gates, fence roundcfg.FenceClass) (Result, error) {
+	p := &preflight{c: c, g: g, fence: fence}
 	if err := p.legacyState(); err != nil {
 		return Result{}, err
 	}

@@ -204,8 +204,8 @@ func TestGatePoliciesMatchOldTables(t *testing.T) {
 		if path == "rota" {
 			continue // the old tables never named the launcher
 		}
-		if want := oldFenceClass(path); g.Fence != want {
-			t.Errorf("%s: Fence = %d, want %d", path, g.Fence, want)
+		if want := oldFenceClass(path); fenceAt(root, path) != want {
+			t.Errorf("%s: Fence = %d, want %d", path, fenceAt(root, path), want)
 		}
 	}
 	// Every path the old fence tables named is still a verb.
@@ -229,10 +229,10 @@ func TestGatesInheritDownTheTree(t *testing.T) {
 		}},
 	}}
 	root.Gates.RoundKeys = RoundKeysRefuse
-	if g := gatesAt(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || g.Fence != roundcfg.FenceUnclassified {
+	if g := gatesAt(root, "rota grp a"); !g.LegacyExempt || g.RoundKeys != RoundKeysRefuse || fenceAt(root, "rota grp a") != roundcfg.FenceUnclassified {
 		t.Errorf("a = %+v", g)
 	}
-	if g := gatesAt(root, "rota grp b"); !g.LegacyExempt || g.RoundKeys != RoundKeysQuiet || g.Fence != roundcfg.FenceAllowed {
+	if g := gatesAt(root, "rota grp b"); !g.LegacyExempt || g.RoundKeys != RoundKeysQuiet || fenceAt(root, "rota grp b") != roundcfg.FenceAllowed {
 		t.Errorf("b = %+v", g)
 	}
 	// The root's own policy is for bare rota alone.
@@ -241,8 +241,8 @@ func TestGatesInheritDownTheTree(t *testing.T) {
 	}
 }
 
-// Every Gates field is folded by merge or named in neverInherited; a field
-// added to the struct and to neither fails here instead of being dropped.
+// Every Gates field is folded by merge; a field added to the struct and not
+// folded fails here instead of being dropped.
 func TestGatesMergeCoversEveryField(t *testing.T) {
 	typ := reflect.TypeOf(Gates{})
 	for i := 0; i < typ.NumField(); i++ {
@@ -260,8 +260,8 @@ func TestGatesMergeCoversEveryField(t *testing.T) {
 			t.Fatalf("Gates.%s has kind %s: teach this test to set it", f.Name, pf.Kind())
 		}
 		got := reflect.ValueOf(parent.merge(Gates{})).Field(i)
-		if inherited := !got.IsZero(); inherited == neverInherited[f.Name] {
-			t.Errorf("Gates.%s: merge inherits = %v, neverInherited = %v: fold it in merge or list it in neverInherited", f.Name, inherited, neverInherited[f.Name])
+		if got.IsZero() {
+			t.Errorf("Gates.%s: merge drops it: fold it in merge", f.Name)
 		}
 	}
 	// A verb's own non-default RoundKeys beats the group's; the default does not.
@@ -273,11 +273,22 @@ func TestGatesMergeCoversEveryField(t *testing.T) {
 // gatesAt is the gate policy of the verb at path, found the way the dispatcher
 // finds it: the nodes from the root down.
 func gatesAt(root *Command, path string) Gates {
+	return gatesFor(chainAt(root, path))
+}
+
+// fenceAt is the Fence the dispatcher hands the fence gate for path: the
+// verb's own, never a group's.
+func fenceAt(root *Command, path string) roundcfg.FenceClass {
+	chain := chainAt(root, path)
+	return chain[len(chain)-1].Fence
+}
+
+func chainAt(root *Command, path string) []*Command {
 	chain := []*Command{root}
 	for _, w := range strings.Fields(path)[1:] {
 		chain = append(chain, chain[len(chain)-1].sub(w))
 	}
-	return gatesFor(chain)
+	return chain
 }
 
 // failWith keeps a verb's result data on exit 5 only when the returned error

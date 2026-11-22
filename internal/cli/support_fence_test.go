@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -303,19 +304,22 @@ func TestRoundStartSupportSurfacesStoreError(t *testing.T) {
 // (fail closed) and runs on main: the gate walks the tree, so the class a verb
 // declares on its Command is all it needs.
 func TestUnclassifiedVerbRefusedOnSupport(t *testing.T) {
+	ran := func(*Ctx, []string) (Result, error) { return Result{}, nil }
 	tree := &Command{Name: "rota", Subs: []*Command{
 		{Name: "grp", Subs: []*Command{
-			{Name: "new", Verb: noFlags(nil)},
-			{Name: "ok", Fence: fenceAllowed, Verb: noFlags(nil)},
+			{Name: "new", Verb: noFlags(ran)},
+			{Name: "ok", Fence: fenceAllowed, Verb: noFlags(ran)},
 		}},
 	}}
 	support := supportProject(t)
 	main := trackerProject(t, `{"issues":{"source":"github"}}`+"\n")
 	gate := func(dir, path string) error {
-		c := &Ctx{Path: path, Deps: testDeps()}
-		c.Deps.Getwd = func() (string, error) { return dir, nil }
-		_, err := runGates(c, gatesAt(tree, path))
-		return err
+		var out, errb bytes.Buffer
+		code := run(tree, testDeps(), append([]string{"-C", dir}, strings.Fields(path)[1:]...), strings.NewReader(""), &out, &errb)
+		if code != ExitOK {
+			return fmt.Errorf("exit %d: %s", code, errb.String())
+		}
+		return nil
 	}
 	if err := gate(support, "rota grp new"); err == nil {
 		t.Error("unclassified verb ran on a support machine")
