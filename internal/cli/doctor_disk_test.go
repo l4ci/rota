@@ -12,6 +12,7 @@ import (
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
@@ -304,9 +305,25 @@ func TestDoctorLeftoversSkipsHeldTmpEntries(t *testing.T) {
 func TestDoctorReapInputMatchesReapVerbInput(t *testing.T) {
 	root, d := reapProject(t, nil, true)
 	ctx := context.Background()
-	want, _, err := d.reapInput(ctx, root, []string{"kit"})
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"roster":["kit","ben"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.Append(root, ledger.Entry{TS: time.Now(), Kind: ledger.KindAdopt, Slot: "kit", Detail: ledger.AdoptDetail("odd-branch")}); err != nil {
+		t.Fatal(err)
+	}
+	set, err := d.roundSettings(root, roundConfigRequired)
+	if err != nil || len(set.Roster) != 2 {
+		t.Fatalf("roster = %v, %v", set.Roster, err)
+	}
+	want, _, err := d.reapInput(ctx, root, set.Roster)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !want.Adopted["odd-branch"] {
+		t.Fatalf("fixture adopted = %v", want.Adopted)
 	}
 	got, warn := d.doctorReapInput(ctx, root)
 	if got == nil || len(warn) != 0 {
@@ -318,6 +335,9 @@ func TestDoctorReapInputMatchesReapVerbInput(t *testing.T) {
 	}
 	has := func(in reap.Input) []bool {
 		return []bool{in.Git != nil, in.Report != nil, in.Host != nil, in.Lease != nil, in.Refresh != nil, in.ProcessUses != nil, in.Adopted != nil}
+	}
+	if !reflect.DeepEqual(got.Roster, want.Roster) || !reflect.DeepEqual(got.Adopted, want.Adopted) {
+		t.Errorf("held-rule data differs: doctor roster %v adopted %v, reap roster %v adopted %v", got.Roster, got.Adopted, want.Roster, want.Adopted)
 	}
 	if !reflect.DeepEqual(has(*got), has(want)) {
 		t.Errorf("wired fields differ: doctor %v, reap %v", has(*got), has(want))

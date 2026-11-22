@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/reap"
+	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -78,9 +79,15 @@ func (d *Deps) doctorReapInput(ctx context.Context, root string) (in *reap.Input
 	if set, ok := d.tolerantRoundSettings(root); ok {
 		roster = set.Roster
 	}
+	// Doctor's ledger read is not part of its output: reap warns about an
+	// unreadable ledger, and it only decides which branches reap offers.
 	ri, _, err := d.reapInput(ctx, root, roster)
 	if err != nil {
-		return nil, []string{"leftovers not checked: " + err.Error()}
+		// No temp root: the old doctor said nothing here, and still says nothing.
+		if tr, _ := rotatree.FindTempRoot(ctx, d.Git, root); tr == "" {
+			return nil, nil
+		}
+		return nil, []string{"temp root not checked: " + err.Error()}
 	}
 	return &ri, nil
 }

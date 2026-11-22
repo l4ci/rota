@@ -207,3 +207,22 @@ func TestTakeCensusPrunableFollowsReapsWorktreeRules(t *testing.T) {
 		t.Errorf("host unreadable: Prunable = %d, want 0", n)
 	}
 }
+
+// Doctor in a directory that is no git repo counted 0 worktrees without a
+// warning; going through Find must keep that, while other git failures warn.
+func TestTakeCensusPrunableNoGitRepoIsSilentZero(t *testing.T) {
+	root := t.TempDir()
+	failing := func(msg string) git.Runner {
+		return func(context.Context, string, ...string) (git.Result, error) {
+			return git.Result{ExitCode: 128, Stderr: msg}, nil
+		}
+	}
+	in := Input{Root: root, Base: "main", Git: failing("fatal: not a git repository (or any of the parent directories): .git"), Report: &round.Report{}}
+	if got := TakeCensus(context.Background(), CensusInput{Root: root, Reap: &in, Git: in.Git}); got.Prunable.N != 0 || len(got.Warnings) != 0 {
+		t.Errorf("no repo: %+v, want 0 and no warning", got)
+	}
+	in.Git = failing("fatal: boom")
+	if got := TakeCensus(context.Background(), CensusInput{Root: root, Reap: &in, Git: in.Git}); got.Prunable.N != 0 || len(got.Warnings) != 1 {
+		t.Errorf("other git error: %+v, want 0 and one warning", got)
+	}
+}

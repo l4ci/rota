@@ -123,6 +123,10 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 func prunableWorktrees(ctx context.Context, in Input) (c Count, warnings []string) {
 	res, err := Find(ctx, in, []string{KindWorktree})
 	if err != nil {
+		// A project dir that is no git repo has no checkouts to count.
+		if strings.Contains(err.Error(), "not a git repository") {
+			return c, nil
+		}
 		return c, []string{"worktrees not checked: " + err.Error()}
 	}
 	for _, cd := range res.Candidates {
