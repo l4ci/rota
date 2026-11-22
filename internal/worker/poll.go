@@ -2,16 +2,19 @@ package worker
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/ledger"
+	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
@@ -43,6 +46,72 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 		return st, ev
 	}
 	return StateBusy, relayEchoEvidence
+}
+
+// sentinelScanLines bounds the wider read taken when the pane text mentions
+// ROTA-DONE but the default window did not yield a sentinel (#4093): a DONE
+// line followed by more filler than the window holds.
+const sentinelScanLines = 2000
+
+// widenMemo remembers, per slot, the window text a successful wider read
+// already covered. It is owned by one wait loop and passed to classify, which re-classifies
+// the same idle pane every pass; a nil memo (a one-shot poll) remembers nothing.
+type widenMemo struct {
+	mu   sync.Mutex
+	seen map[string][32]byte
+}
+
+func (m *widenMemo) covered(key string, sum [32]byte) bool {
+	if m == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	prev, ok := m.seen[key]
+	return ok && prev == sum
+}
+
+func (m *widenMemo) remember(key string, sum [32]byte) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.seen == nil {
+		m.seen = map[string][32]byte{}
+	}
+	m.seen[key] = sum
+}
+
+// widenForSentinel re-reads a pane up to sentinelScanLines when
+// the capture fills the window, no sentinel was accepted and the pane changed
+// since the last wider read. It keeps the wider classification only when that
+// finds a sentinel.
+func widenForSentinel(memo *widenMemo, ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
+	if st == StateDone || st == StateBlocked || lines <= 0 || lines >= sentinelScanLines {
+		return st, ev
+	}
+	if !strings.HasPrefix(ev, noSentinelBase) || len(pystr.Splitlines(text)) < lines {
+		return st, ev
+	}
+	// An idle pane that has not changed since the last wider read has nothing
+	// new to find: a wait loop re-classifies the same text every pass.
+	key, sum := t.name+"\x00"+t.handle, sha256.Sum256([]byte(text))
+	if memo.covered(key, sum) {
+		return st, ev
+	}
+	wide, err := readPane(ctx, h, t, sentinelScanLines)
+	if err != nil {
+		return st, ev // a failed read is retried on the next pass
+	}
+	memo.remember(key, sum)
+	if !strings.Contains(wide, "ROTA-DONE") {
+		return st, ev
+	}
+	if ws, we := ClassifyFor(t.kind, wide, false, sentinelScanLines, native); ws == StateDone {
+		return ws, we
+	}
+	return st, ev
 }
 
 // relayHistoryLines bounds a recovery read when the first poll already missed
@@ -242,7 +311,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	}
 	before := ChangeCount(root)
 
-	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines)
+	rows, _, _ := e.classify(ctx, h, targets, o.Settle, o.Lines, nil)
 	e.noteRelayEcho(root, targets, e.Now())
 	rows, notes := e.promoteIdleWithPR(ctx, root, rows)
 	for i := range targets {
@@ -649,7 +718,7 @@ func targetOf(targets []pollTarget, name string) pollTarget {
 // status). The host sends no event when such a pane comes to rest, so a
 // caller woken by events must re-classify it on its own (#211: herdr's
 // scrollback reads differ for a moment after a turn ends).
-func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int) (rows []PollRow, settling, slept bool) {
+func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int, memo *widenMemo) (rows []PollRow, settling, slept bool) {
 	tr := h.Capabilities().TurnReader
 	first := map[string]string{}
 	finished := map[string]string{} // slot -> native status of a finished turn
@@ -684,6 +753,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		}
 		if native, ok := finished[t.name]; ok {
 			st, ev := ClassifyFor(t.kind, first[t.name], false, lines, native)
+			st, ev = widenForSentinel(memo, ctx, h, t, st, ev, first[t.name], lines, native)
 			t.relayMarker = t.relayPending > 0 && relayMarkerVisible(first[t.name], lines, t.relayPending)
 			targets[i].relayMarker = t.relayMarker
 			st, ev = e.gateRelayCapture(ctx, h, &t, st, ev, first[t.name], lines)
@@ -699,6 +769,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 		native = withReadFailure(native, err)
 		moved := first[t.name] != second
 		st, ev := ClassifyFor(t.kind, second, moved, lines, native)
+		st, ev = widenForSentinel(memo, ctx, h, t, st, ev, second, lines, native)
 		t.relayMarker = t.relayPending > 0 && relayMarkerVisible(second, lines, t.relayPending)
 		targets[i].relayMarker = t.relayMarker
 		t.relayObserved = t.relayObserved || t.relayMarker
