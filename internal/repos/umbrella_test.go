@@ -108,3 +108,24 @@ func TestFindRootMaskAlsoWithoutNameAndAbsolutePath(t *testing.T) {
 		t.Errorf("%v", err)
 	}
 }
+
+func TestVerdictRepo(t *testing.T) {
+	um := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
+	web := filepath.Join(um, "web")
+	plain, _ := filepath.EvalSymlinks(t.TempDir())
+	os.MkdirAll(filepath.Join(plain, ".rota"), 0o755)
+	gittest.Init(t, plain, "main")
+	gittest.Run(t, plain, "commit", "-q", "--allow-empty", "-m", "init")
+	cases := []struct{ name, root, dir, flag, want string }{
+		{"flag overrides umbrella", um, web, "api", "api"},
+		{"umbrella sub-repo", um, web, "", "web"},
+		{"umbrella dir outside every sub-repo", um, um, "", ""},
+		{"plain project", plain, plain, "", ""},
+		{"plain project with flag", plain, plain, "api", "api"},
+	}
+	for _, c := range cases {
+		if got := VerdictRepo(c.root, c.dir, c.flag); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}

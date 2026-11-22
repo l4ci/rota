@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/stamp"
 	"strings"
 	"time"
@@ -125,7 +126,7 @@ func findingLine(f verdict.Finding) string {
 // branchVerdicts loads the store once and returns branch's records under the
 // sub-repo key the gate reads them by.
 func branchVerdicts(c *Ctx, root, branch string) []verdict.Record {
-	return verdict.Load(root).Branch(shipVerdict(c, root, root).Repo, branch)
+	return verdict.Load(root).Branch(repos.VerdictRepo(root, root, c.Repo), branch)
 }
 
 // failRecords are branch's FAIL verdicts a relay carries: the effective review,

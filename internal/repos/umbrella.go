@@ -84,3 +84,16 @@ func str(o *jsonx.Object, key string) string {
 	s, _ := v.(string)
 	return s
 }
+
+// VerdictRepo is the repo name that keys a branch's verdicts: flag when set,
+// else in the umbrella at root the sub-repo whose checkout dir belongs to,
+// else "" (a plain project, or a dir outside every registered sub-repo).
+func VerdictRepo(root, dir, flag string) string {
+	if flag != "" || !Umbrella(root) {
+		return flag
+	}
+	if r, err := Which(dir); err == nil {
+		return r.Name
+	}
+	return ""
+}

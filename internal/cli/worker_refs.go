@@ -2,6 +2,7 @@ package cli
 
 import (
 	"flag"
+	"github.com/l4ci/rota/internal/repos"
 
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/worker"
@@ -21,7 +22,7 @@ func workerRefs(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := c.workerContext()
 		defer stop()
-		res, err := workerEnvCtx(c, ctx).Refs(ctx, root, worker.RefsOpts{Branch: args[0], VerdictRepo: shipVerdict(c, root, root).Repo})
+		res, err := workerEnvCtx(c, ctx).Refs(ctx, root, worker.RefsOpts{Branch: args[0], VerdictRepo: repos.VerdictRepo(root, root, c.Repo)})
 		if err != nil {
 			return Result{}, err
 		}

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
+	"github.com/l4ci/rota/internal/repos"
 	"slices"
 	"strings"
 	"time"
@@ -266,7 +267,7 @@ func prepareTrain(c *Ctx, ctx context.Context, root string, o trainRunOpts) (pos
 	if err != nil {
 		return postgate.Env{}, postgate.Request{}, err
 	}
-	opts := postgate.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: shipVerdict(c, root, root).Repo, CheckReviews: true, ItemBody: lazyItemBody(c, root), RequestID: o.RequestID, Integration: o.Integration, Onto: o.Onto}
+	opts := postgate.TrainOpts{NoWait: o.NoWait, Targets: o.Targets, Base: o.Base, SyncBase: syncBase, Order: o.Order, Plan: o.Plan, Say: func(l string) { fmt.Fprintln(c.Stderr, l) }, LandGreen: o.LandGreen, OnFail: o.OnFail, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Approve: approve, VerdictRepo: repos.VerdictRepo(root, root, c.Repo), CheckReviews: true, ItemBody: lazyItemBody(c, root), RequestID: o.RequestID, Integration: o.Integration, Onto: o.Onto}
 	return landingEnv(c, ctx, root), postgate.Request{Train: &opts}, nil
 }
 
