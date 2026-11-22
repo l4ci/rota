@@ -677,18 +677,6 @@ func descends(cmd *Command, tok string) bool {
 	return !isFlag(tok) && cmd.sub(tok) != nil
 }
 
-func hasHelp(args []string) bool {
-	for _, a := range args {
-		if a == "--" {
-			return false
-		}
-		if a == "-h" || a == "--help" || a == "-help" {
-			return true
-		}
-	}
-	return false
-}
-
 // physicalCwd makes the working directory its symlink-free path, as Python's
 // os.getcwd() is. Go's os.Getwd returns $PWD while it still names the cwd, so
 // from a symlinked directory (link -> umb/web) every walk-up and sub-repo
