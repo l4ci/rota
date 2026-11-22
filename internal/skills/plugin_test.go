@@ -76,7 +76,7 @@ func TestStatusPluginRoot(t *testing.T) {
 	dir := pluginDir(t, set)
 	root := Root{Path: filepath.Join(dir, "skills"), Agent: Claude, Scope: User, Plugin: true}
 	status := func() RootStatus {
-		rep, err := set.Status([]Root{root}, "1")
+		rep, err := set.Status([]Root{root}, nil, "1")
 		if err != nil || len(rep.Roots) != 1 {
 			t.Fatalf("%v %+v", err, rep)
 		}
