@@ -240,17 +240,11 @@ func finishDebugCycles(c *Ctx, ids []string) int {
 	if err != nil {
 		return 0
 	}
-	st, err := ctr.State()
-	if err != nil {
+	st, err := ctr.Load()
+	if err != nil || st.BugID == "" || !slices.Contains(ids, st.BugID) {
 		return 0
 	}
-	bug, _ := st.Get("bug_id")
-	if id, _ := bug.(string); id == "" || !slices.Contains(ids, id) {
-		return 0
-	}
-	v, _ := st.Get("hypothesis_cycles")
-	n, _ := jsonx.Int(v)
-	return n
+	return st.HypothesisCycles
 }
 
 // finishRelease is the release nudge: fires when `rota release pending` has
