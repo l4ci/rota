@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/tracker"
@@ -659,5 +660,34 @@ func TestUmbrellaSetSection(t *testing.T) {
 	}
 	if _, err := u.SetSection("nope:9", "acceptance", "x"); !errors.Is(err, ErrNotFound) {
 		t.Errorf("unknown repo: %v, want ErrNotFound", err)
+	}
+}
+
+// TestUmbrellaSubReposShareSinkAndClock: every sub-repo, home or not, built
+// before or after SetWarn, raises notices into the umbrella's sink and reads
+// the umbrella's clock.
+func TestUmbrellaSubReposShareSinkAndClock(t *testing.T) {
+	u, _, _ := twoRepos(t)
+	day := time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC)
+	u.Today = func() time.Time { return day }
+	early, err := u.sub("api") // built before SetWarn
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	u.SetWarn(func(m string) { got = append(got, m) })
+	late, err := u.sub("web") // built after SetWarn
+	if err != nil {
+		t.Fatal(err)
+	}
+	early.warn("from api")
+	late.warn("from web")
+	if want := []string{"from api", "from web"}; !slices.Equal(got, want) {
+		t.Errorf("sink got %v, want %v", got, want)
+	}
+	for name, s := range map[string]*Issues{"api": early, "web": late} {
+		if s.Today == nil || !s.Today().Equal(day) {
+			t.Errorf("%s sub-repo Today not the umbrella clock", name)
+		}
 	}
 }
