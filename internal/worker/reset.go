@@ -109,6 +109,30 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 			unmerged = append(unmerged, l[2:])
 		}
 	}
+	// A start point that overrides the base (a milestone branch) lacks commits
+	// that already landed on the project base, e.g. the activation commit; the
+	// slot is provisioned from that base, so they are merged, not unmerged work.
+	if from != "" && len(unmerged) > 0 {
+		pb, err := e.resetBase(root, slot, s.Base())
+		if err != nil {
+			return res, err
+		}
+		if pc, code := e.git(worktree, "cherry", pb, "HEAD"); code == 0 {
+			onlyHere := map[string]bool{}
+			for _, l := range strings.Split(pc, "\n") {
+				if strings.HasPrefix(l, "+ ") {
+					onlyHere[l[2:]] = true
+				}
+			}
+			kept := unmerged[:0]
+			for _, sha := range unmerged {
+				if onlyHere[sha] {
+					kept = append(kept, sha)
+				}
+			}
+			unmerged = kept
+		}
+	}
 	// A squash merge leaves the slot's commits unmerged by patch. A done slot
 	// whose merged PR has the slot's HEAD as its head proves they landed.
 	var info tracker.PRInfo
@@ -148,6 +172,12 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 		for _, sha := range unmerged {
 			line, _ := e.git(worktree, "log", "-1", "--abbrev=7", "--format=%h %s", sha)
 			res.Unmerged = append(res.Unmerged, line)
+		}
+		if from != "" {
+			// Re-provisioning would park the slot on the project base again, so a
+			// reap does not move it onto the milestone branch: name the real way out.
+			return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s (nor on the project base): gate and merge them (rota worker gate) before giving the slot another task; re-dispatch %s to continue it in place.\n%s",
+				slot, len(unmerged), base, cont, indent(res.Unmerged)))
 		}
 		return refuse(fmt.Sprintf("REFUSED %s — %d commit(s) not on %s: gate and merge them (rota worker gate) before giving the slot another task, or rota worker pool reap %s: %s; re-dispatch %s to continue it in place.\n%s",
 			slot, len(unmerged), base, slot, reapNote(reg, plainBase), cont, indent(res.Unmerged)))
