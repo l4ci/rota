@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
 	"slices"
@@ -208,12 +209,12 @@ func (b *Issues) fields(is Issue, block map[string]string) []kv {
 }
 
 // bracketIDs turns "F12, B03" into "[F12], [B03]" so Related matches the file
-// grammar: a bracketed ID, (?<![\[\w])(IDPattern)(?![\]\w]).
+// grammar: a bracketed ID, (?<![\[\w])(itemid.IDPattern)(?![\]\w]).
 func bracketIDs(v string) string {
 	var out strings.Builder
 	for i := 0; i < len(v); {
 		r, n := utf8.DecodeRuneInString(v[i:])
-		if n == 1 && strings.IndexByte(ItemLetters, v[i]) >= 0 {
+		if n == 1 && strings.IndexByte(itemid.ItemLetters, v[i]) >= 0 {
 			prev, _ := utf8.DecodeLastRuneInString(v[:i])
 			j, digits := i+1, 0
 			for j < len(v) {
@@ -398,7 +399,7 @@ func (b *Issues) Markdown(closedLimit int) (string, error) {
 // Done lines, as BACKLOG.md-shaped text.
 func renderBacklog(sections map[string][]string, done []string) string {
 	out := []string{"# Backlog", ""}
-	for _, l := range ItemLetters {
+	for _, l := range itemid.ItemLetters {
 		bullets := sections[string(l)]
 		out = append(out, "## "+sectionOfLetter(string(l)), "")
 		out = append(out, bullets...)
@@ -418,7 +419,7 @@ func (b *Issues) lookup(ref string) (Issue, bool, error) {
 	if b.Tracker == nil {
 		return Issue{}, false, errors.New("issues backend has no tracker")
 	}
-	n, letter, err := resolveKey(ref)
+	n, letter, err := itemid.ResolveKey(ref)
 	if err != nil {
 		return Issue{}, false, nil
 	}
@@ -461,7 +462,7 @@ func (b *Issues) List(includeClosed bool) ([]Item, error) {
 		return nil, err
 	}
 	var out []Item
-	for _, l := range ItemLetters {
+	for _, l := range itemid.ItemLetters {
 		for _, is := range open {
 			if b.Letter(is) == string(l) {
 				out = append(out, *b.item(is))

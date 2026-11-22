@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"slices"
 	"sort"
@@ -117,7 +118,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 		reviewScanIssues(c, t, bodies, &info)
 		return info, nil
 	}
-	if ids := backlog.FindItemIDs(bodies, backlog.ItemLetters); ids != nil {
+	if ids := backlog.FindItemIDs(bodies, itemid.ItemLetters); ids != nil {
 		info.IDs = ids
 	}
 	// File mode only (the issue branch returned above): the corpus is BACKLOG.md and ARCHIVE.md.

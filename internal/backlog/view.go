@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/itemid"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
@@ -135,7 +136,7 @@ func MilestonesFor(rows []Row, match func(Row) bool) []string {
 	for m := range set {
 		out = append(out, m)
 	}
-	num := func(m string) int { n, _ := Atoi(m[1:]); return n }
+	num := func(m string) int { n, _ := itemid.Atoi(m[1:]); return n }
 	sort.Slice(out, func(i, j int) bool {
 		if a, b := num(out[i]), num(out[j]); a != b {
 			return a < b
@@ -183,7 +184,7 @@ type Listing struct {
 
 var (
 	progressTitleRe = regexp.MustCompile(`\]` + sp + `+([^.]+?)\.`)
-	idInRelatedRe   = BracketedIDRe
+	idInRelatedRe   = itemid.BracketedIDRe
 )
 
 // titleOf is the backlog view's title_of: the text between the ID and the first "."
@@ -211,7 +212,7 @@ func BuildListing(rows []Row, md string, active []Active, grep string) *Listing 
 	for _, e := range active {
 		for _, id := range e.Items {
 			activeIDs[id] = true
-			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: ItemType(id), Title: titleOf(md, id),
+			l.InProgress = append(l.InProgress, InProgress{ID: id, Type: itemid.ItemType(id), Title: titleOf(md, id),
 				Branch: e.Branch, StartedAt: e.StartedAt, Repo: e.Repo})
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"slices"
 	"sort"
@@ -93,7 +94,7 @@ func highestMilestoneNumber(found []tracker.Milestone) int {
 	highest := 0
 	for _, nm := range found {
 		if id, _, ok := ms.ParseTitle(nm.Title); ok {
-			if n, err := Atoi(id[1:]); err == nil {
+			if n, err := itemid.Atoi(id[1:]); err == nil {
 				highest = max(highest, n)
 			}
 		}
@@ -547,7 +548,7 @@ func (b *Issues) slicePartsOf(n tracker.IssueKey) (map[string][]slicePart, error
 		}
 		idx := 1
 		if nt.Part != "" {
-			if idx, err = Atoi(nt.Part); err != nil {
+			if idx, err = itemid.Atoi(nt.Part); err != nil {
 				return nil, err
 			}
 		}
@@ -557,8 +558,8 @@ func (b *Issues) slicePartsOf(n tracker.IssueKey) (map[string][]slicePart, error
 }
 
 func unitLess(a, b string) bool {
-	x, ea := Atoi(a[1:])
-	y, eb := Atoi(b[1:])
+	x, ea := itemid.Atoi(a[1:])
+	y, eb := itemid.Atoi(b[1:])
 	if ea == nil && eb == nil && x != y {
 		return x < y
 	}

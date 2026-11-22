@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
@@ -99,7 +100,7 @@ func backlogFailRead(err error) (Result, error) {
 // before anything is written, and "F7" or "#7" both answer "7" and "F".
 func resolveItem(be backlog.Backend, ref string) (id, typ string, err error) {
 	if !be.Capabilities().IssueIDs {
-		return ref, backlog.ItemType(ref), nil
+		return ref, itemid.ItemType(ref), nil
 	}
 	it, err := be.Get(ref)
 	if err != nil {

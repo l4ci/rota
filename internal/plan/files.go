@@ -2,13 +2,13 @@ package plan
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/fsio"
@@ -32,12 +32,12 @@ func (files) Resolve(key string) (Ref, error) {
 }
 
 // fileSliceRe is a minted slice unit: S02, with at least FileIDDigits digits.
-var fileSliceRe = regexp.MustCompile(fmt.Sprintf(`^S\p{Nd}{%d,}$`, backlog.FileIDDigits))
+var fileSliceRe = regexp.MustCompile(fmt.Sprintf(`^S\p{Nd}{%d,}$`, itemid.FileIDDigits))
 
 // CheckNew: file units are minted zero-padded, so B7 and S2 are typos.
 func (files) CheckNew(r Ref) error {
 	if (r.Slice && r.Unit != "" && !fileSliceRe.MatchString(r.Unit)) ||
-		(!r.Slice && !backlog.ValidID(r.Item.ID, backlog.FileIDDigits)) {
+		(!r.Slice && !itemid.ValidID(r.Item.ID, itemid.FileIDDigits)) {
 		return exitcode.Errf(exitcode.ExitUsage, "key must look like M01-B07 or M01-S02, got %q", r.Milestone+"-"+r.UnitID())
 	}
 	return nil
@@ -49,7 +49,7 @@ func docs(root string) artifact.FileDocs {
 
 // DesignRef is the path of the design file, which must exist.
 func (s files) DesignRef(_ bool, design string) (string, error) {
-	if !backlog.ValidID(design, backlog.FileIDDigits) {
+	if !itemid.ValidID(design, itemid.FileIDDigits) {
 		return "", exitcode.Errf(exitcode.ExitUsage, "--design must be an item ID like B07, got %q", design)
 	}
 	ref := rotatree.Rel(rotatree.DesignsDir, design+".md")

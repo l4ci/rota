@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"slices"
 	"strings"
@@ -14,8 +15,8 @@ import (
 // grammar, so they live here and the verbs only read flags and files.
 
 var (
-	rawBulletID  = regexp.MustCompile(`\*\*\[(` + IDPattern(1) + `)\]`)
-	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + IDPattern(FileIDDigits) + `)$`)
+	rawBulletID  = regexp.MustCompile(`\*\*\[(` + itemid.IDPattern(1) + `)\]`)
+	dependsRefRe = regexp.MustCompile(`^(?:#\d+|` + itemid.IDPattern(itemid.FileIDDigits) + `)$`)
 )
 
 // ParseDependsRefs splits a --depends-on value into item references, rejecting

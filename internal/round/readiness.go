@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/strutil"
 	"path"
 	"regexp"
@@ -105,7 +106,7 @@ var (
 	// listKeyRe is a key heading a list item (`- OTHER-7`): a dependency, even
 	// of another project, where a key-shaped word inside a sentence is prose.
 	listKeyRe = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+([A-Za-z][A-Za-z0-9_]*-\d+)\b`)
-	itemRefRe = regexp.MustCompile(`\b(` + backlog.IDPattern(backlog.FileIDDigits) + `)\b`)
+	itemRefRe = regexp.MustCompile(`\b(` + itemid.IDPattern(itemid.FileIDDigits) + `)\b`)
 )
 
 // keyMatches is the PROJ-123 refs of project on line; none when project is "".

@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/itemid"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -443,11 +444,11 @@ func FormatDone(openLine, date, hash, reason, note string) (string, error) {
 // ---- ids and origin lines -------------------------------------------------
 
 // FindItemIDs lists the bracketed IDs ([B07], [F12]) in text, deduplicated, in
-// order of first appearance (find_item_ids). letters "" means ItemLetters.
+// order of first appearance (find_item_ids). letters "" means itemid.ItemLetters.
 // An ID is one of letters followed by at least two digits.
 func FindItemIDs(text, letters string) []string {
 	if letters == "" {
-		letters = ItemLetters
+		letters = itemid.ItemLetters
 	}
 	var out []string
 	seen := map[string]bool{}

@@ -1,6 +1,7 @@
 package backlog
 
 import (
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -47,7 +48,7 @@ type RmResult struct {
 	Items   []RmItem
 }
 
-var relatedIDRe = regexp.MustCompile(`\[(` + IDPattern(1) + `)\]`)
+var relatedIDRe = regexp.MustCompile(`\[(` + itemid.IDPattern(1) + `)\]`)
 
 func parseRelatedIDs(v string) []string {
 	var out []string

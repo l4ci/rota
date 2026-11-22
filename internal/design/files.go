@@ -2,14 +2,14 @@ package design
 
 import (
 	"github.com/l4ci/rota/internal/artifact"
-	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/rotatree"
 )
 
 // ValidID reports whether id is a file-mode design ID.
-func ValidID(id string) bool { return backlog.ValidID(id, backlog.FileIDDigits) }
+func ValidID(id string) bool { return itemid.ValidID(id, itemid.FileIDDigits) }
 
 // files keeps each design in .rota/designs/<ID>.md under root.
 type files struct{ root string }
@@ -20,10 +20,10 @@ func Files(root string) Store { return files{root} }
 // CheckID: a file design is [BFT] and at least two digits, never per-slice or
 // per-milestone.
 func (files) CheckID(id string) error {
-	if backlog.ValidID(id, backlog.FileIDDigits) {
+	if itemid.ValidID(id, itemid.FileIDDigits) {
 		return nil
 	}
-	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", backlog.ItemLetters, backlog.FileIDDigits, id)
+	return exitcode.Errf(exitcode.ExitUsage, "ID must match [%s]\\d{%d,} (e.g. B07, F03, T11); designs are per-item, not per-slice or per-milestone, got %q", itemid.ItemLetters, itemid.FileIDDigits, id)
 }
 
 func docs(root string) artifact.FileDocs {

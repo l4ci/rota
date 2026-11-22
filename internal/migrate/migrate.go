@@ -27,6 +27,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/itemid"
 	"os"
 	"regexp"
 	"strconv"
@@ -114,7 +115,7 @@ type migrator struct {
 }
 
 var (
-	migItemKey = regexp.MustCompile(`\A` + backlog.IDPattern(1) + `\z`)
+	migItemKey = regexp.MustCompile(`\A` + itemid.IDPattern(1) + `\z`)
 )
 
 // frozenPrefix starts the banner a finished migration puts on BACKLOG.md.

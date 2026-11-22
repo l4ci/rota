@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/itemid"
 	"github.com/l4ci/rota/internal/rotastate"
 	"slices"
 	"sort"
@@ -205,7 +206,7 @@ func (u *Umbrella) Markdown(closedLimit int) (string, error) {
 		if err != nil {
 			return err
 		}
-		for _, l := range ItemLetters {
+		for _, l := range itemid.ItemLetters {
 			sections[string(l)] = append(sections[string(l)], open[string(l)]...)
 		}
 		return nil
@@ -243,7 +244,7 @@ func (u *Umbrella) List(includeClosed bool) ([]Item, error) {
 		return nil, err
 	}
 	var out []Item
-	for _, l := range ItemLetters {
+	for _, l := range itemid.ItemLetters {
 		for _, name := range u.scoped() {
 			for _, it := range perRepo[name] {
 				if it.Type == string(l) {
@@ -283,7 +284,7 @@ func (u *Umbrella) pick(ref string) (*Issues, string, error) {
 			return s, m[2], err
 		}
 	}
-	if _, _, err := resolveItemRef(ref); err != nil {
+	if _, _, err := itemid.ResolveItemRef(ref); err != nil {
 		return nil, ref, nil
 	}
 	var hits []*Issues
