@@ -71,7 +71,7 @@ func (s Store) Hit(scope, topic, title string) (HitResult, error) {
 }
 
 // storedTitle is the title the one bullet under topic carries, found by the
-// shared title rule (bulletfmt.SelectTitle): it refuses a title that names no
+// shared title rule (bulletfmt.ResolveTitle): it refuses a title that names no
 // bullet, as the external store's Hit does, so a typo cannot leave an orphan
 // tier record, and a title two bullets share up to case. Hit keys its tier and
 // contradiction rows by the stored title, never the typed one.
@@ -92,22 +92,15 @@ func (s Store) storedTitle(scope, topic, title string) (string, error) {
 			titles = append(titles, t)
 		}
 	}
-	hits := bulletfmt.SelectTitle(titles, title)
-	switch len(hits) {
-	case 0:
-		return "", notFound("no bullet in %q is titled %q", topic, title)
-	case 1:
-		return titles[hits[0]], nil
+	i, err := bulletfmt.ResolveTitle(titles, title)
+	if err != nil {
+		return "", fmt.Errorf("%w (under %q)", err, topic)
 	}
-	named := make([]string, len(hits))
-	for i, h := range hits {
-		named[i] = "'" + titles[h] + "'"
-	}
-	return "", fmt.Errorf("%w: %d bullets titled %q under %q: %s", ErrMultiMatch, len(hits), title, topic, strings.Join(named, ", "))
+	return titles[i], nil
 }
 
 // contraKey is how a queue entry and a bullet meet: the topic exactly, the
-// title as bulletfmt.SelectTitle reads it (case and surrounding space ignored).
+// title as bulletfmt.ResolveTitle reads it (case and surrounding space ignored).
 func contraKey(topic, title string) [2]string {
 	return [2]string{topic, strings.ToLower(strings.TrimSpace(title))}
 }

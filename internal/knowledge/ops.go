@@ -16,13 +16,13 @@ import (
 // Sentinels for the failures the verbs map to exit codes.
 var (
 	// ErrNotFound: a topic, bullet or file named by the caller does not exist.
-	ErrNotFound = errors.New("not found")
+	ErrNotFound = bulletfmt.ErrNotFound
 	// ErrExists: the target of a rename already exists.
 	ErrExists = errors.New("already exists")
 	// ErrAmbiguous: a fragment matches in more than one file.
 	ErrAmbiguous = errors.New("ambiguous")
 	// ErrMultiMatch: a fragment, title or legacy tier key can match multiple bullets.
-	ErrMultiMatch = errors.New("matches several bullets")
+	ErrMultiMatch = bulletfmt.ErrMultiMatch
 	// ErrInvalid: a title or date no bullet can carry; shared with the external store.
 	ErrInvalid = bulletfmt.ErrInvalid
 )
@@ -260,26 +260,20 @@ type RenameResult struct {
 // selectBullet is the one title lookup RenameTopic's bullet mode and Remove
 // share: bulletfmt's title grammar and bulletfmt.SelectTitle's case rule. A
 // miss is ErrNotFound and a title two bullets share is ErrMultiMatch naming
-// every hit, so the verbs cannot disagree on what a title is. topic is the
-// heading the bullets sit under, km the file, for the messages.
+// every hit (both from bulletfmt.ResolveTitle), so the verbs cannot disagree
+// on what a title is. topic is the heading the bullets sit under, km the file,
+// for the messages.
 func selectBullet(body, title, topic, km string) (bulletfmt.Bullet, error) {
 	all := bulletfmt.Bullets(body)
 	titles := make([]string, len(all))
 	for i, b := range all {
 		titles[i] = b.Title
 	}
-	hits := bulletfmt.SelectTitle(titles, title)
-	switch {
-	case len(hits) == 0:
-		return bulletfmt.Bullet{}, notFound("bullet titled '%s' not found under '## %s' in %s", title, topic, km)
-	case len(hits) > 1:
-		named := make([]string, len(hits))
-		for i, h := range hits {
-			named[i] = "'" + titles[h] + "'"
-		}
-		return bulletfmt.Bullet{}, fmt.Errorf("%w: %d bullets titled '%s' under '## %s' in %s: %s", ErrMultiMatch, len(hits), title, topic, km, strings.Join(named, ", "))
+	i, err := bulletfmt.ResolveTitle(titles, title)
+	if err != nil {
+		return bulletfmt.Bullet{}, fmt.Errorf("%w (under '## %s' in %s)", err, topic, km)
 	}
-	return all[hits[0]], nil
+	return all[i], nil
 }
 
 // storedTitle resolves a typed bullet title to the title the file stores, so a
