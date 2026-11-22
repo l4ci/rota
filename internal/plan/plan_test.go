@@ -2,6 +2,8 @@ package plan
 
 import (
 	"errors"
+	"fmt"
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/frontmatter"
 	"github.com/l4ci/rota/internal/gittest"
@@ -328,31 +330,56 @@ func TestExplicitAndMintedSliceRace(t *testing.T) {
 	}
 }
 
+// itemsFake is an in-memory file Backend: open bullets from md, detail texts by ID.
+// A nil md is a missing BACKLOG.md.
+type itemsFake struct {
+	backlog.Backend
+	md      *string
+	details map[string]string
+}
+
+func (f itemsFake) Rows() ([]backlog.Row, error) {
+	if f.md == nil {
+		return nil, fmt.Errorf("BACKLOG.md: %w", backlog.ErrNotFound)
+	}
+	var rows []backlog.Row
+	for _, e := range backlog.OpenBullets(*f.md) {
+		b, _ := backlog.ParseOpen(e.Line)
+		rows = append(rows, backlog.Row{ID: e.ID, Key: e.ID, Type: e.ID[:1], Tag: b.Tag, Title: b.Title, Section: e.Section, Raw: e.Line})
+	}
+	return rows, nil
+}
+
+func (f itemsFake) Detail(ref string) (string, bool, error) {
+	t, ok := f.details[ref]
+	return t, ok, nil
+}
+
 // Uncertain runs on the proof fixture (../proof/testdata/fixture) and must
 // agree with the retired uncertain helper: the .rc and .txt goldens are its exit code and stdout.
 func TestUncertainMatchesOldHelper(t *testing.T) {
-	root := t.TempDir()
 	src := filepath.Join("..", "proof", "testdata", "fixture")
-	rota := filepath.Join(root, ".rota")
-	filepath.Walk(src, func(p string, fi os.FileInfo, err error) error {
-		rel, _ := filepath.Rel(src, p)
-		if fi.IsDir() {
-			return os.MkdirAll(filepath.Join(rota, rel), 0o777)
-		}
-		b, _ := os.ReadFile(p)
-		return os.WriteFile(filepath.Join(rota, rel), b, 0o644)
-	})
-	// The recorded run did uncertain after its proof adds, so B07 has the detail file they created.
-	b07 := "# B07: Parser drops `foo`\n\n> Related TODO entry: `[B07]` in `.rota/BACKLOG.md`\n\n## Proof\n\n- 2026-01-02 · unit  tests · PASS · abc1234 · go test ./... ok\n"
-	os.MkdirAll(filepath.Join(rota, "bugs"), 0o777)
-	if err := os.WriteFile(filepath.Join(rota, "bugs", "B07.md"), []byte(b07), 0o644); err != nil {
+	md, err := os.ReadFile(filepath.Join(src, "BACKLOG.md"))
+	if err != nil {
 		t.Fatal(err)
 	}
+	mds := string(md)
+	details := map[string]string{}
+	for id, rel := range map[string]string{"F13": "features/F13.md", "T03": "tasks/T03.md"} {
+		b, err := os.ReadFile(filepath.Join(src, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		details[id] = string(b)
+	}
+	// The recorded run did uncertain after its proof adds, so B07 has the detail file they created.
+	details["B07"] = "# B07: Parser drops `foo`\n\n> Related TODO entry: `[B07]` in `.rota/BACKLOG.md`\n\n## Proof\n\n- 2026-01-02 · unit  tests · PASS · abc1234 · go test ./... ok\n"
+	be := itemsFake{md: &mds, details: details}
 	gold := filepath.Join("..", "proof", "testdata", "golden")
 	for _, id := range []string{"B07", "B08", "B09", "F12", "F13", "T03"} {
 		rc, _ := os.ReadFile(filepath.Join(gold, "uncertain-"+id+".rc"))
 		txt, _ := os.ReadFile(filepath.Join(gold, "uncertain-"+id+".txt"))
-		typ, reasons, err := uncertain(root, id)
+		typ, reasons, err := uncertain(be, id)
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)
 		}
@@ -364,37 +391,38 @@ func TestUncertainMatchesOldHelper(t *testing.T) {
 			t.Errorf("%s: reasons %q, old stdout %q", id, got, txt)
 		}
 	}
-	if _, _, err := uncertain(root, "B99"); exitOf(err) != 3 {
+	_, _, err = uncertain(be, "B99")
+	if exitOf(err) != 3 || !strings.Contains(err.Error(), "item B99 not found in BACKLOG.md") {
 		t.Errorf("missing item: %v", err)
 	}
-	if _, _, err := uncertain(t.TempDir(), "B07"); exitOf(err) != 3 {
+	_, _, err = uncertain(itemsFake{}, "B07")
+	if exitOf(err) != 3 || !strings.Contains(err.Error(), ".rota/BACKLOG.md not found") {
 		t.Errorf("missing BACKLOG.md: %v", err)
 	}
 }
 
 func TestUncertainHonoursOpenSections(t *testing.T) {
-	root := t.TempDir()
-	os.MkdirAll(filepath.Join(root, ".rota"), 0o777)
-	os.WriteFile(filepath.Join(root, ".rota/BACKLOG.md"), []byte("## Bugs\n\n- **[B07] [Major] Vague.** unclear? TBD?\n\n## Features\n\n- **[F01] [Major] Vague.** unclear? TBD?\n"), 0o644)
-	if _, r, err := uncertain(root, "F01"); err != nil || len(r) == 0 {
+	md := "## Bugs\n\n- **[B07] [Major] Vague.** unclear? TBD?\n\n## Features\n\n- **[F01] [Major] Vague.** unclear? TBD?\n"
+	be := itemsFake{md: &md}
+	if _, r, err := uncertain(be, "F01"); err != nil || len(r) == 0 {
 		t.Fatalf("default sections: %v %v", r, err)
 	}
-	if _, _, err := uncertainIn(root, "F01", "Bugs"); exitOf(err) != 3 {
+	if _, _, err := uncertainIn(be, "F01", "Bugs"); exitOf(err) != 3 {
 		t.Errorf("F01 outside the Bugs-only sections: %v", err)
 	}
-	if _, r, err := uncertainIn(root, "B07", "Bugs"); err != nil || len(r) == 0 {
+	if _, r, err := uncertainIn(be, "B07", "Bugs"); err != nil || len(r) == 0 {
 		t.Errorf("B07 inside: %v %v", r, err)
 	}
 }
 
 // uncertain is Uncertain on the file backlog with the default sections.
-func uncertain(root, id string) (string, []string, error) {
-	return uncertainIn(root, id, "")
+func uncertain(be backlog.Backend, id string) (string, []string, error) {
+	return uncertainIn(be, id, "")
 }
 
 // uncertainIn is Uncertain on the file backlog with openSections as passed in.
-func uncertainIn(root, id, openSections string) (string, []string, error) {
-	_, typ, reasons, err := Uncertain(FileItems(root, openSections), id)
+func uncertainIn(be backlog.Backend, id, openSections string) (string, []string, error) {
+	_, typ, reasons, err := Uncertain(FileItems(be, openSections), id)
 	return typ, reasons, err
 }
 
