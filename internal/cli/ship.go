@@ -543,7 +543,11 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 
 // ---- ship undo -------------------------------------------------------------
 
-var shipSections = map[byte]string{'B': "Bugs", 'F': "Features", 'T': "Tasks"}
+// Where a restored item lands; restoreBackend.State and the undo plan share it.
+const (
+	stateOnTracker = "open on the tracker"
+	stateInFile    = "active in BACKLOG.md"
+)
 
 func shipUndo(fs *flag.FlagSet) RunFunc {
 	cycle := fs.String("cycle", "", "undo this merge commit instead of the last cycle")
@@ -578,6 +582,11 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 
 		root := rootOrDir(dir)
 		g := shipGitRunner{c, dir}
+		caps, _, err := c.backendMode(root)
+		if err != nil {
+			return Result{}, err
+		}
+		issueIDs := caps.IssueIDs
 		plan, err := ship.PlanUndo(g, base, cur, dirty, ship.UndoOpts{
 			Cycle: *cycle, AllowPost: *allowPost,
 			IDs: func(hashes map[string]bool) []string { return backlog.CycleIDs(root, hashes) },
@@ -587,7 +596,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 		}
 		short, ids := plan.Short, plan.IDs
 
-		text := shipPlan(short, plan.Subject, base, plan.PostCount, ids, *apply)
+		text := shipPlan(short, plan.Subject, base, plan.PostCount, ids, *apply, issueIDs)
 		data := jsonx.Obj("applied", *apply, "cycle", short, "subject", pystr.Strip(plan.Subject), "base", base,
 			"items", append([]string{}, ids...))
 		if !*apply {
@@ -619,7 +628,7 @@ func shipUndo(fs *flag.FlagSet) RunFunc {
 }
 
 // shipPlan is the block ship undo prints before it changes anything.
-func shipPlan(short, subject, base string, postCount int, ids []string, apply bool) string {
+func shipPlan(short, subject, base string, postCount int, ids []string, apply, issueIDs bool) string {
 	var b strings.Builder
 	note := ""
 	if postCount > 0 {
@@ -636,9 +645,13 @@ func shipPlan(short, subject, base string, postCount int, ids []string, apply bo
 		if i == 0 {
 			lead = "Items:    "
 		}
-		sec := shipSections[id[0]]
-		if sec == "" {
-			sec = "Unknown"
+		if issueIDs {
+			fmt.Fprintf(&b, "%s%s will be reopened (%s)\n", lead, id, stateOnTracker)
+			continue
+		}
+		sec := "Unknown"
+		if t, ok := backlog.TypeByLetter(id[:1]); ok && t.Section != "" {
+			sec = t.Section
 		}
 		fmt.Fprintf(&b, "%s%s will be restored to BACKLOG.md (%s)\n", lead, id, sec)
 	}
@@ -670,7 +683,7 @@ func (r restoreBackend) Reopen(id string) (bool, error) {
 
 func (r restoreBackend) State() string {
 	if r.Capabilities().IssueIDs {
-		return "open on the tracker"
+		return stateOnTracker
 	}
-	return "active in BACKLOG.md"
+	return stateInFile
 }
