@@ -27,9 +27,11 @@ type Census struct {
 type CensusInput struct {
 	Root       string
 	SystemTemp string
-	// Tmp is reap's own input; the tmp class is the candidates `rota reap
-	// --kind tmp` lists that are not held. Nil skips the class.
-	Tmp *Input
+	// Reap is reap's own input, the one `rota reap` lists with. The tmp class
+	// is the candidates `rota reap --kind tmp` lists that are not held, the
+	// worktree class the prunable unheld ones of `--kind worktree`. Nil skips
+	// both.
+	Reap *Input
 	// ProcessUses is the process table reader the systmp class proves no live
 	// process uses a dir with. When set it is authoritative, Tmp's own is
 	// ignored for that class; when nil, Tmp's is used (nil there holds every dir).
@@ -45,13 +47,15 @@ func TakeCensus(ctx context.Context, in CensusInput) Census {
 		c.LeakedTemp, warn = reclaimableSysTmp(ctx, in)
 		c.Warnings = append(c.Warnings, warn...)
 	}
-	if in.Tmp != nil && in.Tmp.TempRoot != "" {
+	if in.Reap != nil && in.Reap.TempRoot != "" {
 		var warn []string
-		c.StaleTmp, warn = reclaimableTmp(ctx, *in.Tmp)
+		c.StaleTmp, warn = reclaimableTmp(ctx, *in.Reap)
 		c.Warnings = append(c.Warnings, warn...)
 	}
-	if in.Root != "" {
-		c.Prunable.N = prunable(ctx, in.Git, in.Root)
+	if in.Root != "" && in.Reap != nil {
+		var warn []string
+		c.Prunable, warn = prunableWorktrees(ctx, *in.Reap)
+		c.Warnings = append(c.Warnings, warn...)
 	}
 	return c
 }
@@ -86,8 +90,8 @@ func unheld(cands []Candidate) (c Count) {
 // under a dir holds it; without one the process table alone proves it free.
 func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 	ri := Input{Root: in.Root, Git: in.Git, ProcessUses: in.ProcessUses}
-	if in.Tmp != nil {
-		ri = *in.Tmp
+	if in.Reap != nil {
+		ri = *in.Reap
 	}
 	ri.SystemTemp = in.SystemTemp
 	if in.ProcessUses != nil {
@@ -113,18 +117,22 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 	return unheld(res.Candidates), res.Warnings
 }
 
-// prunable counts the .worktrees/ checkouts git marks prunable: the ones
-// findWorktrees lists.
-func prunable(ctx context.Context, run git.Runner, root string) int {
-	res, err := run(ctx, root, "worktree", "list", "--porcelain")
-	if err != nil || res.ExitCode != 0 {
-		return 0
+// prunableWorktrees counts the worktree candidates reap lists that git marks
+// prunable and its held rules leave free: what `rota reap --kind worktree
+// --apply` would remove of them. With the host unreadable reap lists none.
+func prunableWorktrees(ctx context.Context, in Input) (c Count, warnings []string) {
+	res, err := Find(ctx, in, []string{KindWorktree})
+	if err != nil {
+		// A project dir that is no git repo has no checkouts to count.
+		if strings.Contains(err.Error(), "not a git repository") {
+			return c, nil
+		}
+		return c, []string{"worktrees not checked: " + err.Error()}
 	}
-	n := 0
-	for _, w := range git.ParseWorktrees(res.Stdout) {
-		if w.Prunable && ScratchCheckout(root, w.Path) {
-			n++
+	for _, cd := range res.Candidates {
+		if cd.Prunable && cd.Held == "" {
+			c.N++
 		}
 	}
-	return n
+	return c, nil
 }

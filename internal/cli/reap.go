@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"flag"
+	"fmt"
 	"strings"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -59,24 +60,13 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		ctx := c.Context()
-		env, ops := c.deps().ReapEnv(ctx, root)
-		rep, err := env.Status(ctx, root)
+		in, warns, err := c.deps().reapInput(ctx, root, set.Roster)
 		if err != nil {
 			return Result{}, err
 		}
-		adopted, err := worker.AdoptedBranches(root)
-		if err != nil {
-			c.Warn("round ledger unreadable (%v): adopted branches will not be offered for deletion", err)
+		for _, w := range warns {
+			c.Warn("%s", w)
 		}
-		in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Host: ops, Lease: env, Adopted: adopted, Roster: set.Roster}
-		in.Refresh = func(ctx context.Context) (*round.Report, error) { return env.Status(ctx, root) }
-		if set, err := skills.Embedded(); err == nil {
-			in.SkillCache = skills.CacheDir(c.deps().Getenv)
-			in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
-		}
-		in.ProcessUses = c.deps().ProcessUses
-		in.SystemTemp = c.deps().TempDir()
-		in.TempRoot, _ = rotatree.FindTempRoot(ctx, c.deps().Git, root)
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err
@@ -94,23 +84,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			c.Warn("preview only; pass --apply")
 		}
 
-		cands := make([]any, 0, len(found.Candidates))
-		var lines []string
-		for _, cd := range found.Candidates {
-			o := jsonx.NewObject()
-			o.Set("id", cd.ID)
-			o.Set("kind", cd.Kind)
-			o.Set("name", cd.Name)
-			setIf(o, "path", cd.Path)
-			o.Set("reason", cd.Reason)
-			setIf(o, "held", cd.Held)
-			cands = append(cands, o)
-			line := cd.ID + "\t" + cd.Reason
-			if cd.Held != "" {
-				line += "\theld: " + cd.Held
-			}
-			lines = append(lines, line)
-		}
+		cands, lines := reapCandidateRows(found.Candidates)
 		failed := make([]any, 0, len(applied.Failed))
 		for _, f := range applied.Failed {
 			o := jsonx.NewObject()
@@ -130,6 +104,54 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		}
 		return res, nil
 	}
+}
+
+// reapCandidateRows renders the candidates as the JSON rows and the text lines
+// of the verb's result.
+func reapCandidateRows(found []reap.Candidate) (rows []any, lines []string) {
+	rows = make([]any, 0, len(found))
+	for _, cd := range found {
+		o := jsonx.NewObject()
+		o.Set("id", cd.ID)
+		o.Set("kind", cd.Kind)
+		o.Set("name", cd.Name)
+		setIf(o, "path", cd.Path)
+		o.Set("reason", cd.Reason)
+		setIf(o, "held", cd.Held)
+		rows = append(rows, o)
+		line := cd.ID + "\t" + cd.Reason
+		if cd.Held != "" {
+			line += "\theld: " + cd.Held
+		}
+		lines = append(lines, line)
+	}
+	return rows, lines
+}
+
+// reapInput builds the one reap.Input both `rota reap` and `rota doctor` list
+// with, so doctor counts through the same held rules. roster is round.roster.
+// The warnings are non-fatal (an unreadable round ledger); an error means the
+// round status could not be read, so no live set can be proved.
+func (d *Deps) reapInput(ctx context.Context, root string, roster []string) (reap.Input, []string, error) {
+	env, ops := d.ReapEnv(ctx, root)
+	rep, err := env.Status(ctx, root)
+	if err != nil {
+		return reap.Input{}, nil, err
+	}
+	var warns []string
+	adopted, err := worker.AdoptedBranches(root)
+	if err != nil {
+		warns = append(warns, fmt.Sprintf("round ledger unreadable (%v): adopted branches will not be offered for deletion", err))
+	}
+	in := reap.Input{Root: root, Base: env.Base, Git: env.Git, Report: rep, Host: ops, Lease: env, Adopted: adopted, Roster: roster,
+		ProcessUses: d.ProcessUses, SystemTemp: d.TempDir()}
+	in.Refresh = func(ctx context.Context) (*round.Report, error) { return env.Status(ctx, root) }
+	if set, err := skills.Embedded(); err == nil {
+		in.SkillCache = skills.CacheDir(d.Getenv)
+		in.SkillCacheKeep = skills.CacheName(version.Get().Version, set.Digest())
+	}
+	in.TempRoot, _ = rotatree.FindTempRoot(ctx, d.Git, root)
+	return in, warns, nil
 }
 
 func parseReapKinds(s string) ([]string, error) {

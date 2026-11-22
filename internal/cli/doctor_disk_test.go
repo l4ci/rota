@@ -5,12 +5,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
@@ -259,7 +261,8 @@ func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
 		return git.Result{Stdout: porcelain}, nil
 	}
 	counted := 0
-	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), nil, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
+	rin := reapInput(root, "", porcelain)
+	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), &rin, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
 		counted = 1
 	}
 	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
@@ -294,5 +297,49 @@ func TestDoctorLeftoversSkipsHeldTmpEntries(t *testing.T) {
 	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil)
 	if len(got) != 1 || !strings.HasPrefix(got[0], "1 entries under ") {
 		t.Fatalf("leftovers = %q, want one line counting only the unheld entry", got)
+	}
+}
+
+// Doctor and reap build one reap.Input, so a held-rule field one sets the
+// other sets too: a field only reap fills would make doctor count differently.
+func TestDoctorReapInputMatchesReapVerbInput(t *testing.T) {
+	root, d := reapProject(t, nil, true)
+	ctx := context.Background()
+	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"roster":["kit","ben"]}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.Append(root, ledger.Entry{TS: time.Now(), Kind: ledger.KindAdopt, Slot: "kit", Detail: ledger.AdoptDetail("odd-branch")}); err != nil {
+		t.Fatal(err)
+	}
+	set, err := d.roundSettings(root, roundConfigRequired)
+	if err != nil || len(set.Roster) != 2 {
+		t.Fatalf("roster = %v, %v", set.Roster, err)
+	}
+	want, _, err := d.reapInput(ctx, root, set.Roster)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !want.Adopted["odd-branch"] {
+		t.Fatalf("fixture adopted = %v", want.Adopted)
+	}
+	got, warn := d.doctorReapInput(ctx, root)
+	if got == nil || len(warn) != 0 {
+		t.Fatalf("doctor input = %v, warn %v", got, warn)
+	}
+	if got.Root != want.Root || got.Base != want.Base || got.TempRoot != want.TempRoot || got.SystemTemp != want.SystemTemp ||
+		got.SkillCache != want.SkillCache || got.SkillCacheKeep != want.SkillCacheKeep {
+		t.Errorf("value fields differ:\ndoctor %+v\nreap   %+v", got, want)
+	}
+	has := func(in reap.Input) []bool {
+		return []bool{in.Git != nil, in.Report != nil, in.Host != nil, in.Lease != nil, in.Refresh != nil, in.ProcessUses != nil, in.Adopted != nil}
+	}
+	if !reflect.DeepEqual(got.Roster, want.Roster) || !reflect.DeepEqual(got.Adopted, want.Adopted) {
+		t.Errorf("held-rule data differs: doctor roster %v adopted %v, reap roster %v adopted %v", got.Roster, got.Adopted, want.Roster, want.Adopted)
+	}
+	if !reflect.DeepEqual(has(*got), has(want)) {
+		t.Errorf("wired fields differ: doctor %v, reap %v", has(*got), has(want))
 	}
 }
