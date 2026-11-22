@@ -258,7 +258,7 @@ type RenameResult struct {
 }
 
 // selectBullet is the one title lookup RenameTopic's bullet mode and Remove
-// share: bulletfmt's title grammar and bulletfmt.SelectTitle's case rule. A
+// share: bulletfmt's title grammar and bulletfmt.ResolveTitle's case rule. A
 // miss is ErrNotFound and a title two bullets share is ErrMultiMatch naming
 // every hit (both from bulletfmt.ResolveTitle), so the verbs cannot disagree
 // on what a title is. topic is the heading the bullets sit under, km the file,
