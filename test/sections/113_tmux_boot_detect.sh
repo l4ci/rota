@@ -36,7 +36,8 @@ rm -f "$BF/state/windows" "$BF/state/n"
 cp "$REPO/internal/host/testdata/trust-dialog-2.1.288.txt" "$BF/state/pane"
 RC=0; OUT="$(bd "$ROTA_BIN" --json worker dispatch w1 --body-file "$TMP_BD/brief.md" --task T2 --boot-timeout 2 2>&1)" || RC=$?
 [ "$RC" != "0" ] || fail "a folder-trust dialog must not read as booted: $OUT"
-case "$OUT" in *"did not come up"*) ;; *) fail "expected the boot-timeout message, got: $OUT" ;; esac
-pass "tmux dispatch still times out on a pane stuck at the trust dialog"
+case "$OUT" in *"stuck on a startup dialog"*"Accessing workspace:"*) ;; *) fail "expected the startup-dialog message, got: $OUT" ;; esac
+case "$OUT" in *"did not come up"*) fail "a stuck dialog must not read as a boot timeout: $OUT" ;; esac
+pass "tmux dispatch names the startup dialog on a pane stuck at the trust dialog"
 
 trap 'rm -rf "$TMP"' EXIT

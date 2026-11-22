@@ -63,18 +63,61 @@ func (t *tmux) pane(ctx context.Context, window string) string {
 	return t.tmux(ctx, "capture-pane", "-pJ", "-t", window).Stdout
 }
 
+// maxBootDialogs is how many startup dialogs the boot wait answers (trust,
+// then bypass), as herdr's does.
+const maxBootDialogs = 2
+
+// tmuxKeys maps DialogKeys names to tmux send-keys names.
+var tmuxKeys = map[string]string{"enter": "Enter", "up": "Up", "down": "Down"}
+
 // waitReady blocks until the pane looks like a booted Claude Code UI.
 // Pasting into a shell that has not yet handed off to Claude Code loses the
-// text silently, which is the failure this exists to prevent.
-func (t *tmux) waitReady(ctx context.Context, window string, timeout int) bool {
+// text silently, which is the failure this exists to prevent. A startup
+// dialog is answered with DialogKeys, up to maxBootDialogs times; a pane that
+// still shows one after that, or at the timeout, is a *DialogError.
+func (t *tmux) waitReady(ctx context.Context, window string, timeout int) (bool, error) {
+	answered, last := 0, ""
 	for waited := 0; waited < timeout; waited += 2 {
 		p := t.pane(ctx, window)
 		if looksBooted(p) {
-			return true
+			return true, nil
+		}
+		// The same pane text as the last answered dialog is a slow redraw, not
+		// a new dialog: wait for it instead of burning another answer.
+		if keys, ok := DialogKeys(p); ok && p != last {
+			if answered == maxBootDialogs {
+				return false, &DialogError{First: dialogTitle(p)}
+			}
+			answered++
+			last = p
+			args := []string{"send-keys", "-t", window}
+			for _, k := range keys {
+				args = append(args, tmuxKeys[k])
+			}
+			t.tmux(ctx, args...)
 		}
 		t.d.settle(2 * time.Second)
 	}
-	return false
+	if p := t.pane(ctx, window); dialogOpen(p) {
+		return false, &DialogError{First: dialogTitle(p)}
+	}
+	return false, nil
+}
+
+func dialogOpen(p string) bool { _, ok := ReadDialog(p); return ok }
+
+// dialogTitle is the dialog's own title line, the same on every path, and the
+// first non-blank line of the pane when ReadDialog does not recognise it.
+func dialogTitle(p string) string {
+	if d, ok := ReadDialog(p); ok {
+		return d.First
+	}
+	for _, l := range strings.Split(p, "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			return l
+		}
+	}
+	return ""
 }
 
 // bootPatterns is the one place that says what a booted agent pane looks
@@ -129,7 +172,11 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		// The window exists: hand it back so the caller records and reaps it.
 		return handle, err
 	}
-	if !t.waitReady(ctx, handle, o.BootTimeout) {
+	ready, derr := t.waitReady(ctx, handle, o.BootTimeout)
+	if derr != nil {
+		return handle, fmt.Errorf("slot '%s' is stuck on a startup dialog: %w", o.Slot, derr)
+	}
+	if !ready {
 		return handle, fmt.Errorf("slot '%s' session did not come up within %ds", o.Slot, o.BootTimeout)
 	}
 	return handle, nil
@@ -341,7 +388,9 @@ func (t *tmux) EnsureOperator(ctx context.Context, o OperatorOpts) error {
 	if o.Instruction == "" {
 		return nil
 	}
-	if !t.waitReady(ctx, target, o.BootTimeout) {
+	if ready, derr := t.waitReady(ctx, target, o.BootTimeout); derr != nil {
+		return fmt.Errorf("%w: %w", ErrOperatorBoot, derr)
+	} else if !ready {
 		return ErrOperatorBoot
 	}
 	if t.sendFile(ctx, target, o.Instruction, "rota-operator") != nil {
