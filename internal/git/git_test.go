@@ -3,7 +3,9 @@ package git
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -144,5 +146,47 @@ func TestOutputAndCheck(t *testing.T) {
 		return Result{ExitCode: 3}, nil
 	}}).Check(ctx, "status"); err == nil || !strings.Contains(err.Error(), "git status: exit status 3") {
 		t.Fatalf("Check with empty stderr = %v", err)
+	}
+}
+
+func TestDirtyPathsNamesUnusualFilesVerbatim(t *testing.T) {
+	ctx := context.Background()
+	dir := gittest.NewRepo(t, "main")
+	r := Repo{Dir: dir}
+
+	if got, ok, err := r.DirtyPaths(ctx); err != nil || !ok || len(got) != 0 {
+		t.Fatalf("clean tree: DirtyPaths = %v, %v, %v", got, ok, err)
+	}
+
+	names := []string{"with space.txt", "café.txt", "plain.txt"}
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, ok, err := r.DirtyPaths(ctx)
+	if err != nil || !ok {
+		t.Fatalf("DirtyPaths = %v, %v, %v", got, ok, err)
+	}
+	slices.Sort(got)
+	want := slices.Clone(names)
+	slices.Sort(want)
+	if !slices.Equal(got, want) {
+		t.Errorf("DirtyPaths = %q, want %q", got, want)
+	}
+
+	// A rename reports its destination only, not "old -> new".
+	gittest.Run(t, dir, "add", "--", "with space.txt")
+	gittest.Run(t, dir, "commit", "-q", "-m", "add")
+	gittest.Run(t, dir, "mv", "with space.txt", "moved é.txt")
+	got, ok, err = r.DirtyPaths(ctx)
+	if err != nil || !ok || !slices.Contains(got, "moved é.txt") || slices.Contains(got, "with space.txt") {
+		t.Errorf("rename: DirtyPaths = %q, %v, %v", got, ok, err)
+	}
+}
+
+func TestDirtyPathsOutsideRepo(t *testing.T) {
+	if got, ok, _ := (Repo{Dir: t.TempDir()}).DirtyPaths(context.Background()); ok || got != nil {
+		t.Errorf("outside a repo: DirtyPaths = %v, %v, want nil, false", got, ok)
 	}
 }

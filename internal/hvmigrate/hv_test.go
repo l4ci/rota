@@ -339,6 +339,21 @@ func TestRunHvRefusals(t *testing.T) {
 		_, err := RunHv(hvOpts(t, dir, home))
 		blocked(err, "dirty-tree")
 	})
+	t.Run("dirty names unusual paths verbatim", func(t *testing.T) {
+		dir, home := t.TempDir(), t.TempDir()
+		hvProject(t, dir)
+		write(t, filepath.Join(dir, "my notes é.txt"), "x")
+		// Under .hv/ a quoted-looking name is still filtered by prefix.
+		write(t, filepath.Join(dir, ".hv", "ünï cöde", "a b.txt"), "x")
+		_, err := RunHv(hvOpts(t, dir, home))
+		var r *Refusal
+		if !errors.As(err, &r) || r.Blocked != "dirty-tree" {
+			t.Fatalf("err = %v, want dirty-tree refusal", err)
+		}
+		if !strings.Contains(err.Error(), "\n  my notes é.txt\n") || strings.Contains(err.Error(), "ünï") || strings.Contains(err.Error(), `"`) {
+			t.Errorf("refusal misnames the path: %v", err)
+		}
+	})
 	t.Run("both dirs", func(t *testing.T) {
 		dir, home := t.TempDir(), t.TempDir()
 		hvProject(t, dir)

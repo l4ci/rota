@@ -170,6 +170,30 @@ func (r Repo) Dirty(ctx context.Context) (dirty, ok bool, err error) {
 	return strings.TrimSpace(res.Stdout) != "", true, nil
 }
 
+// DirtyPaths lists the paths `git status` reports as changed, as git names
+// them: relative to the repository root, unquoted, and for a rename or copy the
+// destination only. ok is false when status itself fails (not a repo).
+func (r Repo) DirtyPaths(ctx context.Context) (paths []string, ok bool, err error) {
+	res, err := r.Run(ctx, "status", "--porcelain", "-z")
+	if err != nil || res.ExitCode != 0 {
+		return nil, false, err
+	}
+	// Each entry is "XY <path>"; a rename or copy is followed by its source as
+	// a bare entry, which is not a dirty path of its own.
+	ents := strings.Split(res.Stdout, "\x00")
+	for i := 0; i < len(ents); i++ {
+		ent := ents[i]
+		if len(ent) < 4 {
+			continue
+		}
+		paths = append(paths, ent[3:])
+		if ent[0] == 'R' || ent[0] == 'C' || ent[1] == 'R' || ent[1] == 'C' {
+			i++
+		}
+	}
+	return paths, true, nil
+}
+
 // HasHead reports whether the repo has a first commit.
 func (r Repo) HasHead(ctx context.Context) (bool, error) {
 	return r.Verify(ctx, "HEAD")

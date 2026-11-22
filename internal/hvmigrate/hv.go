@@ -634,25 +634,17 @@ func gitClean(o HvOptions, dir string, umbrella bool) error {
 		return nil
 	}
 	repo, ctx := o.repo(dir), o.ctx()
-	st, err := repo.Run(ctx, "status", "--porcelain")
-	if err != nil || st.ExitCode != 0 {
+	all, ok, err := repo.DirtyPaths(ctx)
+	if err != nil || !ok {
 		return fmt.Errorf("%w: not inside a git repo (or git unavailable)", ErrGit)
 	}
-	out := st.Stdout
 	pc, err := repo.Run(ctx, "rev-parse", "--show-prefix")
 	if err != nil || pc.ExitCode != 0 {
 		return fmt.Errorf("%w: git rev-parse --show-prefix failed in %s", ErrGit, dir)
 	}
 	prefix := strings.TrimSpace(pc.Stdout)
 	var dirty []string
-	for _, line := range strings.Split(out, "\n") {
-		if len(line) < 4 {
-			continue
-		}
-		path := strings.TrimSpace(line[3:])
-		if _, dest, ok := strings.Cut(path, " -> "); ok {
-			path = dest
-		}
+	for _, path := range all {
 		if prefix != "" {
 			if !strings.HasPrefix(path, prefix) {
 				continue
