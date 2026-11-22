@@ -110,7 +110,7 @@ func openItems(c *Ctx, id string) (plan.Items, error) {
 		return nil, err
 	}
 	if !issue {
-		return plan.FileItems(root, c.deps().Getenv("ROTA_OPEN_SECTIONS")), nil
+		return plan.FileItems(fileBackend(root), c.deps().Getenv("ROTA_OPEN_SECTIONS")), nil
 	}
 	return plan.NewIssueItems(func() (backlog.Backend, error) {
 		be, _, _, err := itemOpen(c, id)

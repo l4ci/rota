@@ -51,22 +51,23 @@ func Uncertain(src Items, id string) (itemID, typ string, reasons []string, err 
 	return it.ID, it.Type, uncertainReasons(it.Line, it.Detail, it.HasDetail), nil
 }
 
-// FileItems reads open items from the file backlog under root. openSections is
+// FileItems reads open items through be, the file backlog's Backend. openSections is
 // the "Bugs|Features|Tasks" list that limits which open sections an item may
 // live in; "" is that default.
-func FileItems(root, openSections string) Items { return fileItems{root, openSections} }
+func FileItems(be backlog.Backend, openSections string) Items { return fileItems{be, openSections} }
 
-type fileItems struct{ root, openSections string }
+type fileItems struct {
+	be           backlog.Backend
+	openSections string
+}
 
 func (s fileItems) Open(id string) (OpenItem, error) {
-	// File-mode store by definition; it cannot import cli (documented exception to backend_select.go).
-	f := &backlog.File{Root: s.root}
-	md, merr := f.Markdown(0)
-	if merr != nil {
-		if errors.Is(merr, backlog.ErrNotFound) {
+	rows, err := s.be.Rows()
+	if err != nil {
+		if errors.Is(err, backlog.ErrNotFound) {
 			return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, ".rota/BACKLOG.md not found")
 		}
-		return OpenItem{}, merr
+		return OpenItem{}, err
 	}
 	// The sections list (ROTA_OPEN_SECTIONS, as the retired type registry exported it) limits
 	// which open sections the item may live in.
@@ -75,31 +76,26 @@ func (s fileItems) Open(id string) (OpenItem, error) {
 	if sections == "" {
 		sections = "Bugs|Features|Tasks"
 	}
-	for _, s := range strings.Split(sections, "|") {
-		if s = strings.TrimSpace(s); s != "" {
-			active[s] = true
+	for _, name := range strings.Split(sections, "|") {
+		if name = strings.TrimSpace(name); name != "" {
+			active[name] = true
 		}
 	}
-	var line string
-	for _, e := range backlog.OpenBullets(md) {
-		if e.ID == id && active[e.Section] {
-			line = e.Line
-			break
+	for _, r := range rows {
+		if r.ID != id || !active[r.Section] {
+			continue
 		}
-	}
-	if line == "" {
-		return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, "item %s not found in BACKLOG.md", id)
-	}
-	it := OpenItem{ID: id, Type: id[:1], Line: line}
-	if b, ok := backlog.ParseOpen(line); !ok || !strings.EqualFold(b.Tag, "major") {
+		it := OpenItem{ID: id, Type: id[:1], Line: r.Raw}
+		if !strings.EqualFold(r.Tag, "major") {
+			return it, nil
+		}
+		it.Major = true
+		if it.Detail, it.HasDetail, err = s.be.Detail(id); err != nil {
+			return OpenItem{}, err
+		}
 		return it, nil
 	}
-	it.Major = true
-	var derr error
-	if it.Detail, it.HasDetail, derr = f.Detail(id); derr != nil {
-		return OpenItem{}, derr
-	}
-	return it, nil
+	return OpenItem{}, exitcode.Errf(exitcode.ExitResolution, "item %s not found in BACKLOG.md", id)
 }
 
 // NewIssueItems reads open items from the issue backend; open connects to it
