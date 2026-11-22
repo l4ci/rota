@@ -36,12 +36,12 @@ func TestDebugIssueAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := ctr.State()
+	bugID, err := ctr.BugID()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if issueGet(st, "bug_id") != "9" {
-		t.Fatalf("session identity: %v", st)
+	if bugID != "9" {
+		t.Fatalf("session identity: %q", bugID)
 	}
 	for i, ref := range []string{"9", "#9", "B9"} {
 		d := debugIssueRun(t, deps, root, 0, "verdict", ref, "--verdict", "FAIL")

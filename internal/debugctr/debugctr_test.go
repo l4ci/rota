@@ -95,8 +95,8 @@ func TestSummaryBytes(t *testing.T) {
 	}
 	c.RecordAttempt(long, "abc")
 	c.Fail()
-	st, _ := c.State()
-	md, bug, failed := c.Summary(st)
+	st, _ := c.Load()
+	md, bug, failed := st.Summary()
 	trunc := ""
 	for i := 0; i < 117; i++ {
 		trunc += "é"
@@ -172,5 +172,81 @@ func TestTimestampsComeFromTheInjectedClock(t *testing.T) {
 	raw, _ := os.ReadFile(c.Path)
 	if !strings.Contains(string(raw), `"started_at": "2031-07-09T23:59:01+00:00"`) {
 		t.Errorf("init did not stamp the clock:\n%s", raw)
+	}
+}
+
+func TestPendingAttemptRule(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	if _, _, err := c.PendingAttempt(); exitOf(err) != 3 {
+		t.Fatalf("no session file: %v", err)
+	}
+	c.Init("B07")
+	if _, ok, err := c.PendingAttempt(); err != nil || ok {
+		t.Fatalf("no attempts: ok=%v err=%v", ok, err)
+	}
+	c.RecordAttempt("h1", "c1")
+	a, ok, _ := c.PendingAttempt()
+	if !ok || a.N != 1 || a.Hypothesis != "h1" || a.Commit != "c1" || a.Outcome != "pending" {
+		t.Fatalf("open attempt: ok=%v %+v", ok, a)
+	}
+	c.Fail()
+	if _, ok, _ := c.PendingAttempt(); ok {
+		t.Fatal("a closed last attempt is not pending")
+	}
+	c.RecordAttempt("h2", "c2")
+	if a, ok, _ := c.PendingAttempt(); !ok || a.N != 2 {
+		t.Fatalf("second attempt: ok=%v %+v", ok, a)
+	}
+}
+
+func TestBugIDAndCycles(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	if _, err := c.BugID(); exitOf(err) != 3 {
+		t.Fatalf("bug id without file: %v", err)
+	}
+	if _, err := c.Load(); exitOf(err) != 3 {
+		t.Fatalf("load without file: %v", err)
+	}
+	c.Init("B07")
+	c.IncCycle()
+	c.IncCycle()
+	if id, err := c.BugID(); err != nil || id != "B07" {
+		t.Fatalf("bug id %q %v", id, err)
+	}
+	if s, err := c.Load(); err != nil || s.HypothesisCycles != 2 {
+		t.Fatalf("cycles %+v %v", s, err)
+	}
+}
+
+// A partial file (older helper, hand edit) keeps absent keys absent in Show
+// and renders the old Summary fallbacks.
+func TestLoadPartialFile(t *testing.T) {
+	c, _ := Open(repo(t), nil)
+	os.MkdirAll(filepath.Dir(c.Path), 0o777)
+	os.WriteFile(c.Path, []byte(`{"failed_fixes": 2, "attempts": [{"n": 1, "outcome": "pending", "hypothesis": "h"}]}`), 0o666)
+	s, err := c.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.FailedFixes != 2 || s.BugID != "" || s.HypothesisCycles != 0 || len(s.Attempts) != 1 {
+		t.Fatalf("mapping: %+v", s)
+	}
+	if a, ok := s.Pending(); !ok || a.N != 1 || a.Hypothesis != "h" || a.Commit != "" {
+		t.Fatalf("pending: %v %+v", ok, a)
+	}
+	d := s.Show()
+	if _, ok := d.Get("bugId"); ok {
+		t.Error("show emitted bugId for a file without bug_id")
+	}
+	if v, _ := d.Get("failedFixes"); intOf(v) != 2 {
+		t.Errorf("failedFixes %v", v)
+	}
+	att := asObj(mustGet(d, "attempts").([]any)[0])
+	if _, ok := att.Get("commit"); ok {
+		t.Error("show emitted commit for an attempt without one")
+	}
+	md, bug, _ := s.Summary()
+	if bug != "?" || !strings.Contains(md, "1. unknown — h") {
+		t.Errorf("fallbacks: %q\n%s", bug, md)
 	}
 }

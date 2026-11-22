@@ -233,12 +233,11 @@ func counterRecordAttempt(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		st, err := ctr.State() // exit 3 without a session file
+		id, err := ctr.BugID() // exit 3 without a session file
 		if err != nil {
 			return Result{}, err
 		}
-		bug, _ := st.Get("bug_id")
-		if id, _ := bug.(string); id != "" {
+		if id != "" {
 			id, err = debugItem(c, id)
 			if err != nil {
 				return backlogFail(err)
@@ -339,12 +338,6 @@ func runCounterClear(c *Ctx, args []string) (Result, error) {
 	return Result{Data: d}, nil
 }
 
-// camel renames the state file's snake_case keys for --json.
-var counterKeys = [][2]string{
-	{"session", "session"}, {"bug_id", "bugId"}, {"started_at", "startedAt"},
-	{"failed_fixes", "failedFixes"}, {"hypothesis_cycles", "hypothesisCycles"},
-}
-
 func runCounterShow(c *Ctx, args []string) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
@@ -357,31 +350,11 @@ func runCounterShow(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	st, _ := ctr.State()
-	d := jsonx.NewObject()
-	for _, k := range counterKeys {
-		if v, ok := st.Get(k[0]); ok {
-			d.Set(k[1], v)
-		}
+	st, err := ctr.Load()
+	if err != nil {
+		return Result{}, err
 	}
-	atts := []any{}
-	if v, _ := st.Get("attempts"); v != nil {
-		l, _ := v.([]any)
-		for _, a := range l {
-			ao, ok := a.(*jsonx.Object)
-			if !ok {
-				continue
-			}
-			out := jsonx.NewObject()
-			for _, k := range [][2]string{{"n", "n"}, {"started_at", "startedAt"}, {"hypothesis", "hypothesis"}, {"commit", "commit"}, {"outcome", "outcome"}, {"ended_at", "endedAt"}} {
-				if v, ok := ao.Get(k[0]); ok {
-					out.Set(k[1], v)
-				}
-			}
-			atts = append(atts, out)
-		}
-	}
-	d.Set("attempts", atts)
+	d := st.Show()
 	return Result{Data: d, Text: raw}, nil
 }
 
@@ -393,15 +366,15 @@ func runCounterSummary(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	st, err := ctr.State()
+	st, err := ctr.Load()
 	if err != nil {
 		return Result{}, err
 	}
-	md, bug, failed := ctr.Summary(st)
+	md, bug, failed := st.Summary()
 	d := jsonx.NewObject()
 	d.Set("bugId", bug)
 	d.Set("failedFixes", failed)
-	if l, _ := st.Get("attempts"); l == nil || len(l.([]any)) == 0 {
+	if len(st.Attempts) == 0 {
 		d.Set("markdown", "")
 		return Result{Data: d}, Failed("no attempts recorded yet")
 	}
