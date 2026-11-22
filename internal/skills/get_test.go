@@ -44,7 +44,7 @@ func TestGetAndStubbed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rep, err := s.Status(nil, "v")
+	rep, err := s.Status(nil, nil, "v")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestStubUpdate(t *testing.T) {
 	if b, _ := st.File("rota-a/SKILL.md"); !strings.Contains(string(b), "rota skills get") {
 		t.Fatal("no stub")
 	}
-	rep, _ := st.Status(r, "")
+	rep, _ := st.Status(r, nil, "")
 	if !rep.Roots[0].Current || len(rep.Roots[0].Edited) != 0 || len(rep.Roots[0].Missing) != 0 {
 		t.Errorf("%+v", rep.Roots[0])
 	}

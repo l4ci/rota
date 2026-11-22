@@ -118,7 +118,7 @@ func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, 
 			}
 			// A Codex user root with no known base is skipped while Claude's
 			// roots stand, so "all" degrades per agent; status reports it.
-			if ag.name == Codex && home == "" && sc == User && agent != Codex && len(claudeDirs) > 0 {
+			if ag.name == Codex && sc == User && codexSkipped(scope, agent, home, claudeDirs) {
 				continue
 			}
 			var paths []string
@@ -140,6 +140,28 @@ func Roots(scope, agent, home string, claudeDirs []string, top string) ([]Root, 
 		}
 	}
 	return out, nil
+}
+
+// codexSkipped says Roots leaves out the Codex user root for these inputs:
+// home is unknown, the agent filter is "" or "all", the scope reaches user
+// roots, and Claude's user roots still stand.
+func codexSkipped(scope, agent, home string, claudeDirs []string) bool {
+	return home == "" && (agent == "" || agent == "all") && (scope == "" || scope == User) && len(claudeDirs) > 0
+}
+
+// Unavailable is an agent whose user root Roots left out, and why.
+type Unavailable struct {
+	Agent  string
+	Reason string
+}
+
+// UnavailableAgents names the agents Roots leaves out for the same inputs, so
+// Status can report them; nil when every asked-for agent has its roots.
+func UnavailableAgents(scope, agent, home string, claudeDirs []string) []Unavailable {
+	if codexSkipped(scope, agent, home, claudeDirs) {
+		return []Unavailable{{Agent: Codex, Reason: "HOME unset, so no Codex user root"}}
+	}
+	return nil
 }
 
 // ManifestSchema is the version of the manifest file format.
@@ -593,6 +615,9 @@ type RootStatus struct {
 	// added, removed or whose stub changed, as "<skill> (<what>)".
 	Mode    string
 	Changed []string
+	// Want is the digest an installed root is judged against: the stub
+	// digest for a stub root, the full digest otherwise.
+	Want string
 }
 
 // Damaged says the root is installed but out of step with the binary: another
@@ -630,11 +655,14 @@ type Report struct {
 	Roots      []RootStatus
 	// Warnings are problems reading plugin state that do not fail a root.
 	Warnings []string
+	// Unavailable are the agents whose user root was left out of roots.
+	Unavailable []Unavailable
 }
 
-// Status reads the roots; it writes nothing.
-func (s *Set) Status(roots []Root, version string) (Report, error) {
-	rep := Report{Version: version, Digest: s.digest}
+// Status reads the roots; it writes nothing. unavailable is what
+// UnavailableAgents said for the inputs roots came from.
+func (s *Set) Status(roots []Root, unavailable []Unavailable, version string) (Report, error) {
+	rep := Report{Version: version, Digest: s.digest, Unavailable: unavailable}
 	stub, stubErr := s.Stubbed()
 	if stubErr == nil {
 		rep.StubDigest = stub.digest
@@ -652,7 +680,7 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 		}
 		if ok {
 			st.Installed, st.Version, st.Digest, st.Mode = true, m.Version, m.Digest, m.EffectiveMode()
-			st.Current = m.Digest == s.digest
+			st.Current, st.Want = m.Digest == s.digest, s.digest
 			// want is the set install would write for this root's mode, so
 			// Status asks classify the same question planRoot does.
 			want := s
@@ -660,7 +688,7 @@ func (s *Set) Status(roots []Root, version string) (Report, error) {
 				if stubErr != nil {
 					return rep, stubErr
 				}
-				st.Current = m.Digest == stub.digest
+				st.Current, st.Want = m.Digest == stub.digest, stub.digest
 				st.Changed = stubChanges(m.Files, stub)
 				want = stub
 			}

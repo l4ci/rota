@@ -220,7 +220,7 @@ func doctorSkills(d *Deps, getenv func(string) string, home, root, top string) *
 	if err != nil {
 		return nil
 	}
-	rep, err := set.Status(roots, version.Get().Version)
+	rep, err := set.Status(roots, nil, version.Get().Version)
 	if err != nil {
 		return nil
 	}
