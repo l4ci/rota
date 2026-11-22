@@ -55,14 +55,25 @@ func MergeBranch(p MergePorts, branch, base, msg string) (string, error) {
 		Prepare: func() error { return ClearWorktree(p.Git, branch, p.Checkout) },
 	}, land.LocalRequest{Branch: branch, Base: base, Message: msg, Checkout: base, DeleteBranch: true, ShortSHA: true})
 	if err != nil {
-		switch f := land.Classify(err); f.Kind {
+		f := land.Classify(err)
+		msg, hint := f.Refusal(mergeWords(branch))
+		switch f.Kind {
 		case land.FailConflict:
-			return "", &Refusal{By: blockedby.Conflict, Msg: "merge conflict; merge aborted"}
+			return "", &Refusal{By: blockedby.Conflict, Msg: msg, Hint: hint}
 		case land.FailMerge:
-			return "", &GitError{Msg: "git merge " + branch + ": " + strutil.FirstLine(f.Out)}
+			return "", &GitError{Msg: msg}
 		}
 	}
 	return sha, err
+}
+
+// mergeWords is how ship words a failed merge of branch: land owns the rule,
+// ship only names the branch.
+func mergeWords(branch string) land.Words {
+	return land.Words{
+		Failed:   "git merge " + branch,
+		Conflict: "merge of " + branch + " conflicted in {paths}; merge aborted",
+	}
 }
 
 // ChangedFiles lists the files a merge range changes, for the merge-approval

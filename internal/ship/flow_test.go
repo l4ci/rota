@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/proof"
@@ -181,18 +182,49 @@ func TestMergeBranchRefusals(t *testing.T) {
 	if _, err := MergeBranch(mergePorts(mergeGit()), "main", "main", "msg"); !errors.As(err, &ref) || ref.By != "base branch" {
 		t.Errorf("base: %v", err)
 	}
+}
+
+// A failed merge is worded by land.Failure.Refusal: a conflict is a typed
+// refusal naming the branch and paths, anything else a GitError carrying git's
+// output.
+func TestMergeBranchWordsFailuresThroughLand(t *testing.T) {
 	g := mergeGit()
 	g.fail = map[string]bool{"merge --no-ff -m msg cafe123": true}
-	g.out["merge --no-ff -m msg cafe123"] = ""
 	g.out["merge --abort"] = ""
-	// A conflict aborts the merge and refuses.
 	cg := &conflictGit{fakeGit: g}
-	if _, err := MergeBranch(mergePorts(cg), "feat", "main", "msg"); !errors.As(err, &ref) || ref.By != "conflict" {
-		t.Errorf("conflict: %v", err)
+	var ref *Refusal
+	_, err := MergeBranch(mergePorts(cg), "feat", "main", "msg")
+	if !errors.As(err, &ref) || ref.By != blockedby.Conflict {
+		t.Fatalf("conflict: %v", err)
 	}
-	if !contains(cg.calls, "merge --abort") {
-		t.Errorf("no abort: %v", cg.calls)
+	if want, _ := land.Classify(&land.ConflictError{Out: "CONFLICT (content): Merge conflict in x"}).Refusal(mergeWords("feat")); ref.Msg != want {
+		t.Errorf("conflict msg %q, want %q", ref.Msg, want)
 	}
+	if !strings.Contains(ref.Msg, "feat") || !strings.Contains(ref.Msg, "x") || !contains(cg.calls, "merge --abort") {
+		t.Errorf("conflict msg %q, calls %v", ref.Msg, cg.calls)
+	}
+
+	mg := &mergeFailGit{fakeGit: mergeGit()}
+	mg.fail = map[string]bool{"merge --no-ff -m msg cafe123": true}
+	mg.out["merge --abort"] = ""
+	var ge *GitError
+	_, err = MergeBranch(mergePorts(mg), "feat", "main", "msg")
+	if !errors.As(err, &ge) {
+		t.Fatalf("merge failure: %v", err)
+	}
+	if !strings.Contains(ge.Msg, "feat") || !strings.Contains(ge.Msg, "exit 1") || !strings.Contains(ge.Msg, "Committer identity unknown") {
+		t.Errorf("merge failure msg %q", ge.Msg)
+	}
+}
+
+type mergeFailGit struct{ *fakeGit }
+
+func (c *mergeFailGit) Run(args ...string) (r git.Result, err error) {
+	r, err = c.fakeGit.Run(args...)
+	if strings.HasPrefix(strings.Join(args, " "), "merge --no-ff") {
+		r.ExitCode, r.Stderr = 1, "Committer identity unknown"
+	}
+	return r, err
 }
 
 type conflictGit struct{ *fakeGit }
