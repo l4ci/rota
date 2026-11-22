@@ -314,6 +314,8 @@ func TestUnclassifiedVerbRefusedOnSupport(t *testing.T) {
 	support := supportProject(t)
 	main := trackerProject(t, `{"issues":{"source":"github"}}`+"\n")
 	gate := func(dir, path string) error {
+		wd, _ := os.Getwd()
+		defer os.Chdir(wd) // -C chdirs the process; later tests need a live cwd
 		var out, errb bytes.Buffer
 		code := run(tree, testDeps(), append([]string{"-C", dir}, strings.Fields(path)[1:]...), strings.NewReader(""), &out, &errb)
 		if code != ExitOK {
