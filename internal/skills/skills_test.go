@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -365,25 +366,61 @@ func TestUninstall(t *testing.T) {
 func TestStatusDevBuildComparesByDigest(t *testing.T) {
 	s := loadFake(t, nil)
 	roots := oneRoot(t)
-	rep, _ := s.Status(roots, "")
+	rep, _ := s.Status(roots, nil, "")
 	if rep.Roots[0].Installed || rep.Roots[0].Current {
 		t.Errorf("%+v", rep.Roots[0])
 	}
 	s.Install(roots, Options{Mode: ModeFull, Version: ""})
-	rep, _ = s.Status(roots, "")
+	rep, _ = s.Status(roots, nil, "")
 	if !rep.Roots[0].Installed || !rep.Roots[0].Current || rep.Digest != s.Digest() {
 		t.Errorf("%+v", rep)
 	}
 	s2 := loadFake(t, map[string]string{"references/y.md": "newer\n"})
-	rep, _ = s2.Status(roots, "")
+	rep, _ = s2.Status(roots, nil, "")
 	if rep.Roots[0].Current {
 		t.Error("a different digest must not be current, version empty or not")
 	}
 	os.WriteFile(filepath.Join(roots[0].Path, "rota-a", "SKILL.md"), []byte("mine\n"), 0o644)
 	os.Remove(filepath.Join(roots[0].Path, "rota-b", "SKILL.md"))
-	rep, _ = s.Status(roots, "")
+	rep, _ = s.Status(roots, nil, "")
 	if got := rep.Roots[0]; len(got.Edited) != 1 || got.Edited[0] != "rota-a/SKILL.md" || len(got.Missing) != 1 || got.Missing[0] != "rota-b/SKILL.md" {
 		t.Errorf("%+v", got)
+	}
+}
+
+// HOME unset with Claude dirs known: Roots drops the Codex user root and
+// Status reports it unavailable; asking for Claude alone reports nothing.
+func TestStatusHomeUnsetReportsCodexUnavailable(t *testing.T) {
+	s := loadFake(t, nil)
+	dirs := []string{filepath.Join(t.TempDir(), ".claude")}
+	for _, c := range []struct {
+		scope, agent string
+		want         []Unavailable
+	}{
+		{"", "", []Unavailable{{Agent: Codex, Reason: "HOME unset, so no Codex user root"}}},
+		{User, "all", []Unavailable{{Agent: Codex, Reason: "HOME unset, so no Codex user root"}}},
+		{User, Claude, nil},
+	} {
+		roots, err := Roots(c.scope, c.agent, "", dirs, "")
+		if err != nil {
+			t.Fatalf("%q/%q: %v", c.scope, c.agent, err)
+		}
+		rep, err := s.Status(roots, UnavailableAgents(c.scope, c.agent, "", dirs), "")
+		if err != nil {
+			t.Fatalf("%q/%q: %v", c.scope, c.agent, err)
+		}
+		for _, r := range rep.Roots {
+			if r.Agent == Codex {
+				t.Errorf("%q/%q: Codex root %s listed with HOME unset", c.scope, c.agent, r.Path)
+			}
+		}
+		if !reflect.DeepEqual(rep.Unavailable, c.want) {
+			t.Errorf("%q/%q: unavailable %v, want %v", c.scope, c.agent, rep.Unavailable, c.want)
+		}
+	}
+	// With HOME known nothing is unavailable.
+	if u := UnavailableAgents("", "", "/h", dirs); u != nil {
+		t.Errorf("home set: %v", u)
 	}
 }
 
@@ -453,7 +490,7 @@ func TestManifestTraversalIgnored(t *testing.T) {
 	if _, err := s.Install(roots, Options{Mode: ModeFull, Overwrite: true}); err != nil {
 		t.Fatal(err)
 	}
-	if rep, _ := s.Status(roots, ""); len(rep.Roots[0].Edited)+len(rep.Roots[0].Missing) != 0 {
+	if rep, _ := s.Status(roots, nil, ""); len(rep.Roots[0].Edited)+len(rep.Roots[0].Missing) != 0 {
 		t.Errorf("%+v", rep.Roots[0])
 	}
 	if _, err := Uninstall(roots, Options{Mode: ModeFull, Overwrite: true}); err != nil {
@@ -500,7 +537,7 @@ func TestSymlinkedParentNotFollowed(t *testing.T) {
 	untouched(target)
 
 	s, roots, target = setup()
-	if rep, _ := s.Status(roots, ""); len(rep.Roots[0].Edited) == 0 {
+	if rep, _ := s.Status(roots, nil, ""); len(rep.Roots[0].Edited) == 0 {
 		t.Error("status should flag the symlinked paths")
 	}
 	res2, err := Uninstall(roots, Options{Mode: ModeFull, Overwrite: true})
@@ -690,7 +727,7 @@ func stubRootStatus(t *testing.T, old, now *Set) RootStatus {
 	if _, err := old.Install(r, Options{Mode: ModeStub}); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := now.Status(r, "v2")
+	rep, err := now.Status(r, nil, "v2")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -703,14 +740,18 @@ func TestStubRootCurrentAfterBodyOnlyChange(t *testing.T) {
 	if old.Digest() == now.Digest() {
 		t.Fatal("test setup: full digests must differ")
 	}
-	if st := stubRootStatus(t, old, now); !st.Current || len(st.Changed) != 0 || st.Mode != ModeStub {
+	st := stubRootStatus(t, old, now)
+	if !st.Current || len(st.Changed) != 0 || st.Mode != ModeStub {
 		t.Errorf("stub root reported stale after a body-only change: %+v", st)
+	}
+	if stub, err := now.Stubbed(); err != nil || st.Want != stub.Digest() {
+		t.Errorf("stub root wants %q, want the stub digest (%v)", st.Want, err)
 	}
 	// A full root is stale after the same change.
 	r := modeRoot(t)
 	old.Install(r, Options{Mode: ModeFull})
-	if rep, _ := now.Status(r, "v2"); rep.Roots[0].Current {
-		t.Error("full root reported current after a body change")
+	if rep, _ := now.Status(r, nil, "v2"); rep.Roots[0].Current || rep.Roots[0].Want != now.Digest() {
+		t.Errorf("full root after a body change: %+v", rep.Roots[0])
 	}
 }
 
@@ -820,7 +861,7 @@ func TestStatusMatchesUninstallOverUnreadableLink(t *testing.T) {
 	if err := os.Symlink("references", refs); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := s.Status(roots, "")
+	rep, err := s.Status(roots, nil, "")
 	if err != nil {
 		t.Fatalf("status errored where uninstall keeps the path: %v", err)
 	}
@@ -857,7 +898,7 @@ func TestStatusAndInstallAgreeOnAdoptedBytes(t *testing.T) {
 	if err := writeManifest(roots[0].Path, m); err != nil {
 		t.Fatal(err)
 	}
-	rep, err := s.Status(roots, "")
+	rep, err := s.Status(roots, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}

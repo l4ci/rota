@@ -115,5 +115,5 @@ func (s *Set) pluginStatus(st *RootStatus) {
 		}
 		return b, err == nil
 	})
-	st.Current = st.Digest == s.digest
+	st.Current, st.Want = st.Digest == s.digest, s.digest
 }
