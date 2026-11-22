@@ -17,6 +17,9 @@ func TestLabelRulePerForge(t *testing.T) {
 		{"jira", jiraLabelRule, false},
 	} {
 		t.Run(tc.forge, func(t *testing.T) {
+			if sourceLabelRule(tc.forge) != tc.rule {
+				t.Errorf("sourceLabelRule(%s) is not the forge's rule", tc.forge)
+			}
 			if got := sameLabelName(tc.rule, "Bug", "bug"); got != tc.foldCase {
 				t.Errorf("sameLabelName(Bug, bug) = %v, want %v", got, tc.foldCase)
 			}
