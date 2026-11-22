@@ -2,9 +2,9 @@ package knowledge
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
@@ -228,8 +228,6 @@ type Stat struct {
 	Bytes   int
 }
 
-var bulletLine = regexp.MustCompile(`(?m)^- `)
-
 // Stats counts bullets and bytes per topic of the umbrella KNOWLEDGE.md.
 func (s Store) Stats() ([]Stat, error) {
 	p, err := s.KnowledgePath(Umbrella)
@@ -246,7 +244,7 @@ func (s Store) Stats() ([]Stat, error) {
 func topicStats(content string) []Stat {
 	out := []Stat{}
 	for _, t := range section.Topics(content) {
-		out = append(out, Stat{t.Name, len(bulletLine.FindAllStringIndex(t.Body, -1)), len(t.Body)})
+		out = append(out, Stat{t.Name, bulletfmt.Count(t.Body), len(t.Body)})
 	}
 	return out
 }
