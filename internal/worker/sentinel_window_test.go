@@ -111,43 +111,43 @@ func TestPollWidensWindowForDoneBeyondIt(t *testing.T) {
 	}
 }
 
+// widenOnce drives widenForSentinel the way a wait loop does: the same idle,
+// window-full pane each pass, one memo across passes.
+func widenOnce(h *wideHost, memo *widenMemo, text string, passes int) (st string) {
+	t := pollTarget{name: "w1", handle: "w9:t1", kind: "claude"}
+	for i := 0; i < passes; i++ {
+		st, _ = widenForSentinel(memo, bg, h, t, StateIdle, noSentinelBase, text, 60, "")
+	}
+	return st
+}
+
+func countWide(h *wideHost) (n int) {
+	for _, l := range h.asked {
+		if l == sentinelScanLines {
+			n++
+		}
+	}
+	return n
+}
+
 // A pane unchanged since the last wider read is not read wide again.
-func TestPollWidensOncePerUnchangedPane(t *testing.T) {
-	dir, f := pollRegistry(t, "herdr")
-	h := &wideHost{fakeHost: f, recent: strings.Repeat("● idle once\n", 60), wide: strings.Repeat("● nothing\n", 90)}
-	env := envWith(h)
-	env.widen = &widenMemo{}
-	for i := 0; i < 3; i++ {
-		if _, err := env.Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60}); err != nil {
-			t.Fatal(err)
-		}
+func TestWidenOncePerUnchangedPane(t *testing.T) {
+	h := &wideHost{fakeHost: &fakeHost{}, wide: strings.Repeat("● nothing\n", 90)}
+	widenOnce(h, &widenMemo{}, strings.Repeat("● idle once\n", 60), 3)
+	if n := countWide(h); n != 1 {
+		t.Fatalf("%d wide reads over 3 passes of an unchanged pane, want 1", n)
 	}
-	wide := 0
-	for _, n := range h.asked {
-		if n == sentinelScanLines {
-			wide++
-		}
-	}
-	if wide != 1 {
-		t.Fatalf("%d wide reads over 3 polls of an unchanged pane, want 1", wide)
+	h = &wideHost{fakeHost: &fakeHost{}, wide: h.wide}
+	widenOnce(h, nil, strings.Repeat("● idle once\n", 60), 3)
+	if n := countWide(h); n != 3 {
+		t.Fatalf("a nil memo (one-shot poll) read wide %d times, want 3", n)
 	}
 }
 
-// A failed wider read is not remembered: the next pass of an unchanged pane retries it.
-func TestPollRetriesFailedWideRead(t *testing.T) {
-	dir, f := pollRegistry(t, "herdr")
-	h := &wideHost{fakeHost: f, recent: strings.Repeat("● retry\n", 60), wide: "ROTA-DONE w1 issues:#7\n" + strings.Repeat("● retry\n", 80), wideFails: 1}
-	env := envWith(h)
-	env.widen = &widenMemo{}
-	var last string
-	for i := 0; i < 2; i++ {
-		res, err := env.Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60})
-		if err != nil {
-			t.Fatal(err)
-		}
-		last = res.Slots[0].State
-	}
-	if last != StateDone {
-		t.Fatalf("second poll state %s, want DONE after the failed read", last)
+// A failed wider read is not remembered: the next pass retries it.
+func TestWidenRetriesFailedRead(t *testing.T) {
+	h := &wideHost{fakeHost: &fakeHost{}, wide: "ROTA-DONE w1 issues:#7\n" + strings.Repeat("● retry\n", 80), wideFails: 1}
+	if st := widenOnce(h, &widenMemo{}, strings.Repeat("● retry\n", 60), 2); st != StateDone {
+		t.Fatalf("state %s after the failed read, want DONE on the retry", st)
 	}
 }

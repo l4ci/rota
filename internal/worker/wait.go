@@ -71,7 +71,7 @@ type WaitResult struct {
 // herdr's scrollback reads can differ for a moment, which is how a finished
 // worker reads as moving. The re-check is a poll and is reported as one.
 func (e Env) Wait(ctx context.Context, root string, o WaitOpts) (WaitResult, error) {
-	e.widen = &widenMemo{}
+	memo := &widenMemo{}
 	e = e.WithDefaults()
 	if o.Lines <= 0 {
 		o.Lines = 60
@@ -234,7 +234,7 @@ wait:
 		// The event and the stamps it is weighed against are read again on every
 		// pass: a `worker send` during a long wait must be seen by it.
 		refreshEvents(LoadRegistryTolerant(root), targets)
-		rows, settling, slept := e.classify(ctx, h, targets, o.Settle, o.Lines)
+		rows, settling, slept := e.classify(ctx, h, targets, o.Settle, o.Lines, memo)
 		if ctx.Err() != nil {
 			return stop()
 		}
