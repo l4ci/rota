@@ -113,7 +113,13 @@ func (e Env) ResetFrom(root, slot, task, newBranch, from string, checkOnly bool)
 	// that already landed on the project base, e.g. the activation commit; the
 	// slot is provisioned from that base, so they are merged, not unmerged work.
 	if from != "" && len(unmerged) > 0 {
-		pb, err := e.resetBase(root, slot, s.Base())
+		// assign routes the slot onto the milestone before it resets, so the
+		// project base is the base it was registered with, not Base().
+		home := s.HomeBase()
+		if home == "" {
+			home = s.Base()
+		}
+		pb, err := e.resetBase(root, slot, home)
 		if err != nil {
 			return res, err
 		}

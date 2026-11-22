@@ -592,7 +592,7 @@ func TestResetFromStillRefusesUnpushedWork(t *testing.T) {
 	if !ok || we.Exit != exitcode.ExitRefused {
 		t.Fatalf("err = %v", err)
 	}
-	if !strings.Contains(we.Message, "1 commit(s) not on origin/milestone/M02") || !strings.Contains(we.Message, "add mine.txt") || strings.Contains(we.Message, "add activation.txt") || strings.Contains(we.Message, "pool reap") {
+	if !strings.Contains(we.Message, "1 commit(s) not on origin/milestone/M02") || !strings.Contains(we.Message, "add mine.txt") || strings.Contains(we.Message, "add activation.txt") || strings.Contains(we.Message, "pool reap") || !strings.Contains(we.Message, "nor on the project base") {
 		t.Errorf("message = %s", we.Message)
 	}
 }
