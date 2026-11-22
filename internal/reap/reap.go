@@ -67,6 +67,9 @@ type Candidate struct {
 	Path   string
 	Reason string
 	Held   string
+	// Prunable marks a worktree candidate git lists as prunable (its
+	// directory is gone); doctor counts those through Find.
+	Prunable bool
 }
 
 // Failure is one deletion that did not happen.
@@ -425,6 +428,7 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 		name := filepath.Base(c.path)
 		cand := Candidate{ID: KindWorktree + ":" + name, Kind: KindWorktree, Name: name, Path: c.path}
 		cand.Held = s.heldWorktree(ctx, c)
+		cand.Prunable = c.isPrunable
 		if c.isPrunable {
 			cand.Reason = "git marks the checkout prunable: " + c.prunable
 		} else {

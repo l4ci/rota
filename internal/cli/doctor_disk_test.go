@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -259,7 +260,8 @@ func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
 		return git.Result{Stdout: porcelain}, nil
 	}
 	counted := 0
-	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), nil, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
+	rin := reapInput(root, "", porcelain)
+	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), &rin, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
 		counted = 1
 	}
 	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
@@ -294,5 +296,30 @@ func TestDoctorLeftoversSkipsHeldTmpEntries(t *testing.T) {
 	got := doctorLeftovers(context.Background(), run, "", t.TempDir(), &in, nil)
 	if len(got) != 1 || !strings.HasPrefix(got[0], "1 entries under ") {
 		t.Fatalf("leftovers = %q, want one line counting only the unheld entry", got)
+	}
+}
+
+// Doctor and reap build one reap.Input, so a held-rule field one sets the
+// other sets too: a field only reap fills would make doctor count differently.
+func TestDoctorReapInputMatchesReapVerbInput(t *testing.T) {
+	root, d := reapProject(t, nil, true)
+	ctx := context.Background()
+	want, _, err := d.reapInput(ctx, root, []string{"kit"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, warn := d.doctorReapInput(ctx, root)
+	if got == nil || len(warn) != 0 {
+		t.Fatalf("doctor input = %v, warn %v", got, warn)
+	}
+	if got.Root != want.Root || got.Base != want.Base || got.TempRoot != want.TempRoot || got.SystemTemp != want.SystemTemp ||
+		got.SkillCache != want.SkillCache || got.SkillCacheKeep != want.SkillCacheKeep {
+		t.Errorf("value fields differ:\ndoctor %+v\nreap   %+v", got, want)
+	}
+	has := func(in reap.Input) []bool {
+		return []bool{in.Git != nil, in.Report != nil, in.Host != nil, in.Lease != nil, in.Refresh != nil, in.ProcessUses != nil, in.Adopted != nil}
+	}
+	if !reflect.DeepEqual(has(*got), has(want)) {
+		t.Errorf("wired fields differ: doctor %v, reap %v", has(*got), has(want))
 	}
 }
