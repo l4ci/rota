@@ -2,7 +2,6 @@ package host
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -18,7 +17,8 @@ type FileSystem interface {
 	// CreateTemp creates an empty, closed file and returns its path.
 	CreateTemp(dir, pattern string) (string, error)
 	Remove(string) error
-	Glob(string) ([]string, error)
+	// Glob lists dir entries whose base name matches pattern; dir is literal.
+	Glob(dir, pattern string) []string
 	Locked(string, time.Duration, func() error) error
 	WriteFileAtomic(string, []byte) error
 }
@@ -43,8 +43,8 @@ func (OSFileSystem) CreateTemp(dir, pattern string) (string, error) {
 	}
 	return f.Name(), nil
 }
-func (OSFileSystem) Remove(p string) error                 { return os.Remove(p) }
-func (OSFileSystem) Glob(pattern string) ([]string, error) { return filepath.Glob(pattern) }
+func (OSFileSystem) Remove(p string) error             { return os.Remove(p) }
+func (OSFileSystem) Glob(dir, pattern string) []string { return fsio.GlobDir(dir, pattern) }
 func (OSFileSystem) Locked(p string, wait time.Duration, fn func() error) error {
 	return fsio.Locked(p, wait, fn)
 }

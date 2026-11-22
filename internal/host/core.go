@@ -893,10 +893,7 @@ func (h *coreHost) Snapshot(ctx context.Context) ([]Agent, error) {
 	if e != nil {
 		return nil, e
 	}
-	files, e := h.d.FS.Glob(filepath.Join(d, "*.json"))
-	if e != nil {
-		return nil, e
-	}
+	files := h.d.FS.Glob(d, "*.json")
 	owned := map[string]coreHandle{}
 	for _, p := range files {
 		b, e := h.d.FS.ReadFile(p)
