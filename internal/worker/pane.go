@@ -170,9 +170,6 @@ func lastSentinel(lines []string, gutter bool) (state, evidence string, ok, stal
 	return
 }
 
-// reWrapReply starts a line of the worker's own output.
-var reWrapReply = regexp.MustCompile(`^\s*[●⏺•]`)
-
 const noSentinelBase = "static pane, no sentinel"
 
 // noSentinelEvidence is the evidence of an idle static pane. When the text
@@ -204,34 +201,40 @@ func noSentinelEvidence(full, window []string, gutter bool, lines int) string {
 	return noSentinelBase + ": ROTA-DONE seen only inside a relay echo (masked)"
 }
 
+// reWrapStop starts a line that is never a continuation of a wrapped
+// sentinel: the worker's reply marker (the marker set of reDone), the input
+// prompt, a box border, the permission footer or a sentinel.
+var reWrapStop = regexp.MustCompile(`^\s*(?:[●⏺•❯>┃╭╰│─┌└├⏵?]|ROTA-)`)
+
 // maxWrapJoins bounds how many continuation lines joinWrapped appends.
 const maxWrapJoins = 3
 
 // joinWrapped repairs a DONE line the terminal soft-wrapped (Core hands over
-// the screen as rendered, with no unwrapped read). A line is taken as wrapped
-// when it fills the pane width, seen as another line at least as long, and
-// the next line is one unindented token outside any relay. Only a one-token
-// evidence is extended, so prose after the sentinel is never glued on.
+// the screen as rendered, with no unwrapped read). The pane width is the
+// longest line; the DONE line is wrapped only when it is exactly that wide and
+// another line (a border, a prior wrapped line) is as wide, since a wrapped
+// segment fills the width. The continuation must be one unindented token that
+// is no prompt, border, reply marker or sentinel. Only a one-token evidence is
+// extended, so prose after the sentinel is never glued on.
 func joinWrapped(lines []string, inRelay []bool, at int, ev string) string {
 	if ev == "" || strings.ContainsAny(ev, " \t") || at >= len(lines) {
 		return ev
 	}
-	full := utf8.RuneCountInString(lines[at])
-	wide := false
+	width, full := 0, utf8.RuneCountInString(lines[at])
+	peer := false
 	for j, l := range lines {
-		if j != at && utf8.RuneCountInString(l) >= full-1 {
-			wide = true
-			break
-		}
+		n := utf8.RuneCountInString(l)
+		width = max(width, n)
+		peer = peer || (j != at && n == full)
 	}
-	for n := 0; wide && n < maxWrapJoins && at+1 < len(lines); n++ {
+	for n := 0; full == width && peer && n < maxWrapJoins && at+1 < len(lines); n++ {
 		next := lines[at+1]
-		if next == "" || strings.ContainsAny(next, " \t") || inRelay[at+1] || reWrapReply.MatchString(next) {
+		if next == "" || strings.ContainsAny(next, " \t") || inRelay[at+1] || reWrapStop.MatchString(next) {
 			break
 		}
 		ev += next
 		at++
-		if utf8.RuneCountInString(next) < full-1 {
+		if utf8.RuneCountInString(next) < width {
 			break
 		}
 	}

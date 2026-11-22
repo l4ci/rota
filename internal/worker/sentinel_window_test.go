@@ -28,10 +28,27 @@ func TestClassifyDoneSoftWrapped(t *testing.T) {
 	if st != StateDone || ev != "https://github.com/o/r/pull/4093" {
 		t.Fatalf("got %s %q", st, ev)
 	}
-	// Without a full-width line nothing proves a wrap: prose after is not glued on.
-	st, ev = ClassifyFor("claude", done+"\nDone.\n", false, 60, "")
-	if st != StateDone || ev != "https://github.com/o/r/pull/4093" {
-		t.Fatalf("unwrapped: got %s %q", st, ev)
+}
+
+// Review of #4140: a continuation is glued on only when the DONE line itself
+// fills the pane width. Each case would join under an always-true width test.
+func TestClassifyDoneNeverJoinsUnrelatedNextLine(t *testing.T) {
+	const url = "ROTA-DONE s1 https://github.com/o/r/pull/1"
+	border := strings.Repeat("─", 60)
+	for name, tc := range map[string]struct{ text, want string }{
+		"prompt after done":        {"● " + url + "\n❯\n", "https://github.com/o/r/pull/1"},
+		"border after done":        {url + "\n" + strings.Repeat("─", len(url)) + "\n", "https://github.com/o/r/pull/1"},
+		"prose after short done":   {border + "\nROTA-DONE s1 pr#1\nDone.\n", "pr#1"},
+		"token after lone done":    {url + "\nDone.\n", "https://github.com/o/r/pull/1"},
+		"reply marker after done":  {strings.Repeat("─", len(url)) + "\n" + url + "\n●\n", "https://github.com/o/r/pull/1"},
+		"sentinel after done line": {strings.Repeat("─", len(url)) + "\n" + url + "\nROTA-DONE\n", "https://github.com/o/r/pull/1"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			st, ev := ClassifyFor("claude", tc.text, false, 60, "")
+			if st != StateDone || ev != tc.want {
+				t.Fatalf("got %s %q, want %q", st, ev, tc.want)
+			}
+		})
 	}
 }
 
@@ -73,7 +90,7 @@ func (h *wideHost) ReadPane(_ context.Context, _, _ string, lines int) (string, 
 func TestPollWidensWindowForDoneBeyondIt(t *testing.T) {
 	dir, f := pollRegistry(t, "herdr")
 	filler := strings.Repeat("● work\n", 80)
-	h := &wideHost{fakeHost: f, recent: filler[:len(filler)/2*0] + strings.Repeat("● work\n", 60), wide: "ROTA-DONE w1 issues:#7\n" + filler}
+	h := &wideHost{fakeHost: f, recent: strings.Repeat("● work\n", 60), wide: "ROTA-DONE w1 issues:#7\n" + filler}
 	res, err := envWith(h).Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60})
 	if err != nil || len(res.Slots) != 1 || res.Slots[0].State != StateDone {
 		t.Fatalf("poll: %+v, %v", res, err)
@@ -86,5 +103,25 @@ func TestPollWidensWindowForDoneBeyondIt(t *testing.T) {
 	}
 	if max != sentinelScanLines {
 		t.Fatalf("widest read %d, want bound %d (asked %v)", max, sentinelScanLines, h.asked)
+	}
+}
+
+// A pane unchanged since the last wider read is not read wide again.
+func TestPollWidensOncePerUnchangedPane(t *testing.T) {
+	dir, f := pollRegistry(t, "herdr")
+	h := &wideHost{fakeHost: f, recent: strings.Repeat("● idle once\n", 60), wide: strings.Repeat("● nothing\n", 90)}
+	for i := 0; i < 3; i++ {
+		if _, err := envWith(h).Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wide := 0
+	for _, n := range h.asked {
+		if n == sentinelScanLines {
+			wide++
+		}
+	}
+	if wide != 1 {
+		t.Fatalf("%d wide reads over 3 polls of an unchanged pane, want 1", wide)
 	}
 }

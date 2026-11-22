@@ -2,11 +2,13 @@ package worker
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/landing"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/l4ci/rota/internal/exitcode"
@@ -51,8 +53,13 @@ func gateRelayEcho(t pollTarget, st, ev, text string, lines int) (string, string
 // line followed by more filler than the window holds.
 const sentinelScanLines = 2000
 
+// widened remembers, per slot, the window text a wider read already covered.
+var widened sync.Map // slot\x00handle -> [32]byte
+
 // widenForSentinel re-reads a pane up to sentinelScanLines when
-// the capture fills the window and no sentinel was accepted. It keeps the wider classification only when that finds a sentinel.
+// the capture fills the window, no sentinel was accepted and the pane changed
+// since the last wider read. It keeps the wider classification only when that
+// finds a sentinel.
 func widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
 	if st == StateDone || st == StateBlocked || lines <= 0 || lines >= sentinelScanLines {
 		return st, ev
@@ -60,6 +67,13 @@ func widenForSentinel(ctx context.Context, h host.Host, t pollTarget, st, ev, te
 	if !strings.HasPrefix(ev, noSentinelBase) || len(pystr.Splitlines(text)) < lines {
 		return st, ev
 	}
+	// An idle pane that has not changed since the last wider read has nothing
+	// new to find: a wait loop re-classifies the same text every pass.
+	key, sum := t.name+"\x00"+t.handle, sha256.Sum256([]byte(text))
+	if prev, ok := widened.Load(key); ok && prev == sum {
+		return st, ev
+	}
+	widened.Store(key, sum)
 	wide, err := readPane(ctx, h, t, sentinelScanLines)
 	if err != nil || !strings.Contains(wide, "ROTA-DONE") {
 		return st, ev
