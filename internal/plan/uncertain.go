@@ -85,7 +85,7 @@ func (s fileItems) Open(id string) (OpenItem, error) {
 		if r.ID != id || !active[r.Section] {
 			continue
 		}
-		it := OpenItem{ID: id, Type: id[:1], Line: r.Raw}
+		it := OpenItem{ID: id, Type: r.Type, Line: r.Raw}
 		if !strings.EqualFold(r.Tag, "major") {
 			return it, nil
 		}

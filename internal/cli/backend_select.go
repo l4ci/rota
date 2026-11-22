@@ -17,9 +17,9 @@ import (
 // they need (any backend, file-only, issue-only) and get the refusal policy,
 // the warn wiring and the capability lookup from here.
 //
-// Documented exception: file-mode-only stores in plan and proof build
-// backlog.File{Root:} themselves; they are file stores by definition and
-// cannot import cli.
+// Documented exception: the file-mode-only proof store builds
+// backlog.File{Root:} itself; it is a file store by definition and cannot
+// import cli.
 
 // backendMode reads issues.source of the project at root: what the configured
 // backend can do (IssueIDs is the tracker test) and the loaded config. An invalid value is a corrupt
