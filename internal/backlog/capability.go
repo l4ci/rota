@@ -32,13 +32,9 @@ func (b *Issues) SetWarn(warn func(string)) { b.Warn = warn }
 // HomeIssues is b itself.
 func (b *Issues) HomeIssues() (*Issues, error) { return b, nil }
 
-// SetWarn sets the notice sink on the home sub-repo, where the milestone
-// notices arise. A home that cannot be resolved is left for the verb to hit.
-func (u *Umbrella) SetWarn(warn func(string)) {
-	if home, err := u.homeSub(); err == nil {
-		home.Warn = warn
-	}
-}
+// SetWarn sets the notice sink every sub-repo raises into, including those
+// already built.
+func (u *Umbrella) SetWarn(warn func(string)) { u.warn = warn }
 
 // HomeIssues is the home sub-repo.
 func (u *Umbrella) HomeIssues() (*Issues, error) { return u.homeSub() }
