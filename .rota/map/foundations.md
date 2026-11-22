@@ -2,7 +2,7 @@
 subsystem: foundations
 summary: leaf primitives every other package builds on: atomic files, locks and line stores, git and process execution, JSON, timestamps, path globs, bullet lines, liveness and small string helpers
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -19,17 +19,18 @@ Depends on: each other only. `git` imports `proc`; `pidlive` imports `proc`, `fs
 - internal/jsonx/jsonx.go:65 — `Decode` (key order preserved); `Marshal` at :131 matches Python `json.dumps(indent=2)`; `Obj` at :429 and `Strings` at :439 build objects
 - internal/stamp/stamp.go:18 — `Format`: UTC, second precision, trailing `Z`; `Parse` at :21; `Date` at :34 and `ParseDate` at :39 for `DateLayout` dates
 - internal/pathglob/pathglob.go:54 — `MatchEntry(Flavour, entry, file)`: entry equal to, a directory above, or a glob of the file, read `Recursive` (as `Match`) or `SingleLevel`; `MatchUnder` at :71, `Match` at :84 (`**` as a segment)
-- internal/bulletfmt/bulletfmt.go:79 — `Title`: bold title of a `- **Title** — body` bullet; `Render` at :118
+- internal/bulletfmt/bulletfmt.go:79 — `Title`: bold title of a `- **Title** — body` bullet; `Render` at :118; `ResolveTitle` at :159 (the one title-lookup rule: index, or `ErrNotFound`/`ErrMultiMatch`)
+- internal/bulletfmt/marker.go:16 — `CutMarker(line, markers)` with the marker sets `DashOnly`, `DashStar`, `AnyMarker`; `Count` at :26
 - internal/pidlive/pidlive.go:71 — `Alive`: signal 0 succeeds and the process is not a zombie
 - internal/shlex/shlex.go:16 — `Split`: Python `shlex.split` POSIX mode
 
 ## Key files / dirs
-- `internal/fsio/` — `atomic.go` (`WriteFileAtomic`), `writejson.go` (`WriteJSONAtomic`, `UpdateJSON`), `lock.go` (`Locked`, sidecar lock), `marker.go`, `lines.go`, `jsonl.go` (`AppendJSONL`, `ReadJSONL`), `readjson.go`, `readtext.go`, `temp.go`, `directory.go`, `symlink.go`, `home.go` (`ExpandHome`), `doc.go`, `fsiotest/`, `testdata/`
-- `internal/git/` — `git.go` (`Repo`, `Runner`/`Bound`, `Via`, `Base`, `CurrentBranch`, `Dirty`, `CommonDirVia`, `CommitsSince`, `WorktreePath`), `blame.go` (`BlameLineDates`, `ParseBlameDates`), `diff.go` (`ChangedPaths`, `ChangedLines`, `RemoteBase`), `worktree.go` (`ParseWorktrees`), `ancestry.go` (`IsAncestorWith`, `AncestryError`)
+- `internal/fsio/` — `atomic.go` (`WriteFileAtomic`), `writejson.go` (`WriteJSONAtomic`, `UpdateJSON`), `lock.go` (`Locked`, sidecar lock), `marker.go`, `lines.go`, `jsonl.go` (`AppendJSONL`, `ReadJSONL`), `readjson.go`, `readtext.go`, `temp.go`, `directory.go` (incl. `GlobDir`: literal dir, base-name pattern), `symlink.go`, `home.go` (`ExpandHome`), `doc.go`, `fsiotest/`, `testdata/`
+- `internal/git/` — `git.go` (`Repo`, `Runner`/`Bound`, `Via`, `Base`, `CurrentBranch`, `Dirty`, `DirtyPaths`, `StatusPaths`, `CommonDirVia`, `CommitsSince`, `WorktreePath`), `blame.go` (`BlameLineDates`, `ParseBlameDates`), `diff.go` (`ChangedPaths`, `ChangedLines`, `RemoteBase`), `worktree.go` (`ParseWorktrees`), `ancestry.go` (`IsAncestorWith`, `AncestryError`)
 - `internal/proc/` — `proc.go` (`Cmd`, `Result`, `Run`, `DefaultTimeout`, `NoTimeout`, `WaitDelay`), `duplex.go` (`Duplex`)
 - `internal/jsonx/` — `jsonx.go` ordered `Object`, `Decode`, `Marshal`, `MarshalCompact`, `PyFloat`; `testdata/`
 - `internal/pathglob/` — `pathglob.go` only (`Clean`, `Match`, `MatchEntry` with its `Flavour`, `MatchUnder`, `Valid`); callers: knowledge, change, config, overlap, gate, reviewpolicy, roundcfg
-- `internal/bulletfmt/` — `bulletfmt.go` only (`Title`, `Render`, `Parse`, `Spans`, `HasTitle`, `End`, `SplitStamp`); callers: knowledge, extknowledge (belongs with knowledge-and-map by use)
+- `internal/bulletfmt/` — `bulletfmt.go` (`Title`, `Render`, `Parse`, `Spans`, `HasTitle`, `End`, `SplitStamp`, `ResolveTitle`), `marker.go` (`CutMarker`, `Count`); callers: knowledge, extknowledge, itembody, milestone, round, cli (belongs with knowledge-and-map by use)
 - `internal/pidlive/` — `pidlive.go` (`Source`, `Real`, `Alive`, `Running`, `StartTicks`, `Tree`, `KillTree`), `marker.go` (pid-stamped marker `Codec` via `JSON`/`Text`, `Stamp`, `Marker`), `listeners.go` (`Listener`, `Real.Listeners`)
 - `internal/semver/` — `semver.go` only: the lenient rule never rejects (`CompareLenient`), `Strict` accepts only a three-part core; `Compare`, `Before`; callers: update, release, config
 - `internal/hostenv/` — `hostenv.go` (`Prefixes` and `ConfigVars`, `Drop`, `Scrub`: which env vars name a host session or point at the real harness config; `gen/` prints the prefix list to `test/lib/host-env-prefixes`); callers: worker, testiso
@@ -45,7 +46,7 @@ Go 1.22, standard library only (`os/exec`, `syscall`, `encoding/json`).
 - `AppendLine` appends under the file lock and fsyncs; `ReadLines` with `Lenient` counts rejected lines as skipped, with `Strict` stops with a `*LineError`.
 - `stamp` is the one registry timestamp format; writers call `Format`, readers call `Parse`, which reports a malformed value rather than returning the zero time.
 - `pathglob` is the one answer to "does this repo-relative file match this configured path"; callers choose `Match`, `MatchEntry` or `MatchUnder` by what the configured string means.
-- `bulletfmt` owns the bullet line shape; what goes in the stamp and where bullets live stay with each knowledge store.
+- `bulletfmt` owns the bullet line shape, the list-marker rule (`CutMarker`), the bullet count and the title lookup; what goes in the stamp and where bullets live stay with each knowledge store.
 - `pidlive` is the one rule for "is this pid running"; the host and the orchestrator lease both use it so an unreaped exited holder reads as gone.
 - `fsio` also has `LockedCtx`, `AppendLineUnique`, `UpdateJSONStrict`, `WriteFileAtomicMode`; errors callers match on: `ErrLockTimeout`, `ErrNotLanded`, `ErrUnreadable`.
 - `pystr` and `shlex` exist because Go's `\s`, `\d`, `\w` are ASCII; ports that must match Python use these.

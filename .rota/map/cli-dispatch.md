@@ -2,7 +2,7 @@
 subsystem: cli-dispatch
 summary: the rota command dispatcher, exit-code contract, error translation, per-verb gates and support fence, and the terminal UI (bare-rota palette, --ui screens)
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -25,7 +25,7 @@ Depends on (by map file): knowledge-and-map, config-and-setup (config, initproj,
 
 ## Key files / dirs
 - `cmd/rota/` — binary entry; otherwise tests (`frozen_test.go`, `scenarios_*_test.go`, `testdata/frozen`)
-- `internal/cli/` — one file group per verb family (`round_*.go`, `worker_*.go`, `knowledge*.go`, `item*.go`, `doctor*.go`, `migrate*.go`, ...); `cli.go` (dispatch), `root.go`, `tree.go`, `tree_gates.go` (`gateDecls`), `gates.go` (`Gates`), `deps*.go` (seams), `hook_identity.go`, `refusal.go`, `palette.go` (wires `palette` to verbs), `ui.go` and `view_*.go` (`--ui` screens), `testdata/`
+- `internal/cli/` — one file group per verb family (`round_*.go`, `worker_*.go`, `knowledge*.go`, `item*.go`, `doctor*.go`, `migrate*.go`, ...); `cli.go` (dispatch), `root.go`, `tree.go`, `tree_gates.go` (`gateDecls`), `gates.go` (`Gates`, `runGates(c, g, fence)`), `deps*.go` (seams), `hook_identity.go`, `refusal.go`, `palette.go` (wires `palette` to verbs), `ui.go` and `view_*.go` (`--ui` screens), `testdata/`
 - `internal/exitcode/` — exit-code table and the one exit-coded `Error`/`Refusal`; imports nothing from rota
 - `internal/exitmap/` — `exitmap.go` (`Translate`: backlog sentinels, `tracker.Error`, busy lock), `config.go` (config usage and internal classes)
 - `internal/palette/` — `palette.go` (State, Scope), `render.go`, `run.go` (`Run`, `RunTerminal`, `RunDefault`)
@@ -37,7 +37,7 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 ## Conventions specific here
 - Verb shape: `RunFunc func(c *Ctx, args []string) (Result, error)`; `Result.Data` fills the `--json` envelope, `Result.Text` is the plain output.
 - Invariants: verbs never print the envelope, stderr line or exit code themselves; `exitcode` imports nothing from rota (so cli, artifact and worker share it); `tui` Update and Render are pure, side effects go in a `Cmd`; `palette` core is pure and terminal work lives in `run.go` behind a `Config` tests fill with fakes.
-- Every verb sets its own `Command.Fence` (never inherited); a verb with none is `FenceUnclassified` and refused on a support machine, so a new verb fails safe. `gateDecls` names verb paths in the tree and `applyGates` panics on a path that is not there.
+- Every verb sets its own `Command.Fence` (never inherited; `Gates` has no Fence field, cli.go:464 passes the verb's own `Fence` to `runGates`); a verb with none is `FenceUnclassified` and refused on a support machine, so a new verb fails safe. `gateDecls` names verb paths in the tree and `applyGates` panics on a path that is not there.
 - Project root comes from `findRoot`; masked (a stray `.rota/` in a registered sub-repo) and missing roots are different errors (`rotatree.ErrMasked`, `ErrNoRoot`).
 - Verb families differ in which domain errors `exitmap.Translate` recognises (`Class` bit flags in `Options`).
 - Tests isolate from the real machine with `isolate_test.go` / `testiso` (blank import) so global config loads as absent.
@@ -48,5 +48,5 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 - `go vet ./...`
 
 ## Concerns
-- `internal/cli` is the largest package (about 404 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
+- `internal/cli` is the largest package (406 files, 148 without tests); adding a verb touches `tree.go`, its `Fence` on registration, plus its own file group.
 - `internal/cli/doctor.go`, `reap.go`, `migrate*.go`, `hook.go` are thin verbs over packages mapped in other files; the logic is not here.

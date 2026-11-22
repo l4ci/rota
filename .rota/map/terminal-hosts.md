@@ -2,7 +2,7 @@
 subsystem: terminal-hosts
 summary: terminal host abstraction (herdr, herdr-core, tmux, Orca) that runs worker sessions, and the herdr pane layout (split/tabs)
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -21,7 +21,7 @@ Depends on: fsio, git, harness, pidlive, proc, shlex, strutil, tui, repos (layou
 - internal/cli/layout.go:25 — `rota layout [split|tabs]`
 
 ## Key files / dirs
-- internal/host/ — 38 files: host.go (interface, Kind, Deps, Capabilities), policy.go, resolve.go (Resolve, Solo), herdr.go + herdr_kill/send/status.go, tmux.go, orca.go + orca_handle/kill/send.go, core.go + core_*.go (herdr-core transport: input, observe, pending, pids, spawn, watch), bootready.go, panelist.go, tabs.go, panes.go, snapshot.go, open.go, label.go, draft.go (dialog/draft), events.go, stream.go, layout.go, address.go, filesystem.go, pickup.go, sendclass.go, process_evidence.go (process identity: PID plus start time, fail-closed while alive) and process_evidence_store.go (`evidenceStore`: the one locked, enveloped on-disk store the herdr-core `core_pids.go` and Orca `orca_kill.go` backends share), delivery_evidence.go (`relayDeliveryEvidence`: relay-echo matching), dialog.go (`DialogKeys`: startup-dialog grammar)
+- internal/host/ — 38 non-test files: host.go (interface, Kind, Deps, Capabilities), policy.go, resolve.go (Resolve, Solo), herdr.go + herdr_kill/send/status.go, tmux.go (boot wait answers startup dialogs with `DialogKeys`, up to `maxBootDialogs`; a stuck pane returns a `*DialogError`), orca.go + orca_handle/kill/send.go, core.go + core_*.go (herdr-core transport: input, observe, pending, pids, spawn, watch), bootready.go, panelist.go, tabs.go, panes.go, snapshot.go, open.go, label.go, draft.go (dialog/draft), events.go, stream.go, layout.go, address.go, filesystem.go (`FileSystem.Glob(dir, pattern)` over `fsio.GlobDir`), pickup.go, sendclass.go, process_evidence.go (process identity: PID plus start time, fail-closed while alive) and process_evidence_store.go (`evidenceStore`: the one locked, enveloped on-disk store the herdr-core `core_pids.go` and Orca `orca_kill.go` backends share), delivery_evidence.go (`relayDeliveryEvidence`: relay-echo matching), dialog.go (`DialogKeys`: startup-dialog grammar)
 - internal/layout/ — grid for a wide screen: left column 40% for the orchestrator (see package comment); state via layout.State
 
 ## Stack
@@ -41,5 +41,5 @@ Go 1.22; shells out to herdr, tmux, Orca binaries only through Deps.Run (`Deps.R
 - bash test/sections/51_herdr_dispatch.sh, 113_tmux_boot_detect.sh, 93_codex_workers.sh, 100_continuous_round.sh touch hosts (smoke only at integration boundaries)
 
 ## Concerns
-- host is about 7500 non-test lines; core.go (1017) is the biggest backend, herdr.go (383, plus herdr_kill/send/status.go) and orca.go (410, plus orca_*.go) are split by concern; hand-parsed dialog keys (`DialogKeys`, dialog.go:96) depend on harness prompt text.
+- host is about 7500 non-test lines (tmux.go 400); core.go (1014) is the biggest backend, herdr.go (383, plus herdr_kill/send/status.go) and orca.go (407, plus orca_*.go) are split by concern; hand-parsed dialog keys (`DialogKeys`, dialog.go:96, `DialogError` :161) depend on harness prompt text.
 - host imports harness, and harness reads host facts through HostTraits: the seam is a copy of facts, not a shared type.

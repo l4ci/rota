@@ -2,7 +2,7 @@
 subsystem: tracker-issues
 summary: forge and issue-tracker adapters (gh, glab, Jira, Linear, Itsaplan), upstream-issue verbs, label registry, comment markers and note chunking, item-body grammar, tracker connections, bug-report log
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -13,7 +13,7 @@ Depends on: tracker -> cfgdir, config, connections, git, labels, marker, proc, p
 - internal/tracker/tracker.go:316 — `IssueTracker` interface; `Forge` at :389, `Adapter` at :474
 - internal/tracker/tracker.go:578 — `New`; `NewForge` :601, `NewIssueTracker` :616
 - internal/tracker/cli.go:290 — `CLI.Run`, the single place the forge CLI executes; `ResolveProvider` at :161
-- internal/issues/issues.go:67 — `Forge` (the port `issues` calls); `NewEnv` :53, `Label` :117, `Close` :142, `StillOpen` :190
+- internal/issues/issues.go:66 — `Forge` (the port `issues` calls); `NewEnv` :52, `Label` :121, `Close` :146, `StillOpen` :194
 - internal/marker/marker.go:23 — `Line`; `ParseNote` :124, `ParseComment` :142; `Parts` internal/marker/note.go:47 (note splitting), `Visible` internal/marker/visible.go:20
 - internal/labels/registry.go:145 — `Resolve`; `Diff` at internal/labels/diff.go:27
 - internal/connections/connections.go:144 — `Add`; `Load` :109; secrets: `Secrets.Resolve` internal/connections/secrets.go:121
@@ -21,7 +21,7 @@ Depends on: tracker -> cfgdir, config, connections, git, labels, marker, proc, p
 
 ## Key files / dirs
 - internal/tracker/ — tracker.go (types, interfaces, factory), cli.go, cli_base.go (the `base` both gh/glab adapters embed), github.go, gitlab.go, jira.go, linear.go, itsaplan*.go (itsaplan.go, itsaplan_round.go, itsaplan_write.go), rest.go, adf.go (Jira ADF), claims.go, claim_markers.go (`ClaimReader`), closing.go, comment_state.go, connect.go, merge_close.go, key.go, labels.go, issuesource.go (`issueUse`: how an `issues.source` is resolved per caller), shared.go (`firstN`, `uniq`), readcache.go, release.go, report.go, prurl.go, noissues.go, no_milestones.go, assumed.go, classify.go (failure cause and `Kind` rules table), kinds.go (own-tracker kinds and `connect add` flags), fieldsblock.go, trust.go (optional trust capabilities: authorship, push rights, current user), testseam_rotatest.go; test fakes in itsaplantest/, jiratest/, lineartest/; fixtures in testdata/
-- internal/issues/ — issues.go (provider detection, label, close, open-only filter)
+- internal/issues/ — issues.go (provider detection, label, close, open-only filter; `Env.tracker` returns the `tracker.IssueActor` beside the forge)
 - internal/labels/ — registry.go, diff.go, refpage.go; genref/ is a command rendering the label reference
 - internal/marker/ — marker.go (all marker kinds, writers and parsers), claims.go (`FoldClaims`: claim comments to a `ClaimState`), note.go (note splitting), visible.go
 - internal/itembody/ — itembody.go (section and entry grammar, `AppendDependsOn`), template.go (per-kind), change.go, tryit.go
@@ -50,4 +50,4 @@ Go 1.22, stdlib only. gh/glab through `tracker.CLI`; Jira, Linear and Itsaplan t
 - tracker is ~9.2k non-test lines (17.3k with 52 test files); github.go, jira.go and linear.go each run about 1000 to 1150 lines (gitlab.go 728).
 - Itsaplan (itsaplan*.go) are adapter variants beyond the gh/glab layer the package comment describes.
 - `assumedForge` (assumed.go:13, built by `NewIssueTracker` for a forge source whose origin names no forge, `AssumedNote` :31): reads pass through, every write refuses with `UnknownForgeError` (#3972).
-- Label-name matching has one owner: `labelRule` in labels.go (case-folding for GitHub, Linear, Itsaplan; exact for GitLab, Jira) read through `sameLabelName` (:69), `labelKey` (:61) and `hasLabel`; adapters never compare names themselves (#3971). Changing a forge's rule needs a recorded decision. `IssueEdit.NoCreateLabels` (tracker.go:274) is the inverse of `issues.autoCreateLabel`, so the zero value creates (#3973).
+- Label-name matching has one owner: `labelRule` in labels.go (case-folding for GitHub, Linear, Itsaplan; exact for GitLab, Jira) read through `sameLabelName` (:70), `labelKey` (:62) and `hasLabel` (:78), and outside the package through `IssueActor.HasLabel` (`sourceLabelRule` maps an `issues.source` to its rule; `issues.Label` matches through it); adapters never compare names themselves (#3971). Changing a forge's rule needs a recorded decision. `IssueEdit.NoCreateLabels` (tracker.go:274) is the inverse of `issues.autoCreateLabel`, so the zero value creates (#3973).

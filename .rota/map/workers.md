@@ -2,7 +2,7 @@
 subsystem: workers
 summary: worker slots, registry, gate/train/done verbs, agent harness adapters and quota reporters, subagent definitions, keepalive supervisor, usage limits
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -10,7 +10,7 @@ Standing worker slots (registry, worktrees, accounts, dispatch, merge gate and t
 Depends on: terminal-hosts (host, layout), round-orchestration (roundcfg, roundlease, ledger), hooks-guard (none: keepalive and `hook` share `keepstate` instead), gate-landing (gate, land, landfreeze, overlap), review-verdicts (verdict, proof, flakeledger, testledger), plus config, tracker, git, proc, rotatree/rotastate, fsio, jsonx, stamp, hostenv (foundations). `harness` also imports tracker-issues (`connections`, `labels`) and backlog-items (`blockedby`).
 
 ## Entry points
-- internal/cli/worker.go:64 — `workerCommands`: the `rota worker` verb tree (pool, adopt, dispatch, inbox, reply, send, poll, session, done, gate, train, account, ...)
+- internal/cli/worker.go:65 — `workerCommands`: the `rota worker` verb tree (pool, adopt, dispatch, inbox, reply, send, poll, session, done, gate, train, account, ...)
 - internal/worker/registry.go:27 — Registry: .rota/workers.json model; `LoadRegistry` :42, `LoadRegistryTolerant` :61, `SlotHolding` :566
 - internal/worker/done_after.go:16 — `doneAfter`: the one rule for "a `worker done` landed after a relay or delivery went out" (event seq when the marker has one, else a strictly later stamp)
 - internal/worker/train_verify.go:16 — `verifyRun`: the train's verify policy (verdict cache `cached` :46, `blame` :100, `forgive` :110, `bisect` :122), built in train.go (#3976)
@@ -25,7 +25,7 @@ Depends on: terminal-hosts (host, layout), round-orchestration (roundcfg, roundl
 - internal/limits/watcher.go:131 — New: watcher behind `rota limit watch`
 
 ## Key files / dirs
-- internal/worker/ — 94 non-test files (about 22400 lines): registry, pool, dispatch, account*, gate* (gate.go plus gate_run, gate_running, gate_verify, gate_merge, gate_freshness, gate_records, gate_resolve, gate_bookkeeping, gate_closing, gate_integration, gate_milestone, gate_reports, gate_stack, gate_subchecks), postgate.go (`Env.Landing`: adapts round execution to the `postgate` ports), train* (train.go, train_verify.go, train_cancel.go, train_classify.go, traincache.go, train_integration.go), done and done_after, review loop (reviewloop, reviewdepth, reviewinputs), session, pane, isolate, land lock, verify tiers, inbox, adopt, bestof, park; the verdict-meaning table moved to `landing`
+- internal/worker/ — 94 non-test files (about 22400 lines): registry, pool, dispatch, account*, gate* (gate.go plus gate_run, gate_running, gate_verify, gate_merge, gate_freshness, gate_records, gate_resolve, gate_bookkeeping, gate_closing, gate_integration, gate_milestone, gate_reports, gate_stack, gate_subchecks), postgate.go (`Env.Landing`: adapts round execution to the `postgate` ports), train* (train.go, train_verify.go, train_cancel.go, train_classify.go, traincache.go, train_integration.go), done and done_after, review loop (reviewloop, reviewdepth, reviewinputs), session, pane, isolate, land lock, verify tiers, inbox, adopt, bestof, park, reset (`reset.go`: when a slot is re-pointed at a milestone branch, unmerged commits are filtered with `git cherry` against the slot's home base, so commits already on the project base do not count); the verdict-meaning table moved to `landing`
 - internal/harness/ — adapters claude.go, codex.go, opencode.go (+ opencode_guard.js), promptsig.go (signed prompts), readiness.go, tiers.go, relay.go, panerules.go (`PaneRules`), author.go (`AuthorSources`), config.go (typed per-adapter `Config`), input_syntax.go (`InputSyntax`), quota.go (`QuotaReporter`)/claude_quota.go/claude_credentials.go/codex_quota.go, usage.go, login.go, roundread.go, startup_dialog.go, core_reporting.go and core_shell_environment.go (host-core launch/shell identity)
 - internal/agents/ — renders .claude/agents/rota-<role>.md and .codex/agents/*.toml (agents.go:116 Render); CLI internal/cli/agents.go:15
 - internal/keepalive/ — keepalive.go (supervisor), settings.go, usage.go; the state file, handoff stat and usage handoff marker it shares with the Stop hook live in `internal/keepstate`; CLI internal/cli/keepalive.go:34

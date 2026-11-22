@@ -2,7 +2,7 @@
 subsystem: config-and-setup
 summary: layered config, project seeding and registry, on-disk layout paths, version and update checks, and the one-shot migrations
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -13,22 +13,22 @@ Depends on (by map file): foundations (fsio, git, jsonx, proc, pystr, strutil, s
 
 ## Entry points
 - internal/config/config.go:24 — `Load`: schema default < global < project `config.json` < `config.local.json`
-- internal/config/keys.go:125 — `Key`: schema row (type, scope, default); `ScopeOf` at :362
+- internal/config/keys.go:126 — `Key`: schema row (type, scope, default); `ScopeOf` at :363
 - internal/config/orchestrate.go:30 — `Migrate`: round-key, accounts, merges and scope steps (preview or apply); `Reconcile` at :81, `Diagnose` at :119
 - internal/initproj/init.go:70 — `Init`: seed `.rota/` in a directory
-- internal/projects/projects.go:93 — `Register`: add a project to the machine-wide registry
+- internal/projects/projects.go:116 — `Register`: add a project to the machine-wide registry (`List` :172, `Cleanup` :240, `Remove` :254; each opens the registry through `openRegistry`)
 - internal/rotatree/rotatree.go:70 — `Dir`, `File` at :73: the in-tree `.rota/` layout; `FindRoot` in root.go:56
 - internal/rotastate/rotastate.go:26 — `CommonDirVia`: git common dir; owns `<git-common-dir>/rota/`
 - internal/rotatree/temproot.go:77 — `FindTempRoot`: the project temp root `<main checkout>/.rota/tmp` (`TempRoot` at :33, `EnclosingTempRoot` :50, `Owned` :144); creates nothing
 - internal/cfgdir/cfgdir.go:43 — `Resolve`: global config dir from an injected `Env` (`Dir` at :64, `DataDir` :75, `StateDir` :89)
-- internal/migrate/migrate.go:127 — `Run`: backlog-file to tracker issues migration
-- internal/hvmigrate/hv.go:691 — `RunHv`: the hv-era to rota project migration
+- internal/migrate/migrate.go:128 — `Run`: backlog-file to tracker issues migration
+- internal/hvmigrate/hv.go:683 — `RunHv`: the hv-era to rota project migration
 
 ## Key files / dirs
 - `internal/config/` — `config.go` (layering), `global.go` (machine-wide layer), `local.go`, `keys.go`, `schema.go`, `types.go`, `typed.go` (typed schema), `scope.go`, `settings.go`, `autonomy.go`, `change.go`, `labels.go`, `lenses.go`, `reviewdepth.go`, `verbs.go`, `fill.go`, `orchestrate.go` (Migrate, Reconcile, Diagnose), `migrate_{round,accounts,merges,scope,source,files}.go` (config key migrations), `refpage.go` + `reference.tmpl.md`, `genref/main.go` (writes the generated config reference), `testdata/`, `divergent/`
 - `internal/initproj/` — `init.go` (Init, `ErrSeed`), `seed.go`, `blocks.go`, `gitignore.go`, `signals.go`, `umbrella.go`, `check.go` (`Check`, preflight), `testdata/golden`
-- `internal/projects/` — `projects.go` (registry in `$XDG_STATE_HOME/rota`, `Register`, `List`, `Cleanup`, `Remove`), `screen.go`
-- `internal/repos/` — `repos.go` (`Load`, `Rels`, `Paths`, `Realpath` for `.rota/repos.json`), `edit.go`, `umbrella.go`
+- `internal/projects/` — `projects.go` (registry in `$XDG_STATE_HOME/rota`, `Register`, `List`, `Cleanup`, `Remove`; `registryPath` has no side effect, `openRegistry` first moves a registry left in the config dir, under the registry lock), `screen.go`
+- `internal/repos/` — `repos.go` (`Load`, `Rels`, `Paths`, `Realpath` for `.rota/repos.json`), `edit.go`, `umbrella.go` (`Umbrella`, `VerdictRepo`: the repo name keying a branch's verdicts)
 - `internal/rotatree/` — `rotatree.go` in-tree path helpers (`Config`, `Workers`, `Status`, ...), `root.go` (`FindRoot`, `AtUmbrellaRoot`, `ErrNoRoot`, `ErrMasked`), `temproot.go` the project temp root (`FindTempRoot`, `TempRoot`, `EnclosingTempRoot`, `Owned`), `walk.go`
 - `internal/rotastate/` — `rotastate.go` only: the per-checkout runtime dir (`File`, `SessionDir`, `CodexDir`, `OpencodeDir`, `MainCheckout`)
 - `internal/cfgdir/` — `cfgdir.go` only: config, data and state dir lookup over an injected `Env` (`Resolve`, `Dir`, `DataDir`, `StateDir`); imports no rota package, read by `config`, `projects` and the cli
@@ -50,6 +50,8 @@ Go 1.22, standard library; JSON files read and written through `jsonx` and `fsio
 - Packages ask `rotatree` or `rotastate` for a path instead of joining `".rota"` themselves.
 - `rotastate` resolves the git common dir symlink-safe so every worktree and spelling of a path agree.
 - A corrupt global config warns once per process (`WarnWriter`).
+- The legacy registry move returns its failure (the old file stays, the next call retries); a failed removal of a superseded old copy only warns on stderr.
+- The `autonomy.level` key is named once as `config.AutonomyLevelKey`.
 - `legacystate` is the one live dependency on the old layout and names the old spelling on purpose; `hvmigrate` can be deleted without touching it.
 - `update` reports only; it never runs the update. `toolver` never runs a tool.
 - Seeding failures wrap `ErrSeed` (cli maps to exit 70); config errors map through the `exitmap` config classes (usage 2, internal 70); migration refusals (`ErrNothingToMigrate`, `ErrUmbrellaMigrate`, `ErrBadMap`) map to exits 3 and 4.

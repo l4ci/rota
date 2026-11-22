@@ -2,7 +2,7 @@
 subsystem: knowledge-and-map
 summary: project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -19,15 +19,15 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 - internal/extknowledge/read.go:183 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:74
 - internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :55, `WriteIndex` :77, `Slugify` :14
 - internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :171
-- internal/stale/stale.go:70 — `FindReport`: stale entries by kind (`Kinds` at :24: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
+- internal/stale/stale.go:71 — `FindReport`: stale entries by kind (`Kinds` at :24: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
 - internal/frontmatter/frontmatter.go:53 — `Parse`: frontmatter map, list keys and body; `Fence` at :28, `SetField` at :126
 
 ## Key files / dirs
-- `internal/knowledge/` — `scope.go` (Store, `Umbrella`, `ErrScope`), `query.go`, `ops.go`, `paths.go` (path-scoped bullets, matched with `pathglob.Match`), `tier.go` (sidecar, tiers provisional/confirmed/deprecated), `bullet.go` (on `bulletfmt`), `hit.go` and `hitbuffer.go` (gitignored `knowledge-hits.jsonl`), `decisions.go`/`decisionwrite.go`/`decisionentry.go`, `glossary.go`, `block.go`, `instructions.go` with `skills_block.md`, `which.go`
-- `internal/extknowledge/` — external repo (`README.md`, `topics/<slug>.md`, `rota-knowledge.json`): `read.go`, `write.go`, `edit.go` (Remove, Replace), `split.go`, `fresh.go`, `hits.go` (per-machine log in the state dir), `state.go`, `stats.go`, `lifecycle.go`, `migrate.go`, `bullet.go`, `extknowledge.go`
+- `internal/knowledge/` — `scope.go` (Store, `Umbrella`, `ErrScope`), `query.go`, `ops.go`, `paths.go` (path-scoped bullets, matched with `pathglob.Match`), `tier.go` (sidecar, tiers provisional/confirmed/deprecated), `bullet.go` (on `bulletfmt`; title lookups go through `bulletfmt.ResolveTitle`, and `Stats` counts bullets with `bulletfmt.Count`), `hit.go` and `hitbuffer.go` (gitignored `knowledge-hits.jsonl`), `decisions.go`/`decisionwrite.go`/`decisionentry.go`, `glossary.go`, `block.go`, `instructions.go` with `skills_block.md`, `which.go`
+- `internal/extknowledge/` — external repo (`README.md`, `topics/<slug>.md`, `rota-knowledge.json`): `read.go`, `write.go`, `edit.go` (Remove, Replace; title lookup through `bulletfmt.ResolveTitle`), `split.go`, `fresh.go`, `hits.go` (per-machine log in the state dir), `state.go`, `stats.go`, `lifecycle.go`, `migrate.go`, `bullet.go`, `extknowledge.go`
 - `internal/topicmatch/` — `topicmatch.go`: heading, read-index and write-index matching; used by `knowledge` (`query.go`, `decisions.go`) and extknowledge read/write
 - `internal/mapqa/` — `mapqa.go`: per-name reads, managed index blocks (`MapIndexBlock`, `QAIndexBlock`, `WriteIndex`), size stats (`Stats`) and stale/cap notes (`StaleNote`, `CapNote`)
-- `internal/stale/` — `stale.go`: `Kinds`, `FindReport`, `TodoSource`
+- `internal/stale/` — `stale.go`: `Kinds`, `FindReport`, `TodoSource`; a knowledge file git cannot blame (untracked) yields none, a blame that fails to run is an error
 - `internal/frontmatter/` — `frontmatter.go`: `Parse`, `Str`, `UpdateField`, `SetField`; `render.go`: `Render` (fields back to a frontmatter block)
 
 ## Stack

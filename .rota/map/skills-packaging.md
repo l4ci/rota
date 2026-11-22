@@ -2,7 +2,7 @@
 subsystem: skills-packaging
 summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -14,7 +14,7 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 ## Entry points
 - embed.go:14 — `FS`: the embedded skills, Codex `agents/*.yaml` and shared references
 - internal/skills/set.go:38 — `Embedded`: the embedded set; `Load` at :69
-- internal/skills/install.go:275 — `Set.Install`; `Update` at :293, package func `Uninstall` at :527, `Set.Status` at :636
+- internal/skills/install.go:297 — `Set.Install`; `Update` at :315, package func `Uninstall` at :549, `Set.Status(roots, unavailable, version)` at :664
 - internal/skills/get.go:116 — `Set.Serve`: one skill or reference by name (read side)
 - internal/cli/skills.go:21 — `skillsCommands`: the `rota skills` verbs
 - internal/prompts/store.go:85 — `Open`; `Save` :252, `Adopt` :263, `Restore` :271; `Catalog` at internal/prompts/catalog.go:8
@@ -25,7 +25,7 @@ Depends on (by map file): foundations (fsio), cli-dispatch (verbs in `internal/c
 ## Key files / dirs
 - `skills/rota-*/` — 21 skill folders, each `SKILL.md` plus detail files, an optional `agents/*.yaml` (Codex invocation policy) and a `references` symlink to `../references`
 - `skills/references/` — 39 shared reference files (including `README.md`, the index); authoring rules in `authoring-conventions.md`, worker rules in `worker-contract.md`
-- `internal/skills/` — `set.go` (Set, digest), `get.go` (Serve, stubs), `install.go` (roots, manifest, install/update/uninstall/status), `extract.go` (cache dir), `links.go`, `layout.go` (`LayoutViolations`), `plugin.go` (Claude Code plugin roots), `brief.go`, `classify.go`, tests
+- `internal/skills/` — `set.go` (Set, digest), `get.go` (Serve, stubs), `install.go` (roots, manifest, install/update/uninstall/status; `codexSkipped`/`UnavailableAgents` name an agent whose user root was left out, `Status` reports them in `Report.Unavailable` and each root's digest it was judged against in `Want`), `extract.go` (cache dir), `links.go`, `layout.go` (`LayoutViolations`), `plugin.go` (Claude Code plugin roots), `brief.go`, `classify.go`, tests
 - `internal/prompts/` — store.go (revisioned `Store`: List, Show, Save, Adopt, Restore; errors `ErrConflict`, `ErrCorrupt`, `ErrNewer`), catalog.go (builtin `Section` templates)
 - `embed.go` — the only Go package at the module root (package `rota`), because `go:embed` cannot reach a parent directory
 - `plugin/skills/rota-install/SKILL.md` — the Claude Code plugin's own skill; `.claude-plugin/{plugin,marketplace}.json`

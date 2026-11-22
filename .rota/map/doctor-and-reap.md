@@ -2,7 +2,7 @@
 subsystem: doctor-and-reap
 summary: read-only preflight checks (rota doctor) and fail-closed cleanup of what a round left behind (rota reap)
 touched: 2026-11-22
-last_mapped_commit: 895c76e36c8fd9a8901d27eeee9ad3a4346b6073
+last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
 ---
 
 ## Purpose
@@ -16,18 +16,18 @@ Depends on (by map file): config-and-setup (config, rotatree, rotastate, initpro
 - internal/doctor/doctor.go:73 — `Input`: working dir, config-derived settings (incl. `RoundRosterSize`) and remote scan data the checks read (`Exec` and `Look` are injected by the caller)
 - internal/doctor/doctor.go:40 — `Check`: one report line (Name, Status, Detail, Hint)
 - internal/reap/reap.go:60 — `Kinds`: worktree, branch, tab, lease, skill cache, tmp, systmp
-- internal/reap/reap.go:264 — `Find`: list candidates for the given kinds
-- internal/reap/reap.go:516 — `Apply`: remove the provably safe candidates
-- internal/reap/census.go:41 — `TakeCensus`: read-only tally of leftovers per class, which `doctor` reports (`Census` at :18)
+- internal/reap/reap.go:267 — `Find`: list candidates for the given kinds
+- internal/reap/reap.go:520 — `Apply`: remove the provably safe candidates
+- internal/reap/census.go:41 — `TakeCensus`: read-only tally of leftovers per class, which `doctor` reports (`Census` at :18; `CensusInput.Reap` is the one `reap.Input`, and the prunable-worktree class counts through `Find`)
 - internal/repoconfig/repoconfig.go:112 — `Record`: baseline of per-key digests of repo-scope git config; `Check` at :139 names the keys that moved
 - internal/cli/doctor.go:36 — `doctorCommand`: the `rota doctor` verb (`runDoctor` at :40)
-- internal/cli/reap.go:33 — `reapCommand`: the `rota reap` verb
+- internal/cli/reap.go:34 — `reapCommand`: the `rota reap` verb
 
 ## Key files / dirs
 - `internal/doctor/` — `doctor.go` (`Input`, `Report`, `Run`, `checkTable`), `runner` and the checks split by theme: `toolchain.go` (git, jq, host), `project.go` (config dir, gitignore, stale claims, state dir), `tracker.go` (connection, forge, accounts), `hooks.go` (hook, statusline, stop hook), `skills.go`, `codex.go` (Codex homes and kinds), `disk.go` (`Disk`, repo-config drift), `decisions.go`, `labels.go`, `external_knowledge.go`, `ports.go` (`SlotBlock`), `remote.go` (`RemoteScanner`)
-- `internal/reap/` — `reap.go` (Candidate, HostOps, LeaseOps, Input, Result, `Find`, `Apply`), `ownership.go`, `tmp.go` (`ListTmp`, `StaleTmp`, `findTmp`, `removeTmp`), `systmp.go` (`findSysTmp`, `removeSysTmp`: smoke, gate and review dirs leaked in the system temp dir), `procuse.go` (`ReadProcUses`: what live processes hold by path), `census.go`
+- `internal/reap/` — `reap.go` (Candidate, HostOps, LeaseOps, Input, Result, `Find`, `Apply`), `ownership.go`, `tmp.go` (`ListTmp`, `StaleTmp`, `findTmp`, `removeTmp`), `systmp.go` (`findSysTmp`, `removeSysTmp`: smoke, gate and review dirs leaked in the system temp dir), `procuse.go` (`ReadProcUses`: what live processes hold by path, from /proc), `lsofuse.go` (`ReadLsofUses`: the same through `lsof -Fpn` where /proc is absent, macOS; fail closed), `census.go`
 - `internal/repoconfig/` — `repoconfig.go` only (`Record`, `Check`, `Drift`); also called by `rota round start`
-- `internal/cli/doctor.go`, `doctor_disk.go`, `reap.go` — verb side
+- `internal/cli/doctor.go`, `doctor_disk.go`, `reap.go` — verb side; `Deps.reapInput` (reap.go) builds the one `reap.Input` for both verbs and `Deps.doctorReapInput` (doctor_disk.go) reuses it; `Deps.processUsesReader` (deps.go) picks `ReadProcUses` when `/proc` exists, else `ReadLsofUses`
 
 ## Stack
 Go 1.22, standard library. No direct `os/exec`: `doctor` takes `Exec`/`Look`, `reap` takes injected `Git` and `HostOps`/`LeaseOps`.
@@ -37,7 +37,7 @@ Go 1.22, standard library. No direct `os/exec`: `doctor` takes `Exec`/`Look`, `r
 - Host-specific checks branch on `host.CapabilitiesForKind(...)` (a host's `Diagnose` and `Harness.HerdrIntegration`) rather than on the host name.
 - Invariants (reap, fail-closed): the live set is the round's status rows plus the host's agents matched by cwd, never the registry alone; a running agent is never killed; a candidate holding work is listed with `Held` and never deleted; registered slots, `park/*` worktrees and branches, the base branch and any branch checked out in a worktree are never candidates.
 - Tab candidates need proof no agent is under them; what a host cannot prove is not listed. Tmp candidates (entries under `<main checkout>/.rota/tmp`, only when `rotatree.Owned`) are held unless the process table (`ReadProcUses`) is readable and shows no live process holding them; systmp candidates (leaked run dirs in the system temp dir) follow the same hold rule, and the census takes its process table from `CensusInput.ProcessUses` when set.
-- `doctor` counts leftovers through `reap.TakeCensus`, so doctor and reap apply one rule for what is left behind.
+- `doctor` counts leftovers through `reap.TakeCensus` over the same `reap.Input` `rota reap` builds, so doctor and reap apply one rule for what is left behind; worktree candidates carry `Prunable` and the census counts the prunable ones that are not `Held`.
 - Tests fake git, the host and the lease; `isolate_test.go` keeps config global-free.
 
 ## Test commands
@@ -46,4 +46,4 @@ Go 1.22, standard library. No direct `os/exec`: `doctor` takes `Exec`/`Look`, `r
 
 ## Concerns
 - The checks hang off one `runner` type across the `internal/doctor/*.go` files (`doctor.go` is about 315 lines); the table of checks is `checkTable` in `doctor.go`.
-- `reap.go` is about 649 lines covering the worktree, branch, tab, lease and skill-cache kinds (ownership proofs in `ownership.go`, tmp in `tmp.go`, system temp in `systmp.go`).
+- `reap.go` is about 653 lines covering the worktree, branch, tab, lease and skill-cache kinds (ownership proofs in `ownership.go`, tmp in `tmp.go`, system temp in `systmp.go`).
