@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/l4ci/rota/internal/proc"
@@ -37,13 +36,24 @@ func TestProcessUsesReaderKeepsProcWhenPresent(t *testing.T) {
 	}}
 	uses, err := d.processUsesReader(procRoot, os.Getuid())()
 	if err != nil || len(uses) != 1 || uses[0].PID != 7 {
-		t.Fatalf("uses=%+v err=%v (uid %s)", uses, err, strconv.Itoa(os.Getuid()))
+		t.Fatalf("uses=%+v err=%v", uses, err)
 	}
 }
 
-// The census doctor counts leftovers with is d.ProcessUses, the reader reap uses.
+// defaultDeps wires the reader the host's /proc probe selects: lsof runs
+// exactly when /proc is absent. Doctor counts leftovers with this same
+// d.ProcessUses, as reap does.
 func TestDefaultDepsProcessUsesIsSelected(t *testing.T) {
-	if defaultDeps().ProcessUses == nil {
-		t.Fatal("defaultDeps leaves ProcessUses nil")
+	_, statErr := os.Stat("/proc")
+	lsofRan := false
+	d := defaultDeps()
+	d.Proc = func(context.Context, proc.Cmd) (proc.Result, error) {
+		lsofRan = true
+		return proc.Result{Stdout: "p1\nn/x\n"}, nil
+	}
+	// The /proc reader may fail on a read; only which reader ran matters.
+	_, _ = d.ProcessUses()
+	if want := statErr != nil; lsofRan != want {
+		t.Errorf("lsof ran = %v, want %v (/proc stat err: %v)", lsofRan, want, statErr)
 	}
 }
