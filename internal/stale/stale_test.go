@@ -227,20 +227,24 @@ func TestFindKnowledgeReadErrors(t *testing.T) {
 	}
 }
 
-func TestFindKnowledgeDatesThroughTheSuppliedRunner(t *testing.T) {
-	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n\n## Beta\ny\n"})
-	const sha = "0123456789012345678901234567890123456789"
-	blame := sha + " 1 1 5\nauthor A\ncommitter-time 1577923200\ncommitter-tz +0000\n\t# K\n" +
-		sha + " 2 2\n\tx\n" + sha + " 3 3\n\t## Alpha\n" + sha + " 4 4\n\tx\n" + sha + " 5 5\n\t\n"
-	beta := "fedcba9876543210fedcba9876543210fedcba98"
-	blame += beta + " 6 6 2\nauthor B\ncommitter-time 1793404800\ncommitter-tz +0000\n\t## Beta\n" +
-		beta + " 7 7\n\ty\n"
-	repo := git.Repo{Runner: func(_ context.Context, _ string, _ ...string) (git.Result, error) {
-		return git.Result{Stdout: blame}, nil
+// A blame that fails to run is an error, not "no stale topics"; a knowledge
+// file git cannot blame (untracked, non-zero exit) gives no entries.
+func TestFindKnowledgeBlameOutcomes(t *testing.T) {
+	root := project(t, map[string]string{".rota/KNOWLEDGE.md": "# K\n\n## Alpha\nx\n"})
+	far := date(t, "2999-01-01")
+	boom := errors.New("boom")
+	failing := git.Repo{Dir: root, Runner: func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{}, boom
 	}}
-	got, err := findKnowledge(repo, root, 90, date(t, "2026-11-18"))
-	if err != nil || len(got) != 1 || got[0].Name != "Alpha" || got[0].Date != "2020-01-02" {
-		t.Fatalf("findKnowledge = %v %v", got, err)
+	if got, err := FindReport(failing, root, "knowledge", 0, far, nil); !errors.Is(err, boom) || got.Entries != nil {
+		t.Errorf("blame error: report = %+v, err = %v", got, err)
+	}
+
+	root = project(t, nil)
+	os.MkdirAll(filepath.Join(root, ".rota"), 0o755)
+	os.WriteFile(filepath.Join(root, ".rota", "KNOWLEDGE.md"), []byte("# K\n\n## Alpha\nx\n"), 0o644)
+	if got, err := FindReport(git.Repo{Dir: root}, root, "knowledge", 0, far, nil); err != nil || got.Entries != nil {
+		t.Errorf("untracked file: report = %+v, err = %v", got, err)
 	}
 }
 
