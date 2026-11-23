@@ -126,6 +126,8 @@ Where it opens depends on where you ran it:
 
 `round.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
 started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
+Under tmux, the boot wait answers a trust or startup dialog, up to twice. A pane that stays stuck
+reports the dialog by name instead of a generic boot timeout.
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.
@@ -826,6 +828,10 @@ any merge a policy sends to a person come back in `needsYou`. The watch wakes yo
 have not seen, at the heartbeat, or when the autopilot stops (a wind-down or a lost lease). A gate that
 failed for a reason a person must clear is held, not re-run on every tick. Every action is one line in
 `.rota/gate-audit.jsonl` with `"gate": "autopilot"`.
+
+While an autopilot watch is armed, a hand-started `rota worker gate` or `rota worker train` exits 4
+(`blockedBy: autopilot-armed`), because the tick trains reviewed PRs itself. Pass `--ignore-autopilot`
+to override. The watch exits when `round.roster` changes, so a new roster takes effect on the next arm.
 
 A `branch-no-pr` finding appears only after a slot is done or idle with commits and no PR.
 The watch reports it once per slot state or held-issue change, and again if it disappears and returns.
