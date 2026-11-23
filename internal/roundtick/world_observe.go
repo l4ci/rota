@@ -23,7 +23,10 @@ func (o readOnlyWorld) Observing() bool                             { return tru
 func (o readOnlyWorld) TolerantRegistry() worker.Registry           { return o.w.TolerantRegistry() }
 func (o readOnlyWorld) Registry() (worker.Registry, error)          { return o.w.Registry() }
 func (o readOnlyWorld) Forge(ctx context.Context) (PRViewer, error) { return o.w.Forge(ctx) }
-func (o readOnlyWorld) Waiting() []ReadyPR                          { return o.w.Waiting() }
+func (o readOnlyWorld) FreshForge(ctx context.Context) (PRViewer, error) {
+	return o.w.FreshForge(ctx)
+}
+func (o readOnlyWorld) Waiting() []ReadyPR { return o.w.Waiting() }
 func (o readOnlyWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
 	return o.w.Reconcile(ctx)
 }
@@ -46,6 +49,9 @@ func (o readOnlyWorld) Assign(context.Context, string) (round.Assigned, error) {
 func (o readOnlyWorld) AssignBundle(context.Context, string, []string) (round.Assigned, error) {
 	return round.Assigned{}, errReadOnlyWorld
 }
+func (o readOnlyWorld) AssignTo(context.Context, string, string, []string) (round.Assigned, error) {
+	return round.Assigned{}, errReadOnlyWorld
+}
 func (o readOnlyWorld) Review() Reviewer {
 	r := o.w.Review()
 	if r == nil {
@@ -59,6 +65,9 @@ func (o readOnlyWorld) FollowUp() FollowUpSources {
 	f := o.w.FollowUp()
 	if f.Start != nil {
 		f.Start = func(context.Context, FollowUp, string, bool) error { return errReadOnlyWorld }
+	}
+	if f.StartFailed != nil {
+		f.StartFailed = func(context.Context, string, string, string, bool) error { return errReadOnlyWorld }
 	}
 	return f
 }

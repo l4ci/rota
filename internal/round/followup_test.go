@@ -261,3 +261,30 @@ func startOptsWith(set roundcfg.Settings) StartOpts {
 	o.Settings = set
 	return o
 }
+
+// #4247 AC-5: a queued PR whose head failed the gate moves to a free slot with
+// the verdict as its brief. A gate verdict is no bounce (#2858).
+func TestContinueFailedTransfersWithVerdict(t *testing.T) {
+	f, _ := followFx(t)
+	f.host.sents = nil
+	res, err := f.env.ContinueFailed(bg, f.root, f.be, ContinueFailedOpts{PR: pr7, Why: "stale: main moved under the PR", To: "dana"})
+	if err != nil || !res.Changed {
+		t.Fatalf("%+v %v", res, err)
+	}
+	if d := f.slot("dana"); d.HeldID() != "12" || d.PR() != pr7 {
+		t.Fatalf("dana: held %q pr %q", d.HeldID(), d.PR())
+	}
+	if len(f.queued()) != 0 {
+		t.Fatalf("the queued record moved with the PR: %+v", f.queued())
+	}
+	if n := worker.LoadRegistryTolerant(f.root).Bounces("12"); n != 0 {
+		t.Fatalf("bounces %d, want 0: a gate verdict is no bounce", n)
+	}
+	if len(f.host.sents) == 0 || !strings.Contains(f.host.sents[len(f.host.sents)-1], "main moved under the PR") {
+		t.Fatalf("brief lacks the verdict: %v", f.host.sents)
+	}
+	// A record that moved meanwhile refuses: nothing starts twice.
+	if _, err := f.env.ContinueFailed(bg, f.root, f.be, ContinueFailedOpts{PR: pr7, Why: "stale", To: "nia"}); !errors.As(err, new(*BlockedError)) {
+		t.Fatalf("want a refusal for a PR no longer queued, got %v", err)
+	}
+}

@@ -38,6 +38,9 @@ type World interface {
 	TolerantRegistry() worker.Registry
 	Registry() (worker.Registry, error)
 	Forge(ctx context.Context) (PRViewer, error)
+	// FreshForge is Forge past the invocation's read cache, for a read that
+	// must see a change made during the tick (a push during the gate).
+	FreshForge(ctx context.Context) (PRViewer, error)
 	// Waiting lists the queued PRs with their readiness. The tick reads it at
 	// most once, after reconciliation.
 	Waiting() []ReadyPR
@@ -56,6 +59,9 @@ type World interface {
 	Assign(ctx context.Context, id string) (round.Assigned, error)
 	// AssignBundle assigns lead with members to one slot (round.autoBundle).
 	AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error)
+	// AssignTo assigns lead (with members, if any) to the named slot, as
+	// `round assign --agent` does: a done slot's PR is queued first (#4247).
+	AssignTo(ctx context.Context, slot, lead string, members []string) (round.Assigned, error)
 	Review() Reviewer
 	// TestAudit lists the reasons a test-maintenance round is due; empty when none is.
 	TestAudit(ctx context.Context) ([]string, error)
@@ -140,7 +146,8 @@ func NewEnv(w World, cfg Config) Env {
 		p, ok := k.lookup(target)
 		return ok && p.Immediate
 	}
-	e.Head = k.head
+	e.Head = func(ctx context.Context, target string) (string, error) { return k.head(ctx, target, w.Forge) }
+	e.FreshHead = func(ctx context.Context, target string) (string, error) { return k.head(ctx, target, w.FreshForge) }
 	e.RunGate = func(ctx context.Context, target, base string) GateRun {
 		env, req, err := w.Landing(ctx, postgate.Request{Gate: &postgate.GateOpts{Slot: target, Base: base, NoWait: true}})
 		if err != nil {
@@ -180,6 +187,9 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.AssignBundle = func(ctx context.Context, lead string, members []string) ([]string, error) {
 		return k.assigned(lead)(w.AssignBundle(ctx, lead, members))
+	}
+	e.AssignTo = func(ctx context.Context, slot, lead string, members []string) ([]string, error) {
+		return k.assigned(lead)(w.AssignTo(ctx, slot, lead, members))
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit
@@ -228,7 +238,7 @@ func (k *wiring) lookup(target string) (ReadyPR, bool) {
 // head reads a target's PR identity and head SHA. A PR that is no longer open,
 // or whose base is not the one the tick would merge into, is marked to go
 // straight to the gate, which owns what to do about it.
-func (k *wiring) head(ctx context.Context, target string) (string, error) {
+func (k *wiring) head(ctx context.Context, target string, forgeOf func(context.Context) (PRViewer, error)) (string, error) {
 	t, err := k.e.Target(target)
 	if err != nil {
 		return "", err
@@ -237,7 +247,7 @@ func (k *wiring) head(ctx context.Context, target string) (string, error) {
 	if !ok {
 		return "", fmt.Errorf("cannot read PR number from %q", t.PR)
 	}
-	forge, err := k.w.Forge(ctx)
+	forge, err := forgeOf(ctx)
 	if err != nil {
 		return "", err
 	}

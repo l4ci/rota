@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -304,6 +305,13 @@ func (w *tickWorld) Forge(ctx context.Context) (roundtick.PRViewer, error) {
 	return w.c.deps().forge(ctx, w.c.deps().Config(w.root), "", w.root)
 }
 
+// FreshForge skips the read cache: the tick reads a queued PR's head after the
+// gate, and a cached head would hide a push made while the gate ran.
+func (w *tickWorld) FreshForge(ctx context.Context) (roundtick.PRViewer, error) {
+	d := w.c.deps()
+	return tracker.NewForgeFromConfig(ctx, d.Config(w.root), "", w.root, d.trackerOptions(uncachedReads("a queued PR's head is re-read after a gate that ran for minutes; a cached head hides a push made meanwhile"))...)
+}
+
 // Waiting reads the queued PRs once, using the same current-head review
 // timestamps as the nudge. A missing timestamp leaves the count rule usable.
 func (w *tickWorld) Waiting() []roundtick.ReadyPR {
@@ -380,6 +388,12 @@ func (w *tickWorld) AssignBundle(ctx context.Context, lead string, members []str
 	return w.assign(ctx, round.AssignOpts{ID: lead, Bundle: members})
 }
 
+// AssignTo is Assign onto a named slot (`round assign --agent`): the
+// autopilot's assign-ahead of a done slot, whose PR it queues (#4247).
+func (w *tickWorld) AssignTo(ctx context.Context, slot, lead string, members []string) (round.Assigned, error) {
+	return w.assign(ctx, round.AssignOpts{ID: lead, Bundle: members, Agent: slot})
+}
+
 func (w *tickWorld) assign(ctx context.Context, o round.AssignOpts) (round.Assigned, error) {
 	return w.renv.Assign(ctx, w.root, w.board, o)
 }
@@ -420,6 +434,10 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 		},
 		Start: func(ctx context.Context, f round.FollowUp, slot string, reserve bool) ([]string, error) {
 			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
+			return res.Warnings, err
+		},
+		StartFailed: func(ctx context.Context, pr, why, slot string, reserve bool) ([]string, error) {
+			res, err := w.renv.ContinueFailed(ctx, w.root, w.board, round.ContinueFailedOpts{PR: pr, Why: why, To: slot, Reserve: reserve})
 			return res.Warnings, err
 		},
 		Warn: func(m string) { w.c.Warn("%s", m) },

@@ -3,7 +3,9 @@ package roundtick
 import (
 	"context"
 	"github.com/l4ci/rota/internal/blockedby"
+	"github.com/l4ci/rota/internal/landing"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -19,6 +21,8 @@ type fu struct {
 	manual  bool
 	started []string
 	refuse  map[string]error
+	// failed lists the failed-gate starts as "pr->slot: why".
+	failed []string
 }
 
 func (x *fu) wire(f *fake, e *Env) {
@@ -41,6 +45,19 @@ func (x *fu) wire(f *fake, e *Env) {
 					f.slots[i].State, f.slots[i].Issue = "working", u.Issue
 				}
 			}
+			return nil
+		},
+		StartFailed: func(_ context.Context, pr, why, slot string, reserve bool) error {
+			if err := x.refuse[pr]; err != nil {
+				return err
+			}
+			x.failed = append(x.failed, pr+"->"+slot+": "+why)
+			for i := range f.slots {
+				if f.slots[i].Name == slot {
+					f.slots[i].State, f.slots[i].PR = "working", pr
+				}
+			}
+			f.queued = slices.DeleteFunc(f.queued, func(q string) bool { return q == pr })
 			return nil
 		},
 	}
@@ -268,5 +285,167 @@ func TestFollowUpObserveProposesOnly(t *testing.T) {
 	}
 	if strings.Join(got, ",") != "followup #7" {
 		t.Fatalf("proposed %v, want only the follow-up on the one idle slot", got)
+	}
+}
+
+// failedQueued is a round whose queued PR #11 fails the gate with verdict v at
+// head 11:abc, beside an idle dana.
+func failedQueued(v, detail string) (*fake, Env, *fu) {
+	f := &fake{
+		slots:  []Slot{{Name: "dana", State: "idle"}},
+		queued: []string{"#11"},
+		gateOut: func(string) GateRun {
+			return GateRun{Result: landing.GateResult{Verdict: v, Err: detail}}
+		},
+	}
+	e := f.env()
+	e.Head = func(context.Context, string) (string, error) { return "11:abc", nil }
+	x := &fu{}
+	x.wire(f, &e)
+	return f, e, x
+}
+
+// #4247 AC-5: under round.reviewLoop auto, a queued PR whose head failed the
+// gate with a content verdict goes to a free slot in the same tick, the
+// verdict in its brief, and leaves "needs you".
+func TestFailedQueuedHeadStartsFollowUp(t *testing.T) {
+	for _, v := range []string{landing.GateStale, landing.GateProvenanceFail, landing.GateVerifyFailed, landing.GateVacuousTests} {
+		t.Run(v, func(t *testing.T) {
+			_, e, x := failedQueued(v, "the detail")
+			r, err := Run(context.Background(), e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{"#11->dana: " + v + ": the detail"}; !reflect.DeepEqual(x.failed, want) {
+				t.Fatalf("failed starts %v, want %v", x.failed, want)
+			}
+			if got := needs(r, "gate-failed"); len(got) != 0 {
+				t.Fatalf("needs you %v, want the routed PR gone", got)
+			}
+			if !slices.ContainsFunc(r.Did, func(a Action) bool { return a.Action == "followup" && a.Target == "#11" }) {
+				t.Fatalf("did %+v, want the follow-up audited", r.Did)
+			}
+		})
+	}
+}
+
+// A failure carried from an earlier tick (held at the same head) is routed
+// too, once a slot is free.
+func TestFailedQueuedHeadCarriedIsRouted(t *testing.T) {
+	f, e, x := failedQueued(landing.GatePass, "")
+	e.FailedHeads = map[string]FailedHead{"#11": {Head: "11:abc", Why: "stale: base moved"}}
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.gated) != 0 {
+		t.Fatalf("gated %v: a held head is not gated again", f.gated)
+	}
+	if want := []string{"#11->dana: stale: base moved"}; !reflect.DeepEqual(x.failed, want) {
+		t.Fatalf("failed starts %v, want %v", x.failed, want)
+	}
+}
+
+// AC-6: under a manual review loop the failed queued PR stays with a person.
+func TestFailedQueuedHeadManualLoopNeedsYou(t *testing.T) {
+	_, e, x := failedQueued(landing.GateStale, "conflict")
+	e.FollowUp.Auto = false
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v under a manual loop", x.failed)
+	}
+	if got := needs(r, "gate-failed"); len(got) != 1 {
+		t.Fatalf("needs you %+v, want #11 gate-failed", r.NeedsYou)
+	}
+}
+
+// AC-6: an interaction is the orchestrator's to fix: no follow-up.
+func TestFailedQueuedHeadInteractionNeedsYou(t *testing.T) {
+	_, e, x := failedQueued(landing.GatePass, "")
+	e.FailedHeads = map[string]FailedHead{"#11": {Head: "11:abc", Why: landing.GateInteraction + ": fix on one of: #11, #12"}}
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v for an interaction", x.failed)
+	}
+	if got := needs(r, "train-interaction"); len(got) != 1 {
+		t.Fatalf("needs you %+v, want the interaction kept", r.NeedsYou)
+	}
+}
+
+// With no free or reserve slot the failed PR stays with a person and its
+// failure is kept, so the next tick tries again.
+func TestFailedQueuedHeadNoSlotRetries(t *testing.T) {
+	f, e, x := failedQueued(landing.GateStale, "conflict")
+	f.slots = []Slot{{Name: "dana", State: "working", Issue: "#3"}}
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v with no slot", x.failed)
+	}
+	if got := needs(r, "gate-failed"); len(got) != 1 {
+		t.Fatalf("needs you %+v, want #11 gate-failed", r.NeedsYou)
+	}
+	if got := needs(r, "followup"); len(got) != 1 || !strings.Contains(got[0], "no active slot is idle") {
+		t.Fatalf("followup items %v, want one naming the missing slot", got)
+	}
+	if _, ok := r.FailedHeads["#11"]; !ok {
+		t.Fatalf("failed heads %+v, want #11 kept for the next tick", r.FailedHeads)
+	}
+}
+
+// A head that moved between the gate and the follow-up step starts nothing:
+// the new head gets its own gate.
+func TestFailedQueuedHeadMovedRefuses(t *testing.T) {
+	_, e, x := failedQueued(landing.GateStale, "conflict")
+	calls := 0
+	e.Head = func(context.Context, string) (string, error) {
+		calls++
+		if calls == 1 {
+			return "11:abc", nil
+		}
+		return "11:def", nil
+	}
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v for a moved head", x.failed)
+	}
+}
+
+// Observation proposes the failed-gate follow-up and starts nothing.
+func TestFailedQueuedHeadObserveProposes(t *testing.T) {
+	_, e, x := failedQueued(landing.GatePass, "")
+	e.FailedHeads = map[string]FailedHead{"#11": {Head: "11:abc", Why: "stale: base moved"}}
+	e.Observe = true
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("observation started %v", x.failed)
+	}
+	if !slices.ContainsFunc(r.Proposed, func(p Proposal) bool { return p.Action.Action == "followup" && p.Target == "#11" }) {
+		t.Fatalf("proposed %+v, want the follow-up", r.Proposed)
+	}
+}
+
+// Relay 2, item 3: the moved-head check reads past the tick's read cache, so a
+// push made during the gate starts nothing.
+func TestFailedQueuedHeadReadsFreshHead(t *testing.T) {
+	_, e, x := failedQueued(landing.GateStale, "conflict")
+	e.FreshHead = func(context.Context, string) (string, error) { return "11:def", nil }
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v although the fresh head moved", x.failed)
 	}
 }

@@ -12,7 +12,9 @@ Loaded by `skills/rota-orchestrate/SKILL.md` section 3 (autopilot) and the Solo 
 Under `autonomy.level` set to `auto` ([`../references/autonomy.md`](../references/autonomy.md)), run `rota round watch --autopilot` in place of the plain watch. `roundtrip` runs the round without the tick, and `off` and `roundtrip` refuse `rota round tick` with the hint `rota config set autonomy.level auto` (`rota round tick --observe`, a read-only preview of the pass, runs under any level). Each wake it ticks:
 
 - repairs safe drift;
+- assign-ahead: a done slot whose PR it is about to land gets its next ready candidate first, so its worker does not wait for the gate. Its PR moves to the review queue and lands from there; the new branch starts on the base before the train lands, and a later conflict comes back as `stale`;
 - gates and merges finished PRs (never where `ship.mergeApproval` asks for a person, never without a pass);
+- under `round.reviewLoop` `auto`, hands a queued PR whose head failed the gate (`stale`, `provenance-fail`, `verify-failed`, `vacuous-tests`) to a free or reserve slot with the verdict as its brief; an `interaction`, or a `manual` loop, stays yours;
 - assigns ready candidates to idle slots at the default tier. With `round.autoBundle` on (unset: on under `auto`), strictly related small items go to one slot as a bundle: declared `## Touches` overlap, all Minor or Cosmetic, no dependency among them, no `decision:*` or `needs-human` label, at most `round.bundleMax` items, lowest issue number as lead. The tick output names the bundle and the shared paths. Anything looser stays your call.
 
 It returns only for unseen `autopilot.needsYou` items: a blocked, limited or dead slot, a failed gate, a done slot waiting for review verdicts (`awaiting-review`: run `/rota-review` on it), drift it won't repair, a merge a policy leaves to you. Those stay yours: answer, escalate, bounce or fix as usual.
