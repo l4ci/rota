@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
@@ -748,4 +749,67 @@ func TestMergeCommitPRIsRecordedByReconcileAndUnblocksTransfer(t *testing.T) {
 	if _, err := f.transfer("13", "ben", nil); err != nil {
 		t.Errorf("transfer still refuses after reconcile: %v", err)
 	}
+}
+
+// #4248: a manual assign may take a done slot whose own PR the running gate
+// holds. The PR moves to the review list and the gate keeps its scratch tree.
+// An unreadable holder, a busy slot and a transfer still refuse.
+func TestAssignOntoDoneSlotWhileItsPRIsGated(t *testing.T) {
+	for _, tc := range []struct {
+		name, holder string
+		busy         bool
+		refuse       bool
+	}{
+		{"holder names the slot", "ben", false, false},
+		{"holder names its PR", "#7", false, false},
+		{"empty holder", "", false, true},
+		{"unreadable holder", "freeze recovery", false, true},
+		{"slot not done", "ben", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newMoveFx(t)
+			f.finish(t, "ben", pr7)
+			if tc.busy {
+				rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("state", "busy") })
+			}
+			holdGate(t, f.root, tc.holder, func() {
+				_, err := f.assign("13", "ben")
+				if tc.refuse {
+					if err == nil || len(f.queued()) != 0 || f.slot("ben").Task() != "12" {
+						t.Errorf("assign = %v, queued %v: want a refusal that changes nothing", err, f.queued())
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("assign = %v, want the queue step to run", err)
+				}
+				if q := f.queued(); len(q) != 1 || q[0].PR != pr7 || q[0].From != "ben" {
+					t.Errorf("queued = %v, want ben's PR on the review list", q)
+				}
+				if got := f.slot("ben"); got.Task() != "13" || got.PR() != "" {
+					t.Errorf("slot = %v, want the new issue with no PR", got)
+				}
+			})
+		})
+	}
+}
+
+// #4248 AC-3: an idle slot (no branch) whose queued PR the gate holds is
+// assignable; the gate works from the queued record, not the slot.
+func TestAssignIdleSlotWhoseQueuedPRIsGated(t *testing.T) {
+	f := newMoveFx(t)
+	rawSlot(f.root, "ben", func(s *jsonx.Object) { s.Set("branch", ""); s.Set("task", "") })
+	if err := worker.Update(f.root, func(d *worker.Doc) {
+		d.QueuePR(worker.QueuedPR{Issue: "99", PR: "#484", From: "ben", Branch: "ben/99-old"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	holdGate(t, f.root, "#484", func() {
+		// The fixture's worktree carries unpushed commits, a later refusal;
+		// only the gate refusal is under test.
+		var be *BlockedError
+		if _, err := f.assign("13", "ben"); errors.As(err, &be) && be.By == landing.GateRunning {
+			t.Errorf("assign = %v, want no gate refusal", err)
+		}
+	})
 }

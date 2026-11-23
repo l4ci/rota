@@ -360,12 +360,33 @@ func (e Env) placeSlot(ctx context.Context, root string, be Board, o AssignOpts,
 	}
 	agent := slot.Name()
 	res.Agent = agent
-	if err := e.refuseWhileGateRuns(ctx, root, "assign", gateTouched(be.Capabilities().Forge, agent)...); err != nil {
+	forge := be.Capabilities().Forge
+	touched := gateTouched(forge, agent)
+	// A done slot's PR moves to the review list first, and the gate verifies in
+	// its scratch tree, so a gate on that PR does not block the move (#4248).
+	// Only a holder naming no slot or PR still does. The disposition runs
+	// first to tell the move from a refusal.
+	var (
+		resuming, queue bool
+		derr            error
+		decided         bool
+	)
+	if forge && worker.HeldID(slot.Task(), slot.Branch(), agent) != "" {
+		resuming, queue, derr = e.slotDisposition(ctx, root, be, o, slot, id)
+		decided = true
+	}
+	if decided && queue {
+		if err := e.refuseGate(ctx, root, "assign", true, touched...); err != nil {
+			return placement{}, err
+		}
+	} else if err := e.refuseWhileGateRuns(ctx, root, "assign", touched...); err != nil {
 		return placement{}, err
 	}
-	resuming, queue, err := e.slotDisposition(ctx, root, be, o, slot, id)
-	if err != nil {
-		return placement{}, err
+	if !decided {
+		resuming, queue, derr = e.slotDisposition(ctx, root, be, o, slot, id)
+	}
+	if derr != nil {
+		return placement{}, derr
 	}
 	return placement{reg: reg, slot: slot, resuming: resuming, queue: queue}, nil
 }

@@ -139,3 +139,74 @@ func TestGateLocalStageReadbackFailure(t *testing.T) {
 		t.Fatalf("read-back failure lost: result=%+v done=%v err=%v", result, done, err)
 	}
 }
+
+// #4248: a manual assign may give a done slot new work while its own PR is
+// gated. The gate's slot writes then carry the old PR or branch, so they land
+// only when the slot still holds the gated issue and branch.
+func TestGateSlotHeadWriteSkipsMovedOnSlot(t *testing.T) {
+	for _, c := range []struct {
+		name, slotTask, slotBranch, want string
+	}{
+		{"still gated", "#5", "kit/5-first", "kit/5-second"},
+		{"moved to another issue", "#9", "kit/9-other", "kit/9-other"},
+		{"parked", "", "park/kit", "park/kit"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			if err := Update(root, func(d *Doc) {
+				s := NewSlot("kit", c.slotBranch, "/w/kit", "main", "h")
+				s.SetTask(c.slotTask)
+				d.AppendSlot(s)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			run := gateRun{ctx: bg, root: root, o: GateOpts{Slot: "kit"}}
+			target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first", PR: ghURL}
+			forged := gateForgeResult{forge: stagePRForge{info: tracker.PRInfo{State: "OPEN", Head: "kit/5-second"}}}
+			if _, _, _, err := run.stepSlotHead(landing.GateResult{}, target, forged, true, nil); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadRegistryTolerant(root).Slot("kit").Branch(); got != c.want {
+				t.Fatalf("slot branch = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
+type adoptForge struct {
+	Forge
+	prs []tracker.PR
+}
+
+func (f adoptForge) OpenPRs(context.Context) ([]tracker.PR, error) { return f.prs, nil }
+
+func TestGateAdoptPRWriteSkipsMovedOnSlot(t *testing.T) {
+	for _, c := range []struct {
+		name, slotTask, slotBranch, wantPR string
+	}{
+		{"still gated", "#5", "kit/5-first", ghURL},
+		{"moved to another issue", "#9", "kit/9-other", ""},
+		{"parked", "", "park/kit", ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := gittest.NewRepo(t, "main")
+			gittest.Run(t, dir, "remote", "add", "origin", dir)
+			if err := Update(dir, func(d *Doc) {
+				s := NewSlot("kit", c.slotBranch, "/w/kit", "main", "h")
+				s.SetTask(c.slotTask)
+				d.AppendSlot(s)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			run := gateRun{e: Env{Config: diskConfig, Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
+			target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first"}
+			forged := gateForgeResult{forge: adoptForge{prs: []tracker.PR{{Branch: "kit/5-first", URL: ghURL}}}}
+			if _, _, _, err := run.stepAdoptPR(landing.GateResult{}, target, forged); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadRegistryTolerant(dir).Slot("kit").PR(); got != c.wantPR {
+				t.Fatalf("slot PR = %q, want %q", got, c.wantPR)
+			}
+		})
+	}
+}
