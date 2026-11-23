@@ -2,6 +2,7 @@ package round
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
@@ -122,6 +123,44 @@ func TestCandidateDeferredFromOpenPRWaits(t *testing.T) {
 	be.prs = nil
 	if c := get()["20"]; c.DependsOnPR != 0 || !c.Ready() {
 		t.Errorf("PR #77 merged: item is ready again: DependsOnPR=%d ready=%v", c.DependsOnPR, c.Ready())
+	}
+}
+
+// #4256 AC-1/AC-2: a `## Depends on` entry naming an open PR keeps the
+// candidate not ready with that number as the reason (the tracker answers for a
+// PR number like an issue); once the PR is merged the candidate is ready again
+// with no edit. No open-PR matching is involved, so an issue and an MR that
+// share a number on GitLab are not confused.
+func TestCandidateDependsOnOpenPR(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	body := "## Problem\n\nx\n\n## Acceptance\n\n- [ ] AC-1: fixed\n\n## Depends on\n\n- #77\n"
+	be.add("20", "held on a PR", "", false, body)
+	be.add("77", "the PR, as the tracker lists it", "", false, "")
+	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
+	get := func() Candidate {
+		t.Helper()
+		cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs {
+			if c.ID == "20" {
+				return c
+			}
+		}
+		t.Fatal("candidate 20 missing")
+		return Candidate{}
+	}
+	be.prs = []tracker.PR{{Number: 77, Branch: "ben/9-other"}}
+	c := get()
+	if c.Ready() || !strings.Contains(strings.Join(c.NotReady(), ";"), "77") {
+		t.Errorf("Depends on open PR #77: ready=%v why=%q", c.Ready(), c.NotReady())
+	}
+	be.prs = nil
+	be.items["77"].Closed = true // merged: the tracker reports it closed
+	if c := get(); !c.Ready() {
+		t.Errorf("PR #77 merged: still not ready: %q", c.NotReady())
 	}
 }
 
