@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.38.0 — 2026-11-23
+
+Autopilot gives done slots their next issue before it lands their PRs, manual assigns no longer wait for a slot's own gate, and train retries reuse a green rerun.
+
+### New
+
+- **Assign-ahead in the autopilot tick.** A done slot whose PR lands in this tick gets its next issue first, before the gate starts; the PR then lands from the review list. With `round.reviewLoop: auto`, a queued PR that fails the gate (`stale`, `provenance-fail`, `verify-failed`, `vacuous-tests`) restarts as a follow-up on a free slot, with the verdict in its brief (#4247).
+- **Assign a done slot during its own gate.** `rota round assign` can give a done slot new work while a gate or train holds its PR; the PR moves to the review list first. Trains now land each member by its verified PR and head, so an assign mid-train never changes what lands (#4248).
+- **Review depth measures against the PR's base.** `rota review depth` diffs a branch against its open PR's base (a milestone branch, say) instead of the default branch, and prints a `REVIEW-BASE` line (#4242).
+- **`rota setup` offers `test.slots`** at the roster size with the other global defaults, and writes it only on yes or `--save-global` (#4241, #4245).
+
+### Changed
+
+- A train retried after a `FLAKY` verdict reuses the green rerun of the red tier when base and heads are unchanged, instead of re-running the full verify (#4244).
+- `rota round assign` without `--agent` skips slots a running gate or train holds when another free slot exists (#4246).
+- `rota worker dispatch --relay --pr N` accepts the target slot's own PR. When another slot holds the PR, the refusal names the dispatch command to use (#4243).
+- rota-orchestrate: *Before the gate* now describes the acceptance check the gate runs (marks on the closing issue; the PR body is not read for it), and a held item is recorded as a `## Depends on` section naming `#<PR>`; it stays out of candidates until that PR merges (#4256, #4257).
+- Exit codes and JSON for scripts:
+  - A failed flake-ledger write in a train is a warning, not exit 70.
+  - `rota review depth --json` adds `baseSource` (`pr` or `default`).
+  - `rota round tick --json` can list a `needsYou` item of kind `assign-ahead`.
+
+### Stats
+
+34 commits, 48 files changed, +2179 −184 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.37.0...v0.38.0
+
 ## v0.37.0 — 2026-11-23
 
 Faster, safer merge trains, tmux workers that get past startup dialogs, and a large internal cleanup.
