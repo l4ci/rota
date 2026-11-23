@@ -1426,7 +1426,7 @@ func (e Env) bisectTrain(scratch string, res *landing.TrainResult, tips []string
 		res.Verdict, res.Unreproduced = landing.GateVerifyFailed, true
 		res.Err = fmt.Sprintf("TRAIN-FAIL unreproduced — the train fails %s once %s (%s) is merged, but %s passes alone and the failing tests passed on a rerun of the red prefix; a flake, no culprit, the first %d member(s) pass\n%s",
 			tier, c.Target, c.Branch, c.Target, green, failed.detail())
-		res.Hint = "nobody is blamed: re-run the train (an unchanged base and heads reuse the green re-run); if the same tests fail again, look at them (see the FLAKY notes)"
+		res.Hint = "nobody is blamed: re-run the train; if the same tests fail again, look at them (see the FLAKY notes)"
 	case len(class.interaction) > 0:
 		for _, i := range class.interaction {
 			res.Interaction = append(res.Interaction, res.Members[i].Target)

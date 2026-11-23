@@ -1,5 +1,8 @@
 package worker
 
+// These tests live apart from train_test.go: they share one subject (#4244, what a
+// FLAKY train leaves in the cache) and that file is already large.
+
 import (
 	"fmt"
 	"os"
@@ -7,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/flakeledger"
 	"github.com/l4ci/rota/internal/landing"
+	"github.com/l4ci/rota/internal/testledger"
 )
 
 // flakyOnceCmd fails with b2 merged until the counter file holds two bytes (the
@@ -73,5 +78,36 @@ func TestTrainFlakyLedgerWriteFailureWarns(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(res.Notes, "\n"), "flake ledger not written") {
 		t.Errorf("AC-4: want a warning note, got %q", res.Notes)
+	}
+}
+
+// A green rerun of a tier that carries an excuse or an earlier recovered flake
+// is no clean pass: bisect must not cache it, or a retry would skip a tier the
+// gate never saw pass cleanly (#4244). Only the clean case writes an entry.
+func TestBisectGreenRerunCachesOnlyCleanPass(t *testing.T) {
+	cases := []struct {
+		name   string
+		failed VerifyResult
+		cached bool
+	}{
+		{"clean", VerifyResult{Verified: []string{"a"}, Failed: []string{"b"}}, true},
+		{"excused", VerifyResult{Verified: []string{"a"}, Failed: []string{"b"}, Excluded: []testledger.Entry{{}}}, false},
+		{"flaky", VerifyResult{Verified: []string{"a"}, Failed: []string{"b"}, Flaky: []flakeledger.Entry{{}}}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := &verifyRun{
+				res: &landing.TrainResult{}, cache: &trainCache{f: trainCacheFile{Verdicts: map[string]trainCacheVerdict{}}},
+				baseSHA: "base", heads: []string{"h1"}, tips: []string{"t0", "t1"}, n: 1,
+				phase: func(string, ...any) {},
+				rerun: func(string, VerifyResult) (bool, error) { return true, nil },
+			}
+			if _, err := v.bisect("full", nil, tc.failed, "full"); err != nil {
+				t.Fatal(err)
+			}
+			if _, ok := v.cache.get(trainKey("full", "base", []string{"h1"})); ok != tc.cached {
+				t.Errorf("cached = %v, want %v", ok, tc.cached)
+			}
+		})
 	}
 }
