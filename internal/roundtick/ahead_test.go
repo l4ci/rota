@@ -297,3 +297,83 @@ func TestNoAssignToPortGatesSlotByName(t *testing.T) {
 		t.Fatalf("gated %v, want %v", f.gated, want)
 	}
 }
+
+// assignBoth is an AssignTo that takes the named slot and a second one, as a
+// best-of:2 issue does: each slot's PR joins the queue and the slot works.
+func assignBoth(f *fake, second string) func(context.Context, string, string, []string) ([]string, error) {
+	return func(_ context.Context, slot, id string, _ []string) ([]string, error) {
+		f.ahead = append(f.ahead, id+"->"+slot+"+"+second)
+		for i := range f.slots {
+			if n := f.slots[i].Name; n == slot || n == second {
+				if f.slots[i].PR != "" {
+					f.queued = append(f.queued, f.slots[i].PR)
+				}
+				f.slots[i] = Slot{Name: n, State: "working", Issue: id}
+			}
+		}
+		return []string{slot, second}, nil
+	}
+}
+
+// Relay 2, item 1: a best-of:2 assign that parks two done merge targets swaps
+// both for their queued PRs, and the second slot is not assigned again.
+func TestAssignAheadBestOfSwapsBothSlots(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}, {Name: "fox", State: "done", Issue: "#2", PR: "#12"}},
+		cands: []round.Candidate{cand("#5", true), cand("#6", true)},
+	}
+	e := f.env()
+	e.AssignTo = assignBoth(f, "fox")
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"#5->wolf+fox"}; !reflect.DeepEqual(f.ahead, want) {
+		t.Fatalf("ahead %v, want %v (fox taken by the best-of)", f.ahead, want)
+	}
+	if want := [][]string{{"main", "#11", "#12"}}; !reflect.DeepEqual(f.trained, want) || len(f.gated) != 0 {
+		t.Fatalf("trained %v gated %v, want %v (both queued refs, no slot name)", f.trained, f.gated, want)
+	}
+}
+
+// A best-of second slot that was not a merge target (awaiting review) is not
+// added to this tick's merge.
+func TestAssignAheadBestOfLeavesNonTargetOut(t *testing.T) {
+	f := &fake{
+		slots:    []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}, {Name: "fox", State: "done", Issue: "#2", PR: "#12"}},
+		cands:    []round.Candidate{cand("#5", true)},
+		awaiting: func(s Slot) string { return map[string]string{"fox": "no verdict at head"}[s.Name] },
+	}
+	e := f.env()
+	e.AssignTo = assignBoth(f, "fox")
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"main:#11"}; !reflect.DeepEqual(f.gated, want) || len(f.trained) != 0 {
+		t.Fatalf("gated %v trained %v, want %v", f.gated, f.trained, want)
+	}
+}
+
+// Relay 2, item 2: an assign refused after it queued the slot's PR still
+// swaps the target, so the PR lands this tick by its ref, not by slot name.
+func TestAssignAheadRefusalAfterQueueSwapsTarget(t *testing.T) {
+	f := &fake{
+		slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}},
+		cands: []round.Candidate{cand("#5", true)},
+	}
+	e := f.env()
+	e.AssignTo = func(_ context.Context, slot, id string, _ []string) ([]string, error) {
+		f.queued = append(f.queued, "#11")
+		f.slots[0] = Slot{Name: "wolf", State: "idle"}
+		return nil, &round.BlockedError{By: blockedby.ClaimLost, Msg: "lost the claim race"}
+	}
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"main:#11"}; !reflect.DeepEqual(f.gated, want) {
+		t.Fatalf("gated %v, want %v", f.gated, want)
+	}
+	if got := needs(r, "assign-ahead"); len(got) != 0 {
+		t.Fatalf("needs you %v: a queued PR is not missing", got)
+	}
+}

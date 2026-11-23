@@ -23,7 +23,10 @@ func (o readOnlyWorld) Observing() bool                             { return tru
 func (o readOnlyWorld) TolerantRegistry() worker.Registry           { return o.w.TolerantRegistry() }
 func (o readOnlyWorld) Registry() (worker.Registry, error)          { return o.w.Registry() }
 func (o readOnlyWorld) Forge(ctx context.Context) (PRViewer, error) { return o.w.Forge(ctx) }
-func (o readOnlyWorld) Waiting() []ReadyPR                          { return o.w.Waiting() }
+func (o readOnlyWorld) FreshForge(ctx context.Context) (PRViewer, error) {
+	return o.w.FreshForge(ctx)
+}
+func (o readOnlyWorld) Waiting() []ReadyPR { return o.w.Waiting() }
 func (o readOnlyWorld) Reconcile(ctx context.Context) (round.Outcome, error) {
 	return o.w.Reconcile(ctx)
 }

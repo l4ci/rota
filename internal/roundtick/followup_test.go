@@ -436,3 +436,16 @@ func TestFailedQueuedHeadObserveProposes(t *testing.T) {
 		t.Fatalf("proposed %+v, want the follow-up", r.Proposed)
 	}
 }
+
+// Relay 2, item 3: the moved-head check reads past the tick's read cache, so a
+// push made during the gate starts nothing.
+func TestFailedQueuedHeadReadsFreshHead(t *testing.T) {
+	_, e, x := failedQueued(landing.GateStale, "conflict")
+	e.FreshHead = func(context.Context, string) (string, error) { return "11:def", nil }
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if len(x.failed) != 0 {
+		t.Fatalf("started %v although the fresh head moved", x.failed)
+	}
+}

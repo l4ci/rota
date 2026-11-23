@@ -103,6 +103,10 @@ type Env struct {
 	// Head reads the current PR identity and head SHA. An unreadable head
 	// cannot authorize a retry of a failed attempt.
 	Head func(context.Context, string) (string, error)
+	// FreshHead is Head past the tick's read cache: a step after the merge
+	// that must see a push made during the gate reads it. Nil falls back to
+	// Head.
+	FreshHead func(context.Context, string) (string, error)
 	// RunGate and RunTrain execute the shared gate/train runs, including
 	// bookkeeping; the tick interprets their results and reports diagnostics.
 	RunGate  func(context.Context, string, string) GateRun

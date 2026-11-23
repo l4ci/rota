@@ -53,6 +53,7 @@ func (w *fakeWorld) reg() worker.Registry {
 func (w *fakeWorld) TolerantRegistry() worker.Registry                   { return w.reg() }
 func (w *fakeWorld) Registry() (worker.Registry, error)                  { return w.reg(), nil }
 func (w *fakeWorld) Forge(context.Context) (PRViewer, error)             { return w, nil }
+func (w *fakeWorld) FreshForge(context.Context) (PRViewer, error)        { return w, nil }
 func (w *fakeWorld) PRView(context.Context, int) (tracker.PRInfo, error) { return w.info, nil }
 func (w *fakeWorld) Waiting() []ReadyPR                                  { w.waits++; return w.waiting }
 func (w *fakeWorld) Reconcile(context.Context) (round.Outcome, error) {

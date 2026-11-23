@@ -41,6 +41,7 @@ func (e Env) assignAhead(ctx context.Context, r *Result, slots []Slot, targets [
 	if e.AssignTo == nil || e.Role == roundcfg.RoleSupport || e.humanMerge() {
 		return out, nil
 	}
+	slots = slices.Clone(slots) // the assigns below change the registry the snapshot came from
 	due := e.aheadSlots(ctx, r, slots, targets)
 	if len(due) == 0 {
 		return out, nil
@@ -54,20 +55,23 @@ func (e Env) assignAhead(ctx context.Context, r *Result, slots []Slot, targets [
 		if n == 0 {
 			break
 		}
+		if slices.Contains(out.taken, s.Name) { // the second slot of a best-of:2 assign
+			continue
+		}
 		if q == nil {
 			var err error
 			if q, err = e.pickQueue(ctx, r, nil, nil, false); err != nil {
 				return out, err
 			}
 		}
-		gave, stop, err := e.aheadOne(ctx, r, q, s, &out)
+		gave, agents, stop, err := e.aheadOne(ctx, r, q, s, slots, &out)
 		if err != nil {
 			return out, err
 		}
 		if len(gave) > 0 {
 			n--
 			out.used++
-			out.taken = append(out.taken, s.Name)
+			out.taken = append(out.taken, agents...)
 			out.given = append(out.given, gave...)
 		}
 		if stop {
@@ -104,11 +108,13 @@ func (e Env) aheadSlots(ctx context.Context, r *Result, slots []Slot, targets []
 }
 
 // aheadOne hands slot s the first queued item it takes and returns its id
-// with the bundle members that rode along, nothing when none went. A refusal about the item tries the next one; a refusal about
+// with the bundle members that rode along, nothing when none went, and the
+// slots the assign took (two for a best-of:2 issue; each that was a merge
+// target is swapped for its queued PR). A refusal about the item tries the next one; a refusal about
 // the slot (busy, no login, draining) leaves the slot alone; one that holds
 // every later assign (the batch, the quota, a running gate) also stops the
 // step: stop.
-func (e Env) aheadOne(ctx context.Context, r *Result, q *pickQueue, s Slot, out *aheadOutcome) (gave []string, stop bool, err error) {
+func (e Env) aheadOne(ctx context.Context, r *Result, q *pickQueue, s Slot, slots []Slot, out *aheadOutcome) (gave, agents []string, stop bool, err error) {
 	for i := 0; i < len(q.ids); i++ {
 		id := q.ids[i]
 		if q.members[id] || slices.Contains(out.given, id) {
@@ -122,35 +128,47 @@ func (e Env) aheadOne(ctx context.Context, r *Result, q *pickQueue, s Slot, out 
 		r.propose(Action{Action: "assign", Target: id, Detail: detail}, "claim, parking the done slot, queuing its PR and dispatch preflight")
 		if e.Observe {
 			e.swapTarget(r, s, out, true)
-			return append([]string{id}, b.Members...), false, nil
+			return append([]string{id}, b.Members...), []string{s.Name}, false, nil
 		}
 		var members []string
 		if bundled {
 			members = b.Members
 		}
-		_, err := e.AssignTo(ctx, s.Name, id, members)
+		agents, err := e.AssignTo(ctx, s.Name, id, members)
 		if bundled && isRefusal(err) {
+			e.swapIfQueued(s, out)
 			q.unbundle(b, i)
 			members, detail = nil, fmt.Sprintf("to %s ahead of the merge of %s", s.Name, s.PR)
-			_, err = e.AssignTo(ctx, s.Name, id, nil)
+			agents, err = e.AssignTo(ctx, s.Name, id, nil)
 		}
 		switch {
 		case err == nil:
+			if !slices.Contains(agents, s.Name) {
+				agents = append([]string{s.Name}, agents...)
+			}
 			e.audit(r, Action{Action: "assign", Target: id, Detail: detail})
 			e.swapTarget(r, s, out, false)
-			return append([]string{id}, members...), false, nil
+			for _, a := range agents {
+				if i := slices.IndexFunc(slots, func(o Slot) bool { return o.Name == a }); a != s.Name && i >= 0 && slots[i].PR != "" {
+					e.swapTarget(r, slots[i], out, false) // a best-of's second slot, when it was a merge target
+				}
+			}
+			return append([]string{id}, members...), agents, false, nil
 		case isRefusal(err):
+			// The assign may have queued the slot's PR before it refused (the
+			// claim is taken after the park): land it by its ref.
+			e.swapIfQueued(s, out)
 			if e.fillStops(r, err) {
-				return nil, true, nil
+				return nil, nil, true, nil
 			}
 			if !itemRefusal(err) {
-				return nil, false, nil
+				return nil, nil, false, nil
 			}
 		default:
-			return nil, false, fmt.Errorf("assign %s to %s: %w", id, s.Name, err)
+			return nil, nil, false, fmt.Errorf("assign %s to %s: %w", id, s.Name, err)
 		}
 	}
-	return nil, false, nil
+	return nil, nil, false, nil
 }
 
 // swapTarget replaces slot s in the merge targets with the PR the assign
@@ -162,15 +180,30 @@ func (e Env) swapTarget(r *Result, s Slot, out *aheadOutcome, observe bool) {
 	if i < 0 {
 		return
 	}
-	queued := observe
-	if !observe && e.Queued != nil {
-		queued = slices.ContainsFunc(e.Queued(), func(ref string) bool { return samePR(ref, s.PR) })
-	}
-	if !queued {
-		out.targets = slices.Delete(out.targets, i, i+1)
-		r.NeedsYou = append(r.NeedsYou, Item{Kind: "assign-ahead", Target: s.Name, Why: fmt.Sprintf("assigned ahead, but its PR %s is not in the review queue; not landed this tick, check `rota round status`", s.PR)})
+	if observe {
+		out.swap(s, i)
 		return
 	}
+	if !e.swapIfQueued(s, out) {
+		out.targets = slices.Delete(out.targets, i, i+1)
+		r.NeedsYou = append(r.NeedsYou, Item{Kind: "assign-ahead", Target: s.Name, Why: fmt.Sprintf("assigned ahead, but its PR %s is not in the review queue; not landed this tick, check `rota round status`", s.PR)})
+	}
+}
+
+// swapIfQueued swaps slot s in the merge targets for its PR when the review
+// queue holds that PR, and says whether it did. A slot that is no target is
+// left alone.
+func (e Env) swapIfQueued(s Slot, out *aheadOutcome) bool {
+	i := slices.Index(out.targets, s.Name)
+	if i < 0 || e.Queued == nil || !slices.ContainsFunc(e.Queued(), func(ref string) bool { return samePR(ref, s.PR) }) {
+		return false
+	}
+	out.swap(s, i)
+	return true
+}
+
+// swap replaces target i, slot s, with s's PR ref.
+func (out *aheadOutcome) swap(s Slot, i int) {
 	if slices.Contains(out.targets, s.PR) {
 		out.targets = slices.Delete(out.targets, i, i+1)
 	} else {

@@ -16,6 +16,7 @@ import (
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/roundtick"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/worker"
 )
 
@@ -302,6 +303,13 @@ func (w *tickWorld) TolerantRegistry() worker.Registry  { return worker.LoadRegi
 func (w *tickWorld) Registry() (worker.Registry, error) { return worker.LoadRegistry(w.root) }
 func (w *tickWorld) Forge(ctx context.Context) (roundtick.PRViewer, error) {
 	return w.c.deps().forge(ctx, w.c.deps().Config(w.root), "", w.root)
+}
+
+// FreshForge skips the read cache: the tick reads a queued PR's head after the
+// gate, and a cached head would hide a push made while the gate ran.
+func (w *tickWorld) FreshForge(ctx context.Context) (roundtick.PRViewer, error) {
+	d := w.c.deps()
+	return tracker.NewForgeFromConfig(ctx, d.Config(w.root), "", w.root, d.trackerOptions(uncachedReads("a queued PR's head is re-read after a gate that ran for minutes; a cached head hides a push made meanwhile"))...)
 }
 
 // Waiting reads the queued PRs once, using the same current-head review

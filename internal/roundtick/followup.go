@@ -270,8 +270,14 @@ func (e Env) failedFollowUps(ctx context.Context, r *Result, started int, taken 
 	if len(r.gateFailed) == 0 && len(r.FailedHeads) == 0 {
 		return started, taken, nil
 	}
+	// The gate ran for minutes under this tick's read cache: a push made
+	// meanwhile must show, so the head is read past it.
+	readHead := e.Head
+	if e.FreshHead != nil {
+		readHead = e.FreshHead
+	}
 	for _, ref := range e.Queued() {
-		head, err := e.Head(ctx, ref)
+		head, err := readHead(ctx, ref)
 		if err != nil || head == "" {
 			continue
 		}
