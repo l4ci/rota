@@ -125,6 +125,41 @@ func TestCandidateDeferredFromOpenPRWaits(t *testing.T) {
 	}
 }
 
+// #4256 AC-1/AC-2: a `## Depends on` entry that is an open PR holds the
+// candidate with that PR as the reason; once the PR leaves the open set the
+// candidate is ready again with no edit.
+func TestCandidateDependsOnOpenPR(t *testing.T) {
+	root := newRepo(t, nil)
+	be := &fakeRemote{}
+	body := "## Problem\n\nx\n\n## Acceptance\n\n- [ ] AC-1: fixed\n\n## Depends on\n\n- #77\n"
+	be.add("20", "held on a PR", "", false, body)
+	be.add("77", "the PR, as the tracker lists it", "", false, "")
+	e := Env{Git: git.Exec, Base: "main", Forge: be.asForge(), Worker: wk(worker.Env{Getenv: noEnv, Config: diskConfig}), Lease: fakeLease("h", 100)}
+	get := func() Candidate {
+		t.Helper()
+		cs, err := e.RoundCandidates(bg, root, be, roundcfg.Settings{Scope: roundcfg.ScopeOpen}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range cs {
+			if c.ID == "20" {
+				return c
+			}
+		}
+		t.Fatal("candidate 20 missing")
+		return Candidate{}
+	}
+	be.prs = []tracker.PR{{Number: 77, Branch: "ben/9-other"}}
+	if c := get(); c.DependsOnPR != 77 || c.Ready() {
+		t.Errorf("Depends on open PR #77: DependsOnPR=%d ready=%v", c.DependsOnPR, c.Ready())
+	}
+	be.prs = nil
+	be.items["77"].Closed = true // merged: the tracker reports it closed
+	if c := get(); c.DependsOnPR != 0 || !c.Ready() {
+		t.Errorf("PR #77 gone: DependsOnPR=%d ready=%v", c.DependsOnPR, c.Ready())
+	}
+}
+
 // #1545 AC-1: a source PR closed without merging leaves the open set, which
 // releases the deferred item on purpose: no code will arrive to wait for.
 func TestCandidateDeferredReleasedWhenSourcePRClosedUnmerged(t *testing.T) {
