@@ -390,3 +390,21 @@ func TestDispatchRelayUnknownPRRefusalNamesTheWay(t *testing.T) {
 		t.Fatalf("want exit 4 naming how to target the relay, got %v", err)
 	}
 }
+
+// A PR held by another slot is refused with the command that reaches it.
+func TestDispatchRelayPRHeldByOtherSlotNamesDispatch(t *testing.T) {
+	dir := gittest.Project(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
+	e := envWith(tmuxFake())
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateSlot(dir, "w2", func(s *Slot) { s.SetPR(relayQueuedPR) }); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Relay: true, PR: "9"})
+	want := "rota worker dispatch w2 --relay --pr 9"
+	if exitOf(err) != exitcode.ExitRefused || err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("want exit 4 containing %q, got %v", want, err)
+	}
+}

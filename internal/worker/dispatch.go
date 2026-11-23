@@ -974,7 +974,7 @@ func relayPRRefusal(reg Registry, o DispatchOpts) string {
 	if n, ok := PRRefNumber(o.PR); ok {
 		for _, other := range reg.Slots() {
 			if sn, ok := PRRefNumber(other.PR()); ok && sn == n && other.Name() != o.Slot {
-				return fmt.Sprintf("%s: slot '%s' holds it — relay with --agent %s", msg, other.Name(), other.Name())
+				return fmt.Sprintf("%s: slot '%s' holds it — relay to that slot: rota worker dispatch %s --relay --pr %s", msg, other.Name(), other.Name(), o.PR)
 			}
 		}
 	}
