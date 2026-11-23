@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.37.0 — 2026-11-23
+
+Faster, safer merge trains, tmux workers that get past startup dialogs, and a large internal cleanup.
+
+### New
+
+- **Narrower train re-runs.** With `test.rerunCheck` set (a command template with `{check}`), a train that goes red re-runs and bisects only the failing check rather than the whole gate. For this to work, the gate log must print `FAIL <check> (exit N)` lines. `test.goCheck` (default `gotest`) names the Go check, so a red Go check can narrow further to the failing tests.
+- **Smoke section numbers.** The new `test.smokeSectionsDir` key lets `rota round assign` reserve the next free smoke section number for an issue that needs one, and the brief tells the worker which number it got. The key is empty by default, which turns reservation off. Before, rota reserved numbers in `test/sections` without asking. To keep that behaviour, run `rota config set test.smokeSectionsDir test/sections`.
+- **`rota init` seeds `test.slots`** from the roster size when the global value is unset, so the workers of a round do not queue on one test slot. `rota doctor` warns when a round still shares a single slot. `rota setup` does not seed it yet (#4241).
+- **tmux workers answer startup dialogs.** The boot wait clears a trust or startup dialog up to twice. A pane that stays stuck reports the dialog by name instead of a generic boot timeout.
+- **`rota reap` cleans leaked system temp dirs** through a new `systmp` kind. On hosts without `/proc`, reap and doctor read the process table through `lsof`.
+
+### Changed
+
+- **Manual gates and trains refuse while an autopilot watch is armed.** The tick trains reviewed PRs itself, so a hand-started `worker gate` or `worker train` would race it. Pass `--ignore-autopilot` to override.
+- The autopilot watch exits when `round.roster` changes, so a new roster takes effect on the next arm.
+- The `--since` review package leaves base-merge changes out of its diff. It also refuses a local head that differs from an existing `origin/<branch>`. Before, that mismatch was caught only at `verdict add`, after the review had run.
+- `rota release changelog` refuses to write while an `Unreleased` block is left over.
+- `rota config` warns when a list in the local config hides values from the global config.
+- `rota skills status` lists agents it cannot install for, and doctor reads the same wanted-skills digest.
+- Exit-code changes for scripts:
+  - Manual `worker gate`/`train` under an armed autopilot exit 4 with `blockedBy: autopilot-armed`.
+  - A leftover `Unreleased` block makes `release changelog` exit 3.
+  - Review packaging exits 3 on a head that does not match `origin/<branch>`.
+  - `knowledge add`/`amend`/`replace` exit 4 on text that spans more than one line or contains `-->`.
+  - An ambiguous `knowledge rename-topic` title exits 4.
+  - A failed proof save exits 5.
+  - A failed projects registry move and a failed blame in `backlog stale --kind knowledge` now exit 70 instead of passing in silence.
+- New JSON fields:
+  - `testSlotsSeeded` in the `rota init` output.
+  - `logPath` and `saved` in `proof record` output.
+  - `autopilot` in the round-watch marker.
+
+### Fixed
+
+- Done detection finds a `ROTA-DONE` line that wrapped or scrolled deep in the pane, and says why when none matched.
+- Resetting a slot onto a milestone branch ignores commits already merged into the base, and reuses an existing task branch.
+- The gate retries JS runner failures and rota test-lock output as infrastructure flakes, and starts large Go packages alongside the other checks.
+- The projects registry migration runs under the lock and reports a failed move.
+
+### Internal
+
+Ongoing deepening work: item-ID grammar moved to `internal/itemid`, bullet title and marker handling consolidated in `bulletfmt`, a single `issues.source` resolver, typed debug-counter readers, a split worker guard, and fewer exported test-only helpers. The contract docs, knowledge file and project map are restamped.
+
+## Stats
+155 commits, 461 files changed, +10675 −4136 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.36.1...v0.37.0
+
 ## v0.36.1 — 2026-11-20
 
 Safer worker and host handling, stricter doctor checks, and a large round of internal cleanup.
@@ -576,7 +625,6 @@ Orca as a worker host, a one-line agent install, and stricter gates on what coun
 
 **Full changelog:** https://github.com/l4ci/rota/compare/v0.26.0...v0.27.0
 
-## Unreleased
 
 ### New
 
