@@ -2,6 +2,7 @@ package config
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -74,4 +75,20 @@ func TestWarningsAndUnknown(t *testing.T) {
 	if got := Unknown(root); !reflect.DeepEqual(got, []string{"legacy.x", "zzz" + LocalMark}) {
 		t.Errorf("Unknown = %v", got)
 	}
+}
+
+// #4245: the test.slots description names the init seed and the doctor warning.
+func TestTestSlotsDescribesSeedAndWarning(t *testing.T) {
+	for _, k := range Keys {
+		if k.Name != "test.slots" {
+			continue
+		}
+		for _, want := range []string{"rota init seeds an unset global value from the roster size", "rota doctor warns"} {
+			if !strings.Contains(k.Desc, want) {
+				t.Errorf("test.slots description lacks %q", want)
+			}
+		}
+		return
+	}
+	t.Fatal("no test.slots key")
 }
