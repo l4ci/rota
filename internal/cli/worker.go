@@ -445,7 +445,7 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 	body := fs.String("body-file", "", "brief to send; - reads stdin")
 	task := fs.String("task", "", "task id: recreates the slot's session and cuts its branch")
 	relay := fs.Bool("relay", false, "inject into the running session as an orchestrator relay")
-	pr := fs.String("pr", "", "with --relay: log against this open PR on the round's review list")
+	pr := fs.String("pr", "", "with --relay: log against this open PR on the round's review list, or the slot's own PR")
 	round := fs.String("round", "", "orchestrator round for the signature")
 	through := fs.String("review-through", "", "with --relay: RFC 3339 time the relayed review input was read; input dated before it counts as seen")
 	boot := fs.Int("boot-timeout", 60, "seconds to wait for the session to boot")

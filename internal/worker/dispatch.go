@@ -593,15 +593,25 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	}
 	reg, s, h := t.reg, t.slot, t.h
 	if o.PR != "" {
-		q := reg.QueuedPR(o.PR)
-		if q == nil {
-			return res, fail(exitcode.ExitRefused, "relay PR is not on the round's review list")
+		// The PR is on the review list, or it is the target slot's own PR (a
+		// slot that reported done holds it until it is parked or reassigned).
+		// The slot's own PR keeps slot routing: the relay is logged on the slot.
+		ref, queued := "", false
+		if q := reg.QueuedPR(o.PR); q != nil {
+			ref, queued = q.PR, true
+		} else if on, ok := PRRefNumber(o.PR); ok && s.PR() != "" {
+			if sn, ok := PRRefNumber(s.PR()); ok && sn == on {
+				ref = s.PR()
+			}
 		}
-		f, _, refusal := e.openForge(ctx, root, q.PR, ParseGateConfig(t.cfg), tracker.ForgeReader)
+		if ref == "" {
+			return res, fail(exitcode.ExitRefused, relayPRRefusal(reg, o))
+		}
+		f, _, refusal := e.openForge(ctx, root, ref, ParseGateConfig(t.cfg), tracker.ForgeReader)
 		if refusal != nil {
 			return res, fail(exitcode.ExitRefused, "cannot verify relay PR: "+refusal.err.Error())
 		}
-		n, _ := PRRefNumber(q.PR)
+		n, _ := PRRefNumber(ref)
 		pr, err := f.PRView(ctx, n)
 		if err != nil {
 			return res, fail(exitcode.ExitRefused, "cannot verify relay PR: "+err.Error())
@@ -609,7 +619,9 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		if !strings.EqualFold(pr.State, "OPEN") {
 			return res, fail(exitcode.ExitRefused, "relay PR is not open")
 		}
-		t.relayPR = q.PR
+		if queued {
+			t.relayPR = ref
+		}
 	}
 	// A relay is logged where the gate of its PR reads it: on the slot while it
 	// holds an issue or PR, else on the PR queued from it. With neither there is
@@ -953,4 +965,18 @@ func recordWorkspaces(root string, st layout.State) error {
 func readText(ctx context.Context, h host.Host, slot, handle string, lines int) string {
 	text, _ := h.ReadPane(ctx, slot, handle, lines)
 	return text
+}
+
+// relayPRRefusal explains a `--relay --pr` target that is neither on the review
+// list nor the PR of the slot the relay goes to, and says how to aim it.
+func relayPRRefusal(reg Registry, o DispatchOpts) string {
+	msg := "relay PR is not on the round's review list"
+	if n, ok := PRRefNumber(o.PR); ok {
+		for _, other := range reg.Slots() {
+			if sn, ok := PRRefNumber(other.PR()); ok && sn == n && other.Name() != o.Slot {
+				return fmt.Sprintf("%s: slot '%s' holds it — relay to that slot: rota worker dispatch %s --relay --pr %s", msg, other.Name(), other.Name(), o.PR)
+			}
+		}
+	}
+	return msg + " and is not the PR of slot '" + o.Slot + "' — relay without --pr to reach the slot, or queue the PR first (park or reassign its slot)"
 }

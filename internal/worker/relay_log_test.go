@@ -346,3 +346,65 @@ func testRelaySurvivesParkingAndReassignment(t *testing.T, pr string) {
 		})
 	}
 }
+
+// A slot that reported done holds its PR on the slot record and has no queued
+// record yet. `--relay --pr` for that PR goes out and is logged on the slot,
+// where the gate of the PR reads it (#4243).
+func TestDispatchRelayPRHeldBySlotWithoutQueueRecord(t *testing.T) {
+	w := newWorld(t, "")
+	e := w.env(false)
+	e.NewHost = envWith(tmuxFake()).NewHost
+	if err := Update(w.dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetTask("5")
+		s.SetBranch("w1")
+		s.SetHandle("rota:w1")
+		s.SetPR(ghURL)
+		s.Raw().Set("worktree", w.worker)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Dispatch(bg, w.dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "use the cache\n"), Relay: true, PR: "7"}); err != nil {
+		t.Fatalf("relay to the slot's own PR: %v", err)
+	}
+	if n := len(LoadRegistryTolerant(w.dir).Slot("w1").Relays()); n != 1 {
+		t.Errorf("slot relays = %d, want 1", n)
+	}
+}
+
+// A PR in neither place stays refused, and the refusal says how to aim a relay.
+func TestDispatchRelayUnknownPRRefusalNamesTheWay(t *testing.T) {
+	w := newWorld(t, "")
+	e := w.env(false)
+	e.NewHost = envWith(tmuxFake()).NewHost
+	if err := Update(w.dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetTask("6")
+		s.SetHandle("rota:w1")
+		s.Raw().Set("worktree", w.worker)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.Dispatch(bg, w.dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Relay: true, PR: "7"})
+	if exitOf(err) != exitcode.ExitRefused || !strings.Contains(err.Error(), "without --pr") {
+		t.Fatalf("want exit 4 naming how to target the relay, got %v", err)
+	}
+}
+
+// A PR held by another slot is refused with the command that reaches it.
+func TestDispatchRelayPRHeldByOtherSlotNamesDispatch(t *testing.T) {
+	dir := gittest.Project(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
+	e := envWith(tmuxFake())
+	if _, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "12"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := UpdateSlot(dir, "w2", func(s *Slot) { s.SetPR(relayQueuedPR) }); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "x"), Relay: true, PR: "9"})
+	want := "rota worker dispatch w2 --relay --pr 9"
+	if exitOf(err) != exitcode.ExitRefused || err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("want exit 4 containing %q, got %v", want, err)
+	}
+}
