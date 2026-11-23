@@ -463,16 +463,23 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 				extra = append(extra, l)
 			}
 		}
+		prNum := openPRBase(c, &t)
 		res, why, err := branchReviewDepth(c, t, extra)
 		if err != nil {
 			return Result{}, err
 		}
 		depth := res.Depth
-		data := jsonx.Obj("branch", t.Branch, "base", t.Base, "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
+		data := jsonx.Obj("branch", t.Branch, "base", t.Base, "baseSource", baseSource(prNum), "depth", string(depth), "signal", res.Signal, "why", why, "changedLines", res.Changed, "labels", res.Labels)
 		if res.Tier.Tier != "" {
 			data.Set("tier", string(res.Tier.Tier))
 		}
 		text := fmt.Sprintf("REVIEW-DEPTH %s — %s (%s)", t.Branch, depth, why)
+		// Names the span that was measured: the open PR's base or the default.
+		if prNum > 0 {
+			text += fmt.Sprintf("\nREVIEW-BASE %s — %s (open PR #%d)", t.Branch, t.Base, prNum)
+		} else {
+			text += fmt.Sprintf("\nREVIEW-BASE %s — %s (default base)", t.Branch, t.Base)
+		}
 		// Printed only when a label asks about it, so a Minor PR's output is
 		// unchanged.
 		if res.Cross != "" {
@@ -520,6 +527,47 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 		}
 		return Result{Data: data, Text: text}, nil
 	}
+}
+
+// openPRBase points t.Base at the base branch of t.Branch's open PR and returns
+// the PR number, so a PR into a milestone branch is measured against that branch
+// and not against main. It returns 0 and leaves t.Base alone when there is no
+// open PR, the forge cannot be read (the Door read reports that itself) or the
+// PR's base is not a ref in this checkout.
+func openPRBase(c *Ctx, t *branchTarget) int {
+	root, err := backlogScope(c)
+	if err != nil {
+		return 0
+	}
+	f, err := c.deps().forge(c.Context(), c.projectConfig(root), "", root)
+	if err != nil {
+		return 0
+	}
+	prs, err := f.OpenPRs(c.Context())
+	if err != nil {
+		return 0
+	}
+	r := c.deps().Repo(t.Dir)
+	for _, pr := range prs {
+		// A fork PR may reuse the branch name: only the project's own PR counts.
+		if pr.Branch != t.Branch || pr.Base == "" || pr.Base == t.Branch || !pr.SameRepository {
+			continue
+		}
+		for _, ref := range []string{pr.Base, "origin/" + pr.Base} {
+			if ok, err := r.Verify(c.Context(), ref+"^{commit}"); err == nil && ok {
+				t.Base = ref
+				return pr.Number
+			}
+		}
+	}
+	return 0
+}
+
+func baseSource(prNum int) string {
+	if prNum > 0 {
+		return "pr"
+	}
+	return "default"
 }
 
 // branchReviewDepth resolves the depth ship.review picks for t, from its diff
