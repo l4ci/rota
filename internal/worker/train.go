@@ -1138,7 +1138,14 @@ func (t *trainRun) land(p trainPlan, result landing.TrainResult, prefix trainVer
 		// the member's state unknown, so it takes effect before the next member.
 		shielded := e
 		shielded.Ctx = context.WithoutCancel(e.Ctx)
-		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: m.Target, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round, in: &p.in})
+		// Land the PR the train verified, not whatever its slot holds now: a
+		// manual assign may have parked the slot mid-train (#4248). The PR ref
+		// resolves to the slot that still records it, else to its review record.
+		landSlot, landTip := m.Target, ""
+		if m.PR != "" && p.remote {
+			landSlot, landTip = m.PR, heads[i]
+		}
+		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: landSlot, LandVerifiedTip: landTip, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round, in: &p.in})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
 		res.Notes = appendNew(res.Notes, gr.Warnings...)
 		res.Changed = res.Changed || gr.Changed
