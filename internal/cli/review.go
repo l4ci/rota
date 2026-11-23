@@ -549,7 +549,8 @@ func openPRBase(c *Ctx, t *branchTarget) int {
 	}
 	r := c.deps().Repo(t.Dir)
 	for _, pr := range prs {
-		if pr.Branch != t.Branch || pr.Base == "" {
+		// A fork PR may reuse the branch name: only the project's own PR counts.
+		if pr.Branch != t.Branch || pr.Base == "" || pr.Base == t.Branch || !pr.SameRepository {
 			continue
 		}
 		for _, ref := range []string{pr.Base, "origin/" + pr.Base} {
@@ -558,7 +559,6 @@ func openPRBase(c *Ctx, t *branchTarget) int {
 				return pr.Number
 			}
 		}
-		return 0
 	}
 	return 0
 }

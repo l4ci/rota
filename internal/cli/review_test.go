@@ -1027,7 +1027,7 @@ func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
 	if d, _ := run(); d["base"] != "main" || d["changedLines"].(float64) != 3 {
 		t.Errorf("no open PR keeps the default base: %v", d)
 	}
-	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","baseRefName":"m/x","url":"u","body":"Door: two-way."}]`
+	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","baseRefName":"m/x","url":"u","body":"Door: two-way.","isCrossRepository":false}]`
 	d, _ := run()
 	if d["base"] != "m/x" || d["changedLines"].(float64) != 1 || d["baseSource"] != "pr" {
 		t.Errorf("open PR base must be the span base: %v", d)
@@ -1035,5 +1035,10 @@ func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
 	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small")
 	if !strings.Contains(o.stdout, "REVIEW-BASE nia/6-small — m/x (open PR #9)") {
 		t.Errorf("text output must name the base: %s", o.stdout)
+	}
+	// a fork PR reusing the branch name must not pick the base
+	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","baseRefName":"m/x","url":"u","body":"Door: two-way.","isCrossRepository":true}]`
+	if d, _ := run(); d["base"] != "main" || d["baseSource"] != "default" {
+		t.Errorf("a fork PR must not set the base: %v", d)
 	}
 }
