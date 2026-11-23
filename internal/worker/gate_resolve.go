@@ -130,9 +130,23 @@ func (runner gateRun) stepAdoptPR(result landing.GateResult, target GateTarget, 
 	g.pr, g.target.PR, g.res.PR = adopted, adopted, adopted
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("PR-ADOPTED %s — the slot recorded no PR; open PR %s is headed by %s", g.o.Slot, adopted, g.branch))
 	if !g.o.CheckOnly {
-		UpdateSlot(g.root, g.o.Slot, func(s *Slot) { s.SetPR(adopted) })
+		held := HeldID(g.target.Task, g.branch, g.o.Slot)
+		branch := g.branch
+		UpdateSlot(g.root, g.o.Slot, func(s *Slot) {
+			if holdsGated(s, held, branch) {
+				s.SetPR(adopted)
+			}
+		})
 	}
 	return finish(false, nil)
+}
+
+// holdsGated reports whether a slot still holds the issue and branch a gate
+// started on. A manual assign may park the slot and give it new work while its
+// PR is gated (#4248); the gate's later writes then belong to the old
+// assignment and must not reach the new one.
+func holdsGated(s *Slot, held, branch string) bool {
+	return s.Branch() == branch && HeldID(s.Task(), s.Branch(), s.Name()) == held
 }
 
 // stepSlotHead follows a slot's PR to its head branch when the two disagree.
@@ -164,13 +178,19 @@ func (runner gateRun) stepSlotHead(result landing.GateResult, target GateTarget,
 	if info.State != "OPEN" || info.Head == "" || info.Head == g.branch {
 		return finish(false, nil)
 	}
-	if held := HeldID(t.Task, g.branch, t.Name); held == "" || HeldID("", info.Head, t.Name) != held {
+	held := HeldID(t.Task, g.branch, t.Name)
+	if held == "" || HeldID("", info.Head, t.Name) != held {
 		return finish(false, nil)
 	}
 	g.res.Notes = append(g.res.Notes, fmt.Sprintf("BRANCH-FOLLOWED %s — PR %s is headed by %s, not the recorded %s", t.Name, g.pr, info.Head, g.branch))
+	gated := g.branch
 	g.branch, g.target.Branch, g.res.Branch = info.Head, info.Head, info.Head
 	if !g.o.CheckOnly && t.Name != "" { // o.Slot is a PR ref when gated by number
-		UpdateSlot(g.root, t.Name, func(s *Slot) { s.SetBranch(info.Head) })
+		UpdateSlot(g.root, t.Name, func(s *Slot) {
+			if holdsGated(s, held, gated) {
+				s.SetBranch(info.Head)
+			}
+		})
 	}
 	return finish(false, nil)
 }

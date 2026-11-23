@@ -1860,3 +1860,22 @@ func TestPickSkipsPreChosenSlotWithUnresolvedDelivery(t *testing.T) {
 		t.Errorf("picked %v, unresolved %v", picked, unresolved)
 	}
 }
+
+// holdGate holds the land lock as a gate for holder while fn runs.
+func holdGate(t *testing.T, root, holder string, fn func()) {
+	t.Helper()
+	cd, err := rotastatetest.CommonDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := rotastate.File(cd, "land") + worker.LandHolderSuffix
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	holdLandLock(t, root, func() {
+		if err := os.WriteFile(path, []byte(holder), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		fn()
+	})
+}

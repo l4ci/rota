@@ -1701,3 +1701,42 @@ func TestDiagnoseEstimateNamesRunsAndVerifyTime(t *testing.T) {
 		}
 	}
 }
+
+// #4248: a manual assign may park a train member's slot and give it new work
+// while the train runs. The land step must still land the PR the train
+// verified, never whatever branch the slot now holds.
+func TestTrainLandsVerifiedPRAfterSlotMovedOn(t *testing.T) {
+	w := newWorld(t, ghURL)
+	w.setPRBody("Closes #5\n")
+	regPath := filepath.Join(w.dir, ".rota", "workers.json")
+	pre, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Update(w.dir, func(d *Doc) {
+		s := d.Slot("w1")
+		s.SetPR("")
+		s.SetBranch("w9/9-new")
+		s.SetTask("#9")
+		d.QueuePR(QueuedPR{Issue: "5", Branch: "w1", PR: ghURL, From: "w1"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	post, err := os.ReadFile(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	postPath := filepath.Join(filepath.Dir(regPath), "post-assign.json")
+	if err := os.WriteFile(postPath, post, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(regPath, pre, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The verify step stands in for the assign that lands while the train runs.
+	w.setConfig(fmt.Sprintf(`{"test":{"full":["cp %s %s"]}}`, postPath, regPath))
+	res, err := w.train(TrainOpts{Targets: []string{"w1"}})
+	if err != nil || res.Verdict != landing.GatePass || !res.Changed || !w.onMain("work.txt") {
+		t.Fatalf("train after the slot moved on: %+v, %v", res, err)
+	}
+}

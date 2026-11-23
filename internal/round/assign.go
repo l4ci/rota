@@ -260,6 +260,12 @@ func blocked(by, format string, a ...any) *BlockedError {
 // names no slot or PR (an older rota, freeze recovery), every slot counts as
 // touched.
 func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots ...string) error {
+	return e.refuseGate(ctx, root, verb, false, slots...)
+}
+
+// refuseGate is refuseWhileGateRuns; unreadableOnly refuses just a holder that
+// names no slot or PR, for an assign whose PR moves to the review list first.
+func (e Env) refuseGate(ctx context.Context, root, verb string, unreadableOnly bool, slots ...string) error {
 	held, err := e.Worker.LandLockHeld(ctx, root)
 	if err != nil {
 		return err
@@ -270,7 +276,7 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots .
 	h := e.Worker.LandLockHolder(ctx, root)
 	if len(slots) > 0 {
 		gated, all := gatedSlots(root, h)
-		if !all && !slices.ContainsFunc(slots, func(s string) bool { return gated[s] }) {
+		if !all && (unreadableOnly || !slices.ContainsFunc(slots, func(s string) bool { return gated[s] })) {
 			return nil
 		}
 	}
@@ -339,10 +345,10 @@ func gatedSlots(root, holder string) (gated map[string]bool, all bool) {
 // movedOn reports whether a queued PR's origin slot now holds a different
 // branch. The gate merges the PR from its own record and scratch tree and
 // the landing bookkeeping drops only that record, so the slot's worktree is
-// not at risk. An idle slot (no branch) stays gated.
+// not at risk, an idle slot included.
 func movedOn(reg worker.Registry, q worker.QueuedPR) bool {
 	s := reg.Slot(q.From)
-	return s != nil && s.Branch() != "" && s.Branch() != q.Branch
+	return s != nil && s.Branch() != q.Branch
 }
 
 // holderPRs rewrites each comma-separated holder that names a slot with a
