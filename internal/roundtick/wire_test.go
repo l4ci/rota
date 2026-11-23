@@ -83,6 +83,10 @@ func (w *fakeWorld) AssignBundle(context.Context, string, []string) (round.Assig
 	w.assigns++
 	return round.Assigned{}, nil
 }
+func (w *fakeWorld) AssignTo(context.Context, string, string, []string) (round.Assigned, error) {
+	w.assigns++
+	return round.Assigned{}, nil
+}
 func (w *fakeWorld) TestAudit(context.Context) ([]string, error) { return w.auditReason, w.auditErr }
 func (w *fakeWorld) Review() Reviewer                            { return w.reviewer }
 func (w *fakeWorld) Audit(Action)                                { w.audits++ }
@@ -252,7 +256,10 @@ func TestObserveWorldRefusesExecutionAdapters(t *testing.T) {
 	writes := 0
 	w := &fakeWorld{observing: true,
 		reviewer: fakeReview{facts: &round.Architecture{}, mint: func() ([]string, error) { writes++; return nil, nil }},
-		followUp: FollowUpSources{Start: func(context.Context, FollowUp, string, bool) error { writes++; return nil }},
+		followUp: FollowUpSources{
+			Start:       func(context.Context, FollowUp, string, bool) error { writes++; return nil },
+			StartFailed: func(context.Context, string, string, string, bool) error { writes++; return nil },
+		},
 	}
 	e := NewEnv(w, Config{})
 	checks := map[string]func() error{
@@ -260,8 +267,10 @@ func TestObserveWorldRefusesExecutionAdapters(t *testing.T) {
 		"train":     func() error { return e.RunTrain(ctx, []string{"ben"}, "main").Err },
 		"assign":    func() error { _, err := e.Assign(ctx, "#1"); return err },
 		"bundle":    func() error { _, err := e.AssignBundle(ctx, "#1", []string{"#2"}); return err },
+		"assign-to": func() error { _, err := e.AssignTo(ctx, "ben", "#1", nil); return err },
 		"mint":      func() error { _, err := e.Review.Mint(ctx, round.Architecture{}); return err },
 		"follow-up": func() error { return e.FollowUp.Start(ctx, FollowUp{}, "ben", false) },
+		"failed":    func() error { return e.FollowUp.StartFailed(ctx, "#11", "stale", "ben", false) },
 	}
 	for name, call := range checks {
 		if err := call(); !errors.Is(err, errReadOnlyWorld) {

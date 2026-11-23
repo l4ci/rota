@@ -153,6 +153,10 @@ type Env struct {
 	BundleMax  int
 	// AssignBundle is Assign for a lead and its members: one slot, one branch.
 	AssignBundle func(ctx context.Context, lead string, members []string) (agents []string, err error)
+	// AssignTo hands an item (with its bundle members, if any) to the named
+	// slot: `round assign --agent`. On a done slot it queues the slot's PR
+	// before it dispatches. The assign-ahead step uses it; nil means none.
+	AssignTo func(ctx context.Context, slot, lead string, members []string) (agents []string, err error)
 	// Review supplies the architecture review (#53): the facts the decision
 	// rests on, and the mint. The tick decides with round.DecideReview, at the
 	// round.architectureEvery threshold or because a slot is idle with nothing
@@ -295,10 +299,14 @@ func (e Env) audit(r *Result, a Action) {
 	}
 }
 
-// Run does one tick: reconcile, merge, review, assign.
+// Run does one tick: reconcile, assign-ahead, merge, follow-ups, review,
+// assign.
 //
-// The merge comes before the assign so the next assignment branches from the
-// gated base (rota-orchestrate, section 6), not from before the merge.
+// The idle assign comes after the merge so its assignment branches from the
+// gated base (rota-orchestrate, section 6), not from before the merge. Only a
+// done slot whose PR is a merge target is filled before it (assign-ahead): its
+// new branch starts on the base before the train lands, and a later conflict
+// shows as stale at its own gate.
 func Run(ctx context.Context, e Env) (Result, error) {
 	if err := e.stopped(); err != nil {
 		return Result{}, err
@@ -398,10 +406,24 @@ func Run(ctx context.Context, e Env) (Result, error) {
 	}
 
 	// A stop seen after entry halts the phases that act; the tail below still
-	// runs, so the caller saves the state of the work already done.
+	// runs, so the caller saves the state of the work already done. A done
+	// slot whose PR is a merge target takes new work before the merge, so its
+	// worker does not wait for the gate (#4247); what it took stays taken
+	// whatever the merge then does.
+	var ahead aheadOutcome
 	if r.Stopped = e.stopped(); r.Stopped == nil {
-		if err := e.merge(ctx, &r, targets); err != nil {
+		if ahead, err = e.assignAhead(ctx, &r, slots, targets); err != nil {
 			return r, err
+		}
+		targets = ahead.targets
+		if len(ahead.alias) > 0 && e.FillBypass != nil {
+			bypass := e.FillBypass
+			e.FillBypass = func(t string) bool { return bypass(t) || ahead.alias[t] != "" && bypass(ahead.alias[t]) }
+		}
+		if r.Stopped = e.stopped(); r.Stopped == nil {
+			if err := e.merge(ctx, &r, targets); err != nil {
+				return r, err
+			}
 		}
 	}
 	if r.Stopped == nil {
@@ -415,7 +437,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 			r.BatchFull = true
 		}
 		// A follow-up reopens no item, so a full batch does not hold it.
-		started, taken, err := e.followUps(ctx, &r)
+		started, taken, err := e.followUps(ctx, &r, ahead.used, ahead.taken)
 		if err != nil {
 			return r, err
 		}
@@ -425,7 +447,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 				if err != nil {
 					return r, err
 				}
-				if err := e.assign(ctx, &r, minted, started, taken); err != nil {
+				if err := e.assign(ctx, &r, minted, started, taken, ahead.given); err != nil {
 					return r, err
 				}
 			}
@@ -773,10 +795,11 @@ func (e Env) review(ctx context.Context, r *Result) ([]string, error) {
 	return ids, nil
 }
 
-// assign hands ready candidates to idle active slots, within the cap less the
-// follow-ups this tick already started, and never onto a slot one took
-// (observation leaves the registry as it was, so Slots still shows it idle).
-func (e Env) assign(ctx context.Context, r *Result, minted []string, started int, taken []string) error {
+// assign hands ready candidates to idle active slots, within the cap less
+// what this tick already used (assign-ahead and follow-ups), and never onto a
+// slot those took or a candidate assign-ahead gave (observation leaves the
+// registry as it was, so Slots still shows them as before).
+func (e Env) assign(ctx context.Context, r *Result, minted []string, used int, taken, given []string) error {
 	idle := 0
 	for _, s := range e.Slots() {
 		if e.Active != nil && !slices.Contains(e.Active(), s.Name) || slices.Contains(taken, s.Name) {
@@ -789,57 +812,25 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 		}
 	}
 	n := idle
-	if c := e.cap() - started; n > c {
+	if c := e.cap() - used; n > c {
 		n = c
 	}
 	if n <= 0 {
 		return nil
 	}
-	// The minted reviews go first: they are the reason the tick minted them.
-	// One that is refused stays a candidate for a later tick.
-	queue := make([]string, 0, len(minted))
-	queue = append(queue, minted...)
-	cands, err := e.Candidates(ctx)
+	q, err := e.pickQueue(ctx, r, minted, given, true)
 	if err != nil {
 		return err
 	}
-	var eligible []round.Candidate
-	for _, c := range cands {
-		if !c.Ready() || slices.Contains(minted, c.ID) {
-			if e.Observe && !c.Ready() {
-				r.NeedsYou = append(r.NeedsYou, Item{Kind: "candidate-hold", Target: c.ID, Why: "candidate is not ready: " + candidateHold(c)})
-			}
-			continue
-		}
-		// An epic or an unplanned Major item waits for a person (#2570).
-		if c.AutoHold != "" {
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "autopilot-hold", Target: c.ID, Why: c.AutoHold})
-			continue
-		}
-		queue = append(queue, c.ID)
-		eligible = append(eligible, c)
-	}
-	// round.autoBundle: strictly related small items go to one slot. Every
-	// member rides with its lead, so it leaves the queue as a single item.
-	bundles := map[string]round.Bundle{}
-	members := map[string]bool{}
-	if e.AutoBundle && e.AssignBundle != nil {
-		for _, b := range round.PlanBundles(eligible, e.BundleMax) {
-			bundles[b.Lead] = b
-			for _, m := range b.Members {
-				members[m] = true
-			}
-		}
-	}
-	for i := 0; i < len(queue); i++ {
-		id := queue[i]
+	for i := 0; i < len(q.ids); i++ {
+		id := q.ids[i]
 		if n == 0 {
 			break
 		}
-		if members[id] {
+		if q.members[id] {
 			continue
 		}
-		b, bundled := bundles[id]
+		b, bundled := q.bundles[id]
 		detail := "ready candidate; active idle slot available"
 		if bundled {
 			detail = bundleDetail(b)
@@ -857,12 +848,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 				// The bundle cannot be built as planned (a member claimed, the
 				// limit changed): its members go back to the queue as singles,
 				// and the lead is tried alone below.
-				for _, m := range b.Members {
-					delete(members, m)
-					if j := slices.Index(queue, m); j >= 0 && j < i {
-						queue = append(queue, m) // already passed over
-					}
-				}
+				q.unbundle(b, i)
 				bundled = false
 				agents, err = e.Assign(ctx, id)
 			}
@@ -879,22 +865,7 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 			n--
 		case isRefusal(err):
 			// Not ready after all, or every slot filled meanwhile: try the next.
-			// A quota refusal is the cap showing through a pool the cap check
-			// left open (Claude workers beside Codex logins): say why.
-			var blk *round.BlockedError
-			if errors.As(err, &blk) && blk.By == blockedby.Quota && r.Capped == "" {
-				r.Capped = blk.Msg
-			}
-			// A gate or train holds the land lock for the slot assign picked (or
-			// for slots it cannot name): later candidates pick the same slot, so
-			// defer them to the next tick.
-			if errors.As(err, &blk) && blk.By == landing.GateRunning {
-				r.Deferred = "gate running, deferred: " + blk.Msg
-				return nil
-			}
-			// The batch filled during this tick: no later candidate fits either.
-			if errors.As(err, &blk) && blk.By == blockedby.Batch {
-				r.BatchFull = true
+			if e.fillStops(r, err) {
 				return nil
 			}
 		default:
@@ -902,6 +873,101 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, started int
 		}
 	}
 	return nil
+}
+
+// fillStops reads an assign refusal for what it means to the rest of the
+// tick's fill. A quota refusal is the cap showing through a pool the cap check
+// left open (Claude workers beside Codex logins): it says why. A gate or train
+// holding the land lock, or a batch that filled during this tick, stops every
+// later assign: true.
+func (e Env) fillStops(r *Result, err error) bool {
+	var blk *round.BlockedError
+	if !errors.As(err, &blk) {
+		return false
+	}
+	switch blk.By {
+	case blockedby.Quota:
+		if r.Capped == "" {
+			r.Capped = blk.Msg
+		}
+	case landing.GateRunning:
+		r.Deferred = "gate running, deferred: " + blk.Msg
+		return true
+	case blockedby.Batch:
+		r.BatchFull = true
+		return true
+	}
+	return false
+}
+
+// pickQueue is the order both assign steps hand items out in: the minted
+// reviews first (they are the reason the tick minted them; one refused stays
+// a candidate for a later tick), then the ready candidates in backlog order.
+// Under round.autoBundle a bundle's members ride with their lead.
+type pickQueue struct {
+	ids     []string
+	bundles map[string]round.Bundle
+	members map[string]bool
+}
+
+// pickQueue reads the candidates once. given are items this tick already
+// handed out, left out. report adds the candidates a person must look at
+// (an autopilot hold; under observation, one not ready) to NeedsYou: the
+// step that reports them is the idle assign, so assign-ahead passes false.
+func (e Env) pickQueue(ctx context.Context, r *Result, minted, given []string, report bool) (*pickQueue, error) {
+	q := &pickQueue{bundles: map[string]round.Bundle{}, members: map[string]bool{}}
+	for _, id := range minted {
+		if !slices.Contains(given, id) {
+			q.ids = append(q.ids, id)
+		}
+	}
+	cands, err := e.Candidates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var eligible []round.Candidate
+	for _, c := range cands {
+		if slices.Contains(given, c.ID) {
+			continue
+		}
+		if !c.Ready() || slices.Contains(minted, c.ID) {
+			if report && e.Observe && !c.Ready() {
+				r.NeedsYou = append(r.NeedsYou, Item{Kind: "candidate-hold", Target: c.ID, Why: "candidate is not ready: " + candidateHold(c)})
+			}
+			continue
+		}
+		// An epic or an unplanned Major item waits for a person (#2570).
+		if c.AutoHold != "" {
+			if report {
+				r.NeedsYou = append(r.NeedsYou, Item{Kind: "autopilot-hold", Target: c.ID, Why: c.AutoHold})
+			}
+			continue
+		}
+		q.ids = append(q.ids, c.ID)
+		eligible = append(eligible, c)
+	}
+	// round.autoBundle: strictly related small items go to one slot. Every
+	// member rides with its lead, so it leaves the queue as a single item.
+	if e.AutoBundle && e.AssignBundle != nil {
+		for _, b := range round.PlanBundles(eligible, e.BundleMax) {
+			q.bundles[b.Lead] = b
+			for _, m := range b.Members {
+				q.members[m] = true
+			}
+		}
+	}
+	return q, nil
+}
+
+// unbundle returns b's members to the queue as singles; one already passed
+// over (before position i) goes to the end.
+func (q *pickQueue) unbundle(b round.Bundle, i int) {
+	for _, m := range b.Members {
+		delete(q.members, m)
+		if j := slices.Index(q.ids, m); j >= 0 && j < i {
+			q.ids = append(q.ids, m)
+		}
+	}
 }
 
 // bundleDetail names a bundle and the declared Touches that justified it.

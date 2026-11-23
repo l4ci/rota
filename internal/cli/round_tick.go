@@ -380,6 +380,12 @@ func (w *tickWorld) AssignBundle(ctx context.Context, lead string, members []str
 	return w.assign(ctx, round.AssignOpts{ID: lead, Bundle: members})
 }
 
+// AssignTo is Assign onto a named slot (`round assign --agent`): the
+// autopilot's assign-ahead of a done slot, whose PR it queues (#4247).
+func (w *tickWorld) AssignTo(ctx context.Context, slot, lead string, members []string) (round.Assigned, error) {
+	return w.assign(ctx, round.AssignOpts{ID: lead, Bundle: members, Agent: slot})
+}
+
 func (w *tickWorld) assign(ctx context.Context, o round.AssignOpts) (round.Assigned, error) {
 	return w.renv.Assign(ctx, w.root, w.board, o)
 }

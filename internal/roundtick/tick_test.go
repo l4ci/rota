@@ -41,6 +41,34 @@ type fake struct {
 	assignFn func(id string) ([]string, error)
 	// awaiting, when set, is the review-readiness answer per slot.
 	awaiting func(s Slot) string
+	// ahead lists the assign-ahead hand-overs as "id->slot"; aheadFn, when
+	// set, can refuse one; noQueue leaves the slot's PR out of the queue.
+	ahead   []string
+	aheadFn func(slot, id string) error
+	noQueue bool
+}
+
+// withAhead wires assign-ahead onto the fake as `round assign --agent` does
+// it: the slot's PR joins the review queue and the slot works on the item.
+func (f *fake) withAhead(e *Env) {
+	e.AssignTo = func(_ context.Context, slot, id string, _ []string) ([]string, error) {
+		if f.aheadFn != nil {
+			if err := f.aheadFn(slot, id); err != nil {
+				return nil, err
+			}
+		}
+		f.ahead = append(f.ahead, id+"->"+slot)
+		for i := range f.slots {
+			if f.slots[i].Name != slot {
+				continue
+			}
+			if f.slots[i].PR != "" && !f.noQueue {
+				f.queued = append(f.queued, f.slots[i].PR)
+			}
+			f.slots[i] = Slot{Name: slot, State: "working", Issue: id}
+		}
+		return []string{slot}, nil
+	}
 }
 
 func (f *fake) env() Env {

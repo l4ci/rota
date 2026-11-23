@@ -56,6 +56,9 @@ type World interface {
 	Assign(ctx context.Context, id string) (round.Assigned, error)
 	// AssignBundle assigns lead with members to one slot (round.autoBundle).
 	AssignBundle(ctx context.Context, lead string, members []string) (round.Assigned, error)
+	// AssignTo assigns lead (with members, if any) to the named slot, as
+	// `round assign --agent` does: a done slot's PR is queued first (#4247).
+	AssignTo(ctx context.Context, slot, lead string, members []string) (round.Assigned, error)
 	Review() Reviewer
 	// TestAudit lists the reasons a test-maintenance round is due; empty when none is.
 	TestAudit(ctx context.Context) ([]string, error)
@@ -180,6 +183,9 @@ func NewEnv(w World, cfg Config) Env {
 	}
 	e.AssignBundle = func(ctx context.Context, lead string, members []string) ([]string, error) {
 		return k.assigned(lead)(w.AssignBundle(ctx, lead, members))
+	}
+	e.AssignTo = func(ctx context.Context, slot, lead string, members []string) ([]string, error) {
+		return k.assigned(lead)(w.AssignTo(ctx, slot, lead, members))
 	}
 	e.ReviewLoop = func(_ context.Context, sl Slot) ReviewOutcome { return w.ReviewLoop(sl.Name) }
 	e.Audit = w.Audit

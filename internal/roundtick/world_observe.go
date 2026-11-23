@@ -46,6 +46,9 @@ func (o readOnlyWorld) Assign(context.Context, string) (round.Assigned, error) {
 func (o readOnlyWorld) AssignBundle(context.Context, string, []string) (round.Assigned, error) {
 	return round.Assigned{}, errReadOnlyWorld
 }
+func (o readOnlyWorld) AssignTo(context.Context, string, string, []string) (round.Assigned, error) {
+	return round.Assigned{}, errReadOnlyWorld
+}
 func (o readOnlyWorld) Review() Reviewer {
 	r := o.w.Review()
 	if r == nil {
@@ -59,6 +62,9 @@ func (o readOnlyWorld) FollowUp() FollowUpSources {
 	f := o.w.FollowUp()
 	if f.Start != nil {
 		f.Start = func(context.Context, FollowUp, string, bool) error { return errReadOnlyWorld }
+	}
+	if f.StartFailed != nil {
+		f.StartFailed = func(context.Context, string, string, string, bool) error { return errReadOnlyWorld }
 	}
 	return f
 }

@@ -40,6 +40,11 @@ type FollowUpSources struct {
 	// the brief; reserve is true for a reserve slot. A *round.BlockedError is
 	// a refusal that leaves the follow-up pending.
 	Start func(ctx context.Context, f FollowUp, slot string, reserve bool) error
+	// StartFailed transfers the issue of the queued PR pr, whose head failed
+	// the gate, to slot with the gate's verdict (why) as the brief. No bounce
+	// is counted. A *round.BlockedError is a refusal; nil means the round
+	// routes no failed gate to a worker.
+	StartFailed func(ctx context.Context, pr, why, slot string, reserve bool) error
 }
 
 // FollowUpPorts are the outside reads and writes the follow-up sources are
@@ -95,21 +100,24 @@ func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
 }
 
 // followUps starts the waiting follow-ups before any backlog work and returns
-// how many it started, which the assign step's cap counts. Each takes the first
+// how much of the cap the tick has used, which the assign step counts: used
+// (assign-ahead) plus the follow-ups it started. Each takes the first
 // idle active slot, else the first free reserve slot. One that cannot start
 // stays pending (nothing it consumed moved) and is reported as a followup item
 // naming what it lacks. A support machine starts none: the queued PRs are main's.
 // Under observation each start is a proposal and Start is never called. taken
-// names the slots the follow-ups took (or would take), which assign skips.
-func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []string, err error) {
+// names the slots assign-ahead and the follow-ups took (or would take), which
+// assign skips.
+func (e Env) followUps(ctx context.Context, r *Result, used int, took []string) (started int, taken []string, err error) {
+	started, taken = used, slices.Clone(took)
 	src := e.FollowUp
 	if src.List == nil || src.Start == nil || e.Role == roundcfg.RoleSupport {
-		return 0, nil, nil
+		return started, taken, nil
 	}
 	list, err := src.List(ctx)
 	if err != nil {
 		r.NeedsYou = append(r.NeedsYou, Item{Kind: "followup", Target: "poll", Why: "the follow-up poll failed: " + strutil.FirstLine(err.Error())})
-		return 0, nil, nil
+		return started, taken, nil
 	}
 	pending := func(f FollowUp, why string) {
 		r.NeedsYou = append(r.NeedsYou, Item{Kind: "followup", Target: f.Issue, Why: fmt.Sprintf("%s on %s waits: %s", strutil.FirstNonEmpty(f.Who, "review input"), f.PR, why)})
@@ -123,7 +131,7 @@ func (e Env) followUps(ctx context.Context, r *Result) (started int, taken []str
 			pending(f, r.Capped)
 			continue
 		case started >= e.cap():
-			pending(f, fmt.Sprintf("this tick already started %d (round.autopilotCap)", started))
+			pending(f, fmt.Sprintf("this tick already used %d of round.autopilotCap", started))
 			continue
 		}
 		slot, reserve, why := e.followUpSlot(taken)
