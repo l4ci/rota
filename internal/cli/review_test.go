@@ -994,3 +994,46 @@ func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
 		t.Errorf("crossAccount = %v in %v, want codex/rev at /home/rev, not fallen back", acct, d)
 	}
 }
+
+// #4242: a PR into a milestone branch is measured against that branch, not
+// against main, so the milestone's own commits do not count toward its depth.
+func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
+	root := newRepo(t, t.TempDir(), "proj", "main")
+	gittest.Run(t, root, "checkout", "-q", "-b", "m/x")
+	for _, f := range []string{"m1.txt", "m2.txt"} {
+		write(t, filepath.Join(root, f), "milestone\n")
+		gittest.Run(t, root, "add", f)
+		gittest.Run(t, root, "commit", "-q", "-m", "milestone "+f)
+	}
+	gittest.Run(t, root, "checkout", "-q", "-b", "nia/6-small")
+	write(t, filepath.Join(root, "x.txt"), "x\n")
+	gittest.Run(t, root, "add", "x.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "small change")
+	prs := `[]`
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+		if len(cmd.Args) > 1 && cmd.Args[0] == "pr" && cmd.Args[1] == "list" {
+			return proc.Result{Stdout: prs}, nil
+		}
+		return proc.Result{Stdout: "[]"}, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"forge": {"provider": "github"}, "ship":{"review":{"default":"full","lightBelow":100000}}}`)
+	run := func() (map[string]any, string) {
+		o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small", "--json")
+		d, _ := envelope(t, o.stdout)["data"].(map[string]any)
+		return d, o.stdout
+	}
+
+	if d, _ := run(); d["base"] != "main" || d["changedLines"].(float64) != 3 {
+		t.Errorf("no open PR keeps the default base: %v", d)
+	}
+	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","baseRefName":"m/x","url":"u","body":"Door: two-way."}]`
+	d, _ := run()
+	if d["base"] != "m/x" || d["changedLines"].(float64) != 1 || d["baseSource"] != "pr" {
+		t.Errorf("open PR base must be the span base: %v", d)
+	}
+	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small")
+	if !strings.Contains(o.stdout, "REVIEW-BASE nia/6-small — m/x (open PR #9)") {
+		t.Errorf("text output must name the base: %s", o.stdout)
+	}
+}
