@@ -265,6 +265,9 @@ type Result struct {
 	Held        map[string]string
 	Reported    map[string]bool
 	FailedHeads map[string]FailedHead
+	// gateFailed is every target this tick's merge refused with a verdict, at
+	// the head it judged: the follow-up step routes a queued PR's (#4247).
+	gateFailed map[string]FailedHead
 }
 
 func (e Env) cap() int {
@@ -560,6 +563,12 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 			why := m.Verdict
 			if m.Detail != "" {
 				why += ": " + m.Detail
+			}
+			if head := heads[m.Target]; head != "" {
+				if r.gateFailed == nil {
+					r.gateFailed = map[string]FailedHead{}
+				}
+				r.gateFailed[m.Target] = FailedHead{Head: head, Why: why}
 			}
 			if e.Head != nil && failedHeadVerdict(m.Verdict) || e.Head == nil && m.Hold {
 				r.Held[m.Target] = why

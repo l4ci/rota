@@ -60,14 +60,17 @@ type FollowUpPorts struct {
 	List func(ctx context.Context, f round.ReviewForge) ([]round.FollowUp, []string, error)
 	// Start continues one follow-up in slot and returns the warnings it raised.
 	Start func(ctx context.Context, f round.FollowUp, slot string, reserve bool) ([]string, error)
-	Warn  func(string)
+	// StartFailed continues the queued PR pr, whose head failed the gate with
+	// why, in slot (round.ContinueFailed) and returns the warnings it raised.
+	StartFailed func(ctx context.Context, pr, why, slot string, reserve bool) ([]string, error)
+	Warn        func(string)
 }
 
 // NewFollowUpSources assembles the follow-up step (#2580) from its ports. A
 // round with no queued PR asks the forge nothing; the people who asked are
 // joined into Who; the reserve slots follow the settings.
 func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
-	return FollowUpSources{
+	s := FollowUpSources{
 		Auto:    p.Settings.ReviewLoop == roundcfg.ReviewLoopAuto,
 		Size:    p.Settings.FollowupReserve,
 		Reserve: func() []string { return round.Reserve(p.Registry(), p.Settings) },
@@ -97,6 +100,16 @@ func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
 			return err
 		},
 	}
+	if p.StartFailed != nil {
+		s.StartFailed = func(ctx context.Context, pr, why, slot string, reserve bool) error {
+			warns, err := p.StartFailed(ctx, pr, why, slot, reserve)
+			for _, warn := range warns {
+				p.Warn(warn)
+			}
+			return err
+		}
+	}
+	return s
 }
 
 // followUps starts the waiting follow-ups before any backlog work and returns
@@ -110,6 +123,14 @@ func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
 // assign skips.
 func (e Env) followUps(ctx context.Context, r *Result, used int, took []string) (started int, taken []string, err error) {
 	started, taken = used, slices.Clone(took)
+	if started, taken, err = e.askedFollowUps(ctx, r, started, taken); err != nil || r.Deferred != "" {
+		return started, taken, err
+	}
+	return e.failedFollowUps(ctx, r, started, taken)
+}
+
+// askedFollowUps starts the follow-ups people asked for (#2580).
+func (e Env) askedFollowUps(ctx context.Context, r *Result, started int, taken []string) (int, []string, error) {
 	src := e.FollowUp
 	if src.List == nil || src.Start == nil || e.Role == roundcfg.RoleSupport {
 		return started, taken, nil
@@ -220,4 +241,113 @@ func (e Env) followUpSlot(taken []string) (slot string, reserve bool, why string
 		why += fmt.Sprintf("; the roster holds %d of the %d reserve slots round.followupReserve asks for", len(names), src.Size)
 	}
 	return "", false, why
+}
+
+// routedVerdict is a gate verdict the follow-up step hands back to a worker
+// (#4247): one about the PR's content that a push fixes. An interaction is the
+// orchestrator's to fix, and an infrastructure refusal clears without a push.
+func routedVerdict(v string) bool {
+	switch v {
+	case landing.GateStale, landing.GateProvenanceFail, landing.GateVerifyFailed, landing.GateVacuousTests:
+		return true
+	}
+	return false
+}
+
+// failedFollowUps (#4247) starts a follow-up for each queued PR whose current
+// head failed the gate with a routed verdict, this tick or an earlier one: its
+// worker moved on (assign-ahead or a manual assign), so nobody else would fix
+// it. Only under round.reviewLoop auto; otherwise, or for an interaction, it
+// stays under "needs you" as before. It shares the cap and the slots with the
+// follow-ups people asked for. A head that moved since the gate starts nothing:
+// the new head gets its own gate. One that cannot start stays reported and its
+// failure kept, so a later tick tries again.
+func (e Env) failedFollowUps(ctx context.Context, r *Result, started int, taken []string) (int, []string, error) {
+	src := e.FollowUp
+	if src.StartFailed == nil || !src.Auto || e.Head == nil || e.Queued == nil || e.Role == roundcfg.RoleSupport {
+		return started, taken, nil
+	}
+	if len(r.gateFailed) == 0 && len(r.FailedHeads) == 0 {
+		return started, taken, nil
+	}
+	for _, ref := range e.Queued() {
+		head, err := e.Head(ctx, ref)
+		if err != nil || head == "" {
+			continue
+		}
+		why := failedWhy(r, ref, head)
+		if v, _, _ := strings.Cut(why, ":"); !routedVerdict(v) {
+			continue
+		}
+		pending := func(reason string) {
+			r.NeedsYou = append(r.NeedsYou, Item{Kind: "followup", Target: ref, Why: "the gate failure on " + ref + " waits: " + reason})
+		}
+		switch {
+		case r.Capped != "":
+			pending(r.Capped)
+			continue
+		case started >= e.cap():
+			pending(fmt.Sprintf("this tick already used %d of round.autopilotCap", started))
+			continue
+		}
+		slot, reserve, whyNot := e.followUpSlot(taken)
+		if slot == "" {
+			pending(whyNot)
+			continue
+		}
+		detail := "to " + slot
+		if reserve {
+			detail += " (reserve)"
+		}
+		detail += ", gate failed: " + why
+		r.propose(Action{Action: "followup", Target: ref, Detail: detail}, "queued record, claim, overlap, account preflight and dispatch")
+		if e.Observe {
+			started++
+			taken = append(taken, slot)
+			continue
+		}
+		err = src.StartFailed(ctx, ref, why, slot, reserve)
+		switch {
+		case err == nil:
+			e.audit(r, Action{Action: "followup", Target: ref, Detail: detail})
+			started++
+			taken = append(taken, slot)
+			// A worker has it now: it no longer waits for a person.
+			r.NeedsYou = slices.DeleteFunc(r.NeedsYou, func(it Item) bool { return it.Kind == "gate-failed" && it.Target == ref })
+		case !isRefusal(err) && errors.As(err, new(*round.BlockedError)):
+			return started, taken, fmt.Errorf("follow-up %s: %w", ref, err) // no round to work for
+		default:
+			pending("the transfer to " + slot + " did not start: " + strutil.FirstLine(err.Error()))
+			var blk *round.BlockedError
+			if errors.As(err, &blk) && blk.By == landing.GateRunning {
+				r.Deferred = "gate running, deferred: " + blk.Msg
+				return started, taken, nil
+			}
+		}
+	}
+	return started, taken, nil
+}
+
+// failedWhy is the failure recorded for ref at head: this tick's verdict
+// first, else one carried at the same head (a failed head follows its PR
+// whatever target name judged it).
+func failedWhy(r *Result, ref, head string) string {
+	if f, ok := r.gateFailed[ref]; ok {
+		if f.Head == head {
+			return f.Why
+		}
+		return ""
+	}
+	if f, ok := r.FailedHeads[ref]; ok {
+		if f.Head == head {
+			return f.Why
+		}
+		return ""
+	}
+	for _, f := range r.FailedHeads {
+		if f.Head == head {
+			return f.Why
+		}
+	}
+	return ""
 }

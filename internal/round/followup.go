@@ -180,3 +180,35 @@ func (e Env) Continue(ctx context.Context, root string, be Board, o ContinueOpts
 	}
 	return res, terr
 }
+
+// ContinueFailedOpts are the inputs of ContinueFailed.
+type ContinueFailedOpts struct {
+	// PR is the queued PR whose head failed the gate; Why the gate's verdict
+	// and detail, which becomes the brief.
+	PR, Why string
+	// To is the receiving slot; Reserve says it is a follow-up reserve slot.
+	To      string
+	Reserve bool
+}
+
+// ContinueFailed starts a follow-up for a queued PR whose head failed the
+// merge gate (#4247): its worker moved on, so the issue moves to the receiving
+// slot (Transfer) with the gate's verdict as the brief. A gate verdict is no
+// bounce (#2858), so none is counted. The receiver's review cursor carries
+// over from the queued record. A PR no longer queued (started, merged or
+// requeued since the gate) refuses, so nothing starts twice.
+func (e Env) ContinueFailed(ctx context.Context, root string, be Board, o ContinueFailedOpts) (Transferred, error) {
+	reg, err := worker.LoadRegistry(root)
+	if err != nil {
+		return Transferred{}, err
+	}
+	q := reg.QueuedPR(o.PR)
+	if q == nil {
+		return Transferred{}, blocked(blockedby.SlotBusy, "%s is no longer in the review queue (started, merged or requeued); nothing to start", o.PR)
+	}
+	return e.Transfer(ctx, root, be, TransferOpts{
+		Issue: q.Issue, To: o.To, Reserve: o.Reserve, ReviewSeen: q.ReviewSeen,
+		Decisions: fmt.Sprintf("The merge gate refused %s at its current head: %s\nFix it on the PR's branch and push; the next tick gates the new head.", prLabel(q.PR), o.Why),
+		Note:      fmt.Sprintf("gate failure on %s: the PR waited in the review queue, so it moves to %s", prLabel(q.PR), o.To),
+	})
+}

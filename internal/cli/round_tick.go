@@ -428,6 +428,10 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
 			return res.Warnings, err
 		},
+		StartFailed: func(ctx context.Context, pr, why, slot string, reserve bool) ([]string, error) {
+			res, err := w.renv.ContinueFailed(ctx, w.root, w.board, round.ContinueFailedOpts{PR: pr, Why: why, To: slot, Reserve: reserve})
+			return res.Warnings, err
+		},
 		Warn: func(m string) { w.c.Warn("%s", m) },
 	})
 }
