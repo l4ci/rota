@@ -41,14 +41,19 @@ type verifyRun struct {
 	lastVerify time.Duration // the last full-tree verify, the diagnose estimate's unit
 }
 
+// key is the verdict key of a verify of the base plus its first k members.
+func (v *verifyRun) key(tier string, k int) string {
+	if v.tipOf != nil {
+		return trainKey(tier, v.tipOf(k), nil)
+	}
+	return trainKey(tier, v.baseSHA, v.heads[:k])
+}
+
 // cached wraps run as a verify of the base plus its first k members: a hit in
 // the cache answers it, a miss runs it, times it, records it and caches a pass.
 func (v *verifyRun) cached(tier string, run func() (VerifyResult, error)) func(int) (VerifyResult, error) {
 	return func(k int) (VerifyResult, error) {
-		key := trainKey(tier, v.baseSHA, v.heads[:k])
-		if v.tipOf != nil {
-			key = trainKey(tier, v.tipOf(k), nil)
-		}
+		key := v.key(tier, k)
 		if hit, ok := v.cache.get(key); ok {
 			v.res.CacheHits = append(v.res.CacheHits, fmt.Sprintf("%s: base + first %d member(s)", tier, k))
 			return VerifyResult{Cached: true, Verified: hit.Verified}, nil
@@ -134,6 +139,15 @@ func (v *verifyRun) bisect(tier string, run func(int) (VerifyResult, error), fai
 	// A red the same tree does not show twice is a flake, not a culprit: re-run
 	// before paying for a bisect (#3647).
 	if done, err := v.rerun(tier, failed); done || err != nil {
+		if done && err == nil {
+			// The re-run passed every command that failed, and the rest passed
+			// the first time: the whole tier is green on this base and these
+			// heads, so a retry reuses it instead of verifying again (#4244).
+			green := failed
+			green.Verified = append(append([]string{}, failed.Verified...), failed.Failed...)
+			green.Failed = nil
+			v.cache.put(v.key(key, v.n), green)
+		}
 		return done, err
 	}
 	v.phase("%s", diagnoseEstimate(v.n, v.lastVerify))

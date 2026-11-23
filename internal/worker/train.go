@@ -948,7 +948,10 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 		phase: t.phase, passing: n, onFailStop: o.OnFail == OnFailStop,
 		record: func(tier string, prs []string, r VerifyResult) error {
 			e.recordVerification(t.root, o.Round, tier, GateTarget{}, prs, r)
-			return e.recordFlakes(t.root, o.Round, prs, r)
+			if err := e.recordFlakes(t.root, o.Round, prs, r); err != nil {
+				res.Notes = append(res.Notes, "WARNING "+err.Error())
+			}
+			return nil
 		},
 		stop:  func(tier string, failed VerifyResult) { t.stopTrain(res, p, tier, baseSHA, failed) },
 		rerun: func(tier string, failed VerifyResult) (bool, error) { return t.rerunRed(p, res, tier, failed) },
@@ -1307,13 +1310,15 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 		res.Flaky = append(res.Flaky, entry)
 		res.Notes = append(res.Notes, flakeNote(entry))
 	}
+	// A ledger that cannot be written is a warning: the flake is real and the
+	// verdict stands (#4244).
 	if err := e.recordFlakes(t.root, t.o.Round, prs, VerifyResult{Flaky: entries}); err != nil {
-		return false, err
+		res.Notes = append(res.Notes, "WARNING "+err.Error())
 	}
 	res.Verdict, res.Unreproduced = landing.GateVerifyFailed, true
 	res.Err = fmt.Sprintf("TRAIN-FAIL flaky — the train failed %s, then passed on a re-run of the same tree (%s); a flake, no bisect, no culprit, nothing landed\n%s",
 		tier, strings.Join(failed.Failed, "; "), failed.detail())
-	res.Hint = "nobody is blamed: re-run the train; if the same tests fail again the re-run goes red and the bisect names the culprit (see the FLAKY notes)"
+	res.Hint = "nobody is blamed: re-run the train (an unchanged base and heads reuse the green re-run); if the same tests fail again the re-run goes red and the bisect names the culprit (see the FLAKY notes)"
 	return true, nil
 }
 
@@ -1421,7 +1426,7 @@ func (e Env) bisectTrain(scratch string, res *landing.TrainResult, tips []string
 		res.Verdict, res.Unreproduced = landing.GateVerifyFailed, true
 		res.Err = fmt.Sprintf("TRAIN-FAIL unreproduced — the train fails %s once %s (%s) is merged, but %s passes alone and the failing tests passed on a rerun of the red prefix; a flake, no culprit, the first %d member(s) pass\n%s",
 			tier, c.Target, c.Branch, c.Target, green, failed.detail())
-		res.Hint = "nobody is blamed: re-run the train; if the same tests fail again, look at them (see the FLAKY notes)"
+		res.Hint = "nobody is blamed: re-run the train (an unchanged base and heads reuse the green re-run); if the same tests fail again, look at them (see the FLAKY notes)"
 	case len(class.interaction) > 0:
 		for _, i := range class.interaction {
 			res.Interaction = append(res.Interaction, res.Members[i].Target)
