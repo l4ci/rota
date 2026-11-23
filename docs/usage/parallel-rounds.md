@@ -856,7 +856,7 @@ whose worker is busy, blocked or has uncommitted files is never taken.
 - **Send a relay about it**: `rota worker dispatch <slot> --relay --pr <N> --body-file <brief>`
   sends into the named slot's running session and logs the relay on PR N's review record.
   Use this when the slot has already taken another issue. The PR must be open and on the
-  round's review list; otherwise dispatch refuses before sending or logging anything.
+  round's review list, or be the PR the slot itself holds (the relay is then logged on the slot); otherwise dispatch refuses before sending or logging anything.
   Without `--pr`, the relay belongs to the slot's current issue, or its newest queued PR
   when the slot is parked.
 - **Bounce it**: `rota round transfer <issue> --to <free slot> --settled-file <gap>` checks the

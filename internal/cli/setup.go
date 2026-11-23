@@ -198,15 +198,30 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 		}
 		root.Set("answers", out)
 		// A broken global file was already warned about; offering to save into it would fail.
-		if cands := globalCandidates(answers, globalVals); globalOK && len(cands) > 0 {
+		// test.slots is no question: an unset global value is offered beside the
+		// answers at the roster size, as `rota init` seeds it (#4241).
+		slotsDir, slots := "", 0
+		if globalOK {
+			slotsDir, slots = pendingTestSlots(c, dir)
+		}
+		if cands := globalCandidates(answers, globalVals); globalOK && (len(cands) > 0 || slots > 0) {
 			save := *saveGlobal
 			if !save && interactive {
-				save = askSaveGlobal(in, c.Stderr, cands, answers, len(globalVals) == 0)
+				save = askSaveGlobal(in, c.Stderr, cands, answers, len(globalVals) == 0, slots)
 			}
 			if save {
-				saved, err := saveGlobalAnswers(c.deps().projectsEnv(), cands, answers)
-				if err != nil {
-					return Result{}, err
+				saved := []string{}
+				if len(cands) > 0 {
+					var err error
+					if saved, err = saveGlobalAnswers(c.deps().projectsEnv(), cands, answers); err != nil {
+						return Result{}, err
+					}
+				}
+				if slots > 0 {
+					if _, err := config.SetGlobal(slotsDir, testSlotsKey, strconv.Itoa(slots)); err != nil {
+						return Result{}, configFail(err, exitmap.ConfigInternal)
+					}
+					saved = append(saved, testSlotsKey)
 				}
 				root.Set("savedGlobal", jsonx.Strings(saved))
 				lines = append(lines, fmt.Sprintf("saved %d answers as global defaults", len(saved)))
@@ -552,7 +567,7 @@ func saveGlobalAnswers(env cfgdir.Env, cands []config.Prompt, answers map[string
 
 // askSaveGlobal lists the candidate answers and asks y/N. Anything but yes,
 // including end of input, is no: the project is already set up either way.
-func askSaveGlobal(in *bufio.Reader, out io.Writer, cands []config.Prompt, answers map[string]string, first bool) bool {
+func askSaveGlobal(in *bufio.Reader, out io.Writer, cands []config.Prompt, answers map[string]string, first bool, slots int) bool {
 	if first {
 		fmt.Fprintln(out, "\nNo global defaults yet. Save these answers as defaults for every project that does not set the key itself?")
 	} else {
@@ -560,6 +575,9 @@ func askSaveGlobal(in *bufio.Reader, out io.Writer, cands []config.Prompt, answe
 	}
 	for _, p := range cands {
 		fmt.Fprintf(out, "  %s = %s\n", p.Key, answers[p.Key])
+	}
+	if slots > 0 {
+		fmt.Fprintf(out, "  %s = %d (roster size, so workers do not queue on one test slot)\n", testSlotsKey, slots)
 	}
 	fmt.Fprint(out, "Save as global defaults? [y/N]: ")
 	line, _ := in.ReadString('\n')
