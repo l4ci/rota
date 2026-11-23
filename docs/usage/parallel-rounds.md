@@ -801,7 +801,10 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
 5. assign the first ready candidate of the round's scope to each idle slot, at most
    `round.autopilotCap`, at the default tier and never with `--accept-overlap` (with
    `round.autoBundle` on, strictly related small issues go to one slot as a bundle, see
-   [Bundles](#bundles-one-worker-several-small-issues)). Review items
+   [Bundles](#bundles-one-worker-several-small-issues)). A done slot whose PR this tick lands gets
+   its next issue first (assign-ahead), before the gate starts, and the PR then lands from the
+   review list. A refused assign leaves the slot a plain merge target; a PR the queue does not
+   hold after the assign is dropped from the tick and shows in `needsYou` as kind `assign-ahead`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
    down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
    at `round.batch` open items: the tick assigns nothing and says `batch-full`; gating and merging
@@ -923,7 +926,7 @@ without write access never make a follow-up. Once a person has asked, the bot an
 and a `review-bounce` go to the worker in the same brief. Telling a person from a stranger needs the
 forge's write-access lookup, which rota has for GitHub only: on GitLab no PR becomes a follow-up.
 
-Under `round.reviewLoop: auto` the autopilot starts a follow-up before it assigns any backlog item:
+Under `round.reviewLoop: auto` a queued PR that fails the gate (`stale`, `provenance-fail`, `verify-failed` or `vacuous-tests`) also restarts as a follow-up on a free slot, with the verdict in its brief. The autopilot starts a follow-up before it assigns any backlog item:
 `round transfer` moves the issue to an idle round slot with the review input as the brief, and counts
 a bounce. Everything a transfer checks still applies: the claim, overlap, the harness and account
 checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick only lists it, and
@@ -1096,7 +1099,7 @@ Playwright's list reporter (numbered `N) <title>` failures plus an `N failed` li
 `Tests  N failed` line) and `node --test` (TAP `not ok N - <name>` or spec `✖ <name>`, plus a `fail N` count).
 A command wrapped in `rota test lock --` is classified like the bare command.
 The retry runs sequentially in the same directory at the same clean tree. A pass stays green and
-adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red.
+adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red. A train run again after a `FLAKY` pass, on the same base and heads, reuses that green result instead of verifying again. A failed flake-ledger write in a train is a warning, not exit 70.
 Build, setup, panic, infrastructure (connection refused, `ECONNREFUSED`, a Playwright `Test timeout of`, a bundler build error), timeout, signal and unknown failures are not retried.
 The known-red exclusion ledger keeps its existing behavior and is checked before retrying.
 
@@ -1158,7 +1161,7 @@ With two or more reviewed PRs waiting on one base, `rota worker train <slot|PR>.
 default way to land them; a single `gate` is for exactly one waiting PR. The train gates them together and
 pays for the verify once instead of once per PR. A gate or train takes about 10 minutes (median; `rota test-audit` shows current timings): start it
 as a background command, review the next PRs meanwhile, and read the verdict when it
-exits. `round assign` refuses (`gate-running`, naming the PR the gate holds the lock for) only a slot whose branch or PR the gate or train holds; other slots stay assignable, because the gate verifies in its own scratch tree. A lock that names no slot or PR, and every assign on the file backend, still refuses all slots. `round transfer` refuses while any gate or train runs. `round watch` returns when the lock clears, so retry a refused verb then. The autopilot tick reports `deferred` instead of erroring. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
+exits. `round assign` refuses (`gate-running`, naming the PR the gate holds the lock for) only a slot whose branch or PR the gate or train holds; other slots stay assignable, because the gate verifies in its own scratch tree. Without `--agent` it skips a gated slot when another free slot exists. A done slot whose PR the gate holds can still take its next issue with `--agent`: the PR moves to the review list first, and the train lands each member by its verified PR and head. A lock that names no slot or PR, and every assign on the file backend, still refuses all slots. `round transfer` refuses while any gate or train runs. `round watch` returns when the lock clears, so retry a refused verb then. The autopilot tick reports `deferred` instead of erroring. Don't start a second gate or train beside it, and don't write tracked `.rota/` files on the base
 checkout until it exits; the checkout guard fails the gate on a changed tracked file. It checks each member the way `gate --check-only` does,
 merges them onto the base in a scratch worktree in the order it picks, runs `test.full` on that
 tree, then `test.e2e` when set (the most expensive tier runs once per train, not once per PR), and on a pass lands every member through the gate in order. If the base or a member's head moved
