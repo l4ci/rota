@@ -2,6 +2,7 @@ package round
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/l4ci/rota/internal/git"
@@ -125,9 +126,11 @@ func TestCandidateDeferredFromOpenPRWaits(t *testing.T) {
 	}
 }
 
-// #4256 AC-1/AC-2: a `## Depends on` entry that is an open PR holds the
-// candidate with that PR as the reason; once the PR leaves the open set the
-// candidate is ready again with no edit.
+// #4256 AC-1/AC-2: a `## Depends on` entry naming an open PR keeps the
+// candidate not ready with that number as the reason (the tracker answers for a
+// PR number like an issue); once the PR is merged the candidate is ready again
+// with no edit. No open-PR matching is involved, so an issue and an MR that
+// share a number on GitLab are not confused.
 func TestCandidateDependsOnOpenPR(t *testing.T) {
 	root := newRepo(t, nil)
 	be := &fakeRemote{}
@@ -150,13 +153,14 @@ func TestCandidateDependsOnOpenPR(t *testing.T) {
 		return Candidate{}
 	}
 	be.prs = []tracker.PR{{Number: 77, Branch: "ben/9-other"}}
-	if c := get(); c.DependsOnPR != 77 || c.Ready() {
-		t.Errorf("Depends on open PR #77: DependsOnPR=%d ready=%v", c.DependsOnPR, c.Ready())
+	c := get()
+	if c.Ready() || !strings.Contains(strings.Join(c.NotReady(), ";"), "77") {
+		t.Errorf("Depends on open PR #77: ready=%v why=%q", c.Ready(), c.NotReady())
 	}
 	be.prs = nil
 	be.items["77"].Closed = true // merged: the tracker reports it closed
-	if c := get(); c.DependsOnPR != 0 || !c.Ready() {
-		t.Errorf("PR #77 gone: DependsOnPR=%d ready=%v", c.DependsOnPR, c.Ready())
+	if c := get(); !c.Ready() {
+		t.Errorf("PR #77 merged: still not ready: %q", c.NotReady())
 	}
 }
 

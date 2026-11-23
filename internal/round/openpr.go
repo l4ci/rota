@@ -95,31 +95,3 @@ func deferredDependency(be backlog.Backend, it backlog.Item, open map[int]bool) 
 	}
 	return 0
 }
-
-// dependsOnOpenPR is the open PR a `## Depends on` entry names, 0 for none.
-// The entry is read like any dependency (a bare #N in the section); when that
-// number is an open PR the item is held on it, and the hold clears the moment
-// the PR leaves the open set, with no edit to the item. An orchestrator records
-// a maintainer's "after PR X lands" this way instead of holding the item by hand.
-func dependsOnOpenPR(be backlog.Backend, it backlog.Item, open map[int]bool) int {
-	if len(open) == 0 {
-		return 0
-	}
-	body, _, _ := be.Detail(it.ID)
-	refs, _ := dependencies(body, it.IssueKey().Project())
-	for _, ref := range refs {
-		if n, err := strconv.Atoi(ref); err == nil && open[n] && worker.NormID(ref) != worker.NormID(it.ID) {
-			return n
-		}
-	}
-	return 0
-}
-
-// holdingPR is the open PR holding an item back: the PR a deferred finding was
-// filed from, else one its `## Depends on` section names. 0 for none.
-func holdingPR(be backlog.Backend, it backlog.Item, open map[int]bool) int {
-	if n := deferredDependency(be, it, open); n != 0 {
-		return n
-	}
-	return dependsOnOpenPR(be, it, open)
-}

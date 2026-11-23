@@ -31,10 +31,9 @@ type Candidate struct {
 	// OpenPR is the open PR that already resolves the item, 0 for none: the
 	// item is not ready while one is open.
 	OpenPR int
-	// DependsOnPR is the open PR holding the item, 0 for none: the PR a deferred
-	// finding was filed from (the item's Related PR; its fix builds on code only
-	// that PR adds) or one its `## Depends on` section names. The item is not
-	// ready until the PR merges or closes.
+	// DependsOnPR is the open PR a deferred finding was filed from (the item's
+	// Related PR), 0 for none: its fix builds on code only that PR adds, so the
+	// item is not ready until the PR merges.
 	DependsOnPR int
 	// Pick is the harness and model the item asks for; PickErr why its labels
 	// are refused ("" when fine). assign refuses the same way.
@@ -200,7 +199,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 		}
 		ms := milestone.IDs(it.Fields.Get("milestone"))
 		scopes, src := ItemScopeSource(be, it.ID)
-		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: holdingPR(be, it, openNums), ScopeSource: src, Tag: it.Tag, Scopes: scopes, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
+		c := Candidate{ID: it.ID, Title: it.Title, OpenPR: openPR[it.IssueKey()].Number, DependsOnPR: deferredDependency(be, it, openNums), ScopeSource: src, Tag: it.Tag, Scopes: scopes, Readiness: r, Warnings: append([]string{}, staleWarnings...)}
 		if src == SourceTouches {
 			c.Declared = scopes
 		}
