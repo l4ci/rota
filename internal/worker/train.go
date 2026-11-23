@@ -1143,8 +1143,11 @@ func (t *trainRun) land(p trainPlan, result landing.TrainResult, prefix trainVer
 		// resolves to the slot that still records it, else to its review record. A
 		// member named by PR already lands by it.
 		landSlot, landTip := m.Target, ""
-		if _, byPR := PRRefNumber(m.Target); !byPR && m.PR != "" && p.remote {
-			landSlot, landTip = m.PR, heads[i]
+		if p.remote {
+			landTip = heads[i]
+			if _, byPR := PRRefNumber(m.Target); !byPR && m.PR != "" {
+				landSlot = m.PR
+			}
 		}
 		gr, err := shielded.Gate(context.WithoutCancel(ctx), root, GateOpts{Slot: landSlot, LandVerifiedTip: landTip, Base: o.Base, LandVerified: true, NoVerdict: true, FinalSlice: slices.Contains(o.FinalSlice, m.Target), HoldsLandLock: true, Round: o.Round, in: &p.in})
 		res.Notes = appendNew(res.Notes, gr.Notes...)
