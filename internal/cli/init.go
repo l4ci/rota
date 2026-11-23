@@ -357,25 +357,35 @@ const (
 // writes nothing. Best effort: an unreadable global config or round config
 // leaves the key alone. It returns the value written, 0 for none.
 func seedTestSlots(c *Ctx, root string) int {
-	env := c.deps().projectsEnv()
-	dir, err := cfgdir.Dir(env)
-	if err != nil {
+	dir, n := pendingTestSlots(c, root)
+	if n == 0 {
 		return 0
 	}
-	vals, err := config.LoadGlobal(dir)
-	if err != nil {
-		return 0
-	}
-	if _, set := vals[testSlotsKey]; set {
-		return 0
-	}
-	settings, ok := c.deps().tolerantRoundSettings(root)
-	if !ok || len(settings.Roster) < 2 {
-		return 0
-	}
-	n := min(len(settings.Roster), testSlotsMax)
 	if _, err := config.SetGlobal(dir, testSlotsKey, strconv.Itoa(n)); err != nil {
 		return 0
 	}
 	return n
+}
+
+// pendingTestSlots is the value seedTestSlots would write and the global
+// config dir it would write to: 0 when the key is set, the roster has fewer
+// than two workers or a config file is unreadable. It writes nothing, so
+// `rota setup` can offer the same value before it asks (#4241).
+func pendingTestSlots(c *Ctx, root string) (dir string, n int) {
+	dir, err := cfgdir.Dir(c.deps().projectsEnv())
+	if err != nil {
+		return "", 0
+	}
+	vals, err := config.LoadGlobal(dir)
+	if err != nil {
+		return "", 0
+	}
+	if _, set := vals[testSlotsKey]; set {
+		return "", 0
+	}
+	settings, ok := c.deps().tolerantRoundSettings(root)
+	if !ok || len(settings.Roster) < 2 {
+		return "", 0
+	}
+	return dir, min(len(settings.Roster), testSlotsMax)
 }

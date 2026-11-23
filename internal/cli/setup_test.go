@@ -767,3 +767,73 @@ func TestSetupYesWritesNoTasteKey(t *testing.T) {
 		t.Error("--yes wrote config.local.json")
 	}
 }
+
+// #4241: setup offers an unset global test.slots at the roster size, writes it
+// only on a yes or --save-global, and leaves a set value alone.
+func TestSetupTestSlotsGlobal(t *testing.T) {
+	const accept = "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\n\n\ny\n"
+	const decline = "\n1\nworktree\n2\n\n\nnone\n2\n\n\n\n\n\n\n\nn\n"
+	slotsOf := func(t *testing.T, gdir string) (any, bool) {
+		t.Helper()
+		vals, err := config.LoadGlobal(gdir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, ok := vals["test.slots"]
+		return v, ok
+	}
+	t.Run("accepted save writes the roster size", func(t *testing.T) {
+		gdir := isolateGlobal(t)
+		dir := t.TempDir()
+		code, _, errOut := setupRun(t, dir, accept, true)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		if !strings.Contains(errOut, "test.slots = ") {
+			t.Errorf("offer lacks test.slots:\n%s", errOut)
+		}
+		roster := cfgValue(t, dir, "round.roster")
+		want := fmt.Sprint(len(roster.([]any)))
+		if got, ok := slotsOf(t, gdir); !ok || fmt.Sprint(got) != want {
+			t.Errorf("global test.slots = %v (set %v), want %s", got, ok, want)
+		}
+	})
+	t.Run("declined save writes nothing", func(t *testing.T) {
+		gdir := isolateGlobal(t)
+		if code, _, e := setupRun(t, t.TempDir(), decline, true); code != 0 {
+			t.Fatalf("exit %d: %s", code, e)
+		}
+		if _, ok := slotsOf(t, gdir); ok {
+			t.Error("declined offer wrote test.slots")
+		}
+	})
+	t.Run("--yes writes nothing, --save-global saves", func(t *testing.T) {
+		gdir := isolateGlobal(t)
+		if code, _, e := setupRun(t, t.TempDir(), "", false, "--yes"); code != 0 {
+			t.Fatalf("exit %d: %s", code, e)
+		}
+		if _, ok := slotsOf(t, gdir); ok {
+			t.Error("--yes wrote test.slots")
+		}
+		if code, _, e := setupRun(t, t.TempDir(), "", false, "--yes", "--save-global"); code != 0 {
+			t.Fatalf("exit %d: %s", code, e)
+		}
+		if _, ok := slotsOf(t, gdir); !ok {
+			t.Error("--save-global did not write test.slots")
+		}
+	})
+	t.Run("set value is kept and not offered", func(t *testing.T) {
+		gdir := isolateGlobal(t)
+		writeFile(t, config.GlobalPath(gdir), `{"test":{"slots":1}}`)
+		code, _, errOut := setupRun(t, t.TempDir(), accept, true)
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		if strings.Contains(errOut, "test.slots") {
+			t.Errorf("offered over a set value:\n%s", errOut)
+		}
+		if got, _ := slotsOf(t, gdir); fmt.Sprint(got) != "1" {
+			t.Errorf("test.slots = %v, want 1 kept", got)
+		}
+	})
+}
