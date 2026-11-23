@@ -1638,6 +1638,62 @@ func TestAssignWhileGateHoldsAnotherSlot(t *testing.T) {
 	})
 }
 
+// #4246: without --agent the picker skips a slot the running gate holds while
+// an ungated free slot exists. Every free slot gated, or an empty holder,
+// still refuses; an explicit --agent on a gated slot still refuses.
+func TestAssignPickSkipsGatedSlot(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		holder func(roster []string) string
+		agent  string
+		gated  bool   // want a gate-running refusal
+		not    string // "" or a slot the pick must not be
+	}{
+		{"first slot gated", func(r []string) string { return r[0] }, "", false, "first"},
+		{"every slot gated", func(r []string) string { return strings.Join(r, ",") }, "", true, ""},
+		{"empty holder", func([]string) string { return "" }, "", true, ""},
+		{"explicit gated agent", func(r []string) string { return r[0] }, "first", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newAssignFixture(t)
+			roster := f.set.Roster
+			if len(roster) < 2 {
+				t.Skip("needs two roster slots")
+			}
+			cd, err := rotastatetest.CommonDir(f.root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			holder := rotastate.File(cd, "land") + worker.LandHolderSuffix
+			if err := os.MkdirAll(filepath.Dir(holder), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			agent := tc.agent
+			if agent == "first" {
+				agent = roster[0]
+			}
+			holdLandLock(t, f.root, func() {
+				if err := os.WriteFile(holder, []byte(tc.holder(roster)), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				res, err := f.assign("12", agent, nil)
+				if tc.gated {
+					if by := blockedBy(t, err); by != landing.GateRunning {
+						t.Errorf("want gate-running, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("assign = %v, want it to pick an ungated slot", err)
+				}
+				if res.Agent == roster[0] {
+					t.Errorf("picked gated slot %s", res.Agent)
+				}
+			})
+		})
+	}
+}
+
 // #2745: a PR queued in review from a slot that now holds another branch does
 // not gate that slot; a slot still holding the queued branch stays gated, and an
 // unresolvable holder gates every slot.

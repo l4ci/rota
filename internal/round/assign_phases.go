@@ -45,8 +45,9 @@ func noFreeSlotRefusal(reg worker.Registry, set roundcfg.Settings, id string, sk
 }
 
 // selectSlot is the slot for id: the named one, else the first idle roster
-// slot, else the first whose PR can be queued. warns are the slots it skipped.
-func (e Env) selectSlot(ctx context.Context, root string, reg worker.Registry, o AssignOpts, id string) (slot *worker.Slot, warns []string, err error) {
+// slot, else the first whose PR can be queued; a slot a running gate holds
+// comes last. warns are the slots it skipped.
+func (e Env) selectSlot(ctx context.Context, root string, reg worker.Registry, forge bool, o AssignOpts, id string) (slot *worker.Slot, warns []string, err error) {
 	set := e.Round
 	if o.Agent != "" {
 		slot = reg.Slot(o.Agent)
@@ -61,7 +62,26 @@ func (e Env) selectSlot(ctx context.Context, root string, reg worker.Registry, o
 		}
 		return slot, nil, nil
 	}
-	picked, skipped, unresolved := e.pickSlots(ctx, root, reg, set, worker.NormID(id), 1)
+	// While a gate holds the land lock, an assign to a slot it gates refuses
+	// (#2639), and the tick then defers every later candidate. Pick among all
+	// candidates and take the first the gate does not hold (#4246); when every
+	// one is gated, keep the first so the assign refuses with gate-running.
+	gateBlocks, err := e.gateBlocksSlot(ctx, root, forge)
+	if err != nil {
+		return nil, nil, err
+	}
+	want := 1
+	if gateBlocks != nil {
+		want = len(set.Roster)
+	}
+	picked, skipped, unresolved := e.pickSlots(ctx, root, reg, set, worker.NormID(id), want)
+	if gateBlocks != nil {
+		// A holder of this issue resumes; it stays first whatever the gate says.
+		i := slices.IndexFunc(picked, func(s *worker.Slot) bool { return s.Holds(id) || !gateBlocks(s.Name()) })
+		if i > 0 {
+			picked = picked[i:]
+		}
+	}
 	if len(skipped) > 0 {
 		warns = append(warns, "skipped slots whose account has no login: "+strings.Join(skipped, "; "))
 	}
@@ -333,7 +353,7 @@ func (e Env) placeSlot(ctx context.Context, root string, be Board, o AssignOpts,
 	if err != nil {
 		return placement{}, err
 	}
-	slot, warns, err := e.selectSlot(ctx, root, reg, o, id)
+	slot, warns, err := e.selectSlot(ctx, root, reg, be.Capabilities().Forge, o, id)
 	res.Warnings = append(res.Warnings, warns...)
 	if err != nil {
 		return placement{}, err
