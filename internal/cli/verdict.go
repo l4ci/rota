@@ -447,6 +447,7 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	if err != nil || bt.Branch == bt.Base {
 		return ""
 	}
+	openPRBase(c, &bt)
 	res, why, err := branchReviewDepth(c, bt, nil)
 	if err != nil {
 		return ""

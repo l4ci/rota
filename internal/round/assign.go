@@ -281,6 +281,25 @@ func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots .
 	return blocked(landing.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
 }
 
+// gateBlocksSlot says whether a running gate or train blocks assigning to a
+// slot, as refuseWhileGateRuns decides it for an assign: nil when no gate holds
+// the land lock. Without a forge, or with a holder that names no slot or PR,
+// every slot is blocked (fail closed).
+func (e Env) gateBlocksSlot(ctx context.Context, root string, forge bool) (func(string) bool, error) {
+	held, err := e.Worker.LandLockHeld(ctx, root)
+	if err != nil || !held {
+		return nil, err
+	}
+	if !forge {
+		return func(string) bool { return true }, nil
+	}
+	gated, all := gatedSlots(root, e.Worker.LandLockHolder(ctx, root))
+	if all {
+		return func(string) bool { return true }, nil
+	}
+	return func(s string) bool { return gated[s] }, nil
+}
+
 // gatedSlots resolves a land-lock holder (a slot, a PR or a train's
 // comma-separated targets) to the slots whose branch it gates: a named slot,
 // and every slot or queued PR's origin slot whose PR number a target names,
