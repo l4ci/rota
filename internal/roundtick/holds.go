@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/strutil"
 )
 
@@ -52,7 +53,7 @@ func HoldReason(held map[string]string, failed map[string]FailedHead, target, he
 	}
 	contentFailure := func(why string) bool {
 		v, _, _ := strings.Cut(why, ":")
-		return failedHeadVerdict(v)
+		return landing.ClassifyVerdict(v).HoldHead
 	}
 	if prev, ok := failed[target]; ok {
 		if prev.Head == head && contentFailure(prev.Why) {
