@@ -9,7 +9,7 @@ import "strings"
 const slugMax = 40
 
 // BranchName is the default branch for a cycle: rota/<id lowercased>-<slug of
-// the title>. The ID leads the name so backlog.BranchIssueRef reads the issue
+// the title>. The ID leads the name so worker.BranchIssue reads the issue
 // number back from it.
 func BranchName(id, title string) string {
 	name := "rota/" + strings.ToLower(strings.TrimSpace(id))

@@ -9,14 +9,14 @@ import (
 
 // The one owner of the `<agent>/<issue>-<slug>` branch grammar a round cuts for
 // an issue: BranchName writes it, branchIssue (and so BranchIssue, RoundBranch,
-// HeldID, IssueFromBranch) parse it. Change one half and branch_test.go's
+// HeldID, IssueFromBranch) parse it. Nothing else reads a branch's leading issue. Change one half and branch_test.go's
 // round-trip fails.
 
 var (
 	slugNonWord = regexp.MustCompile(`[^a-z0-9]+`)
 	// reIssueBranch: the issue is a number or a tracker key (PROJ-123, upper
-	// case, as BranchName spells it).
-	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+|[A-Z][A-Z0-9_]*-\d+)-`)
+	// case, as BranchName spells it); the slug is optional.
+	reIssueBranch = regexp.MustCompile(`^[^/]+/(\d+|[A-Z][A-Z0-9_]*-\d+)(?:-|$)`)
 )
 
 // BranchName is `<agent>/<issue>-<slug>`: the issue number or tracker key
@@ -59,7 +59,7 @@ func branchIssue(branch string) (string, bool) {
 	return m[1], true
 }
 
-// BranchIssue is the issue key leading a `<agent>/<issue>-<slug>` branch.
+// BranchIssue is the issue key leading a `<agent>/<issue>[-<slug>]` branch.
 func BranchIssue(branch string) (tracker.IssueKey, bool) {
 	id, ok := branchIssue(branch)
 	if !ok {

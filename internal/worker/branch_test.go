@@ -47,3 +47,26 @@ func TestBranchNameRoundTrips(t *testing.T) {
 		t.Error("add-12-things is a slug, not a key")
 	}
 }
+
+// Every reader of a branch's leading issue (review depth, review scope, the
+// follow-up guard, verdict reports) asks BranchIssue, so this table is their
+// whole grammar.
+func TestBranchIssue(t *testing.T) {
+	for branch, want := range map[string]string{
+		// numbers
+		"kit/12-fix": "12", "rota/2349-move-ship": "2349",
+		// tracker keys
+		"kit/PROJ-12-fix": "PROJ-12", "ben/ABC_D-7-underscore": "ABC_D-7",
+		// no slug
+		"kit/12": "12", "kit/PROJ-12": "PROJ-12",
+		// no leading issue
+		"main": "", "feat/x": "", "park/nia": "", "kit/0-x": "", "kit/12abc": "",
+		"kit/PROJ-12abc": "", "kit/proj-12-fix": "", "dana/add-12-things": "",
+		"12-fix": "", "a/b/12-fix": "", "release/1.2": "",
+	} {
+		got, ok := BranchIssue(branch)
+		if string(got) != want || ok != (want != "") {
+			t.Errorf("BranchIssue(%q) = %q, %v, want %q", branch, got, ok, want)
+		}
+	}
+}

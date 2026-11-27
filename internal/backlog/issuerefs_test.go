@@ -21,13 +21,3 @@ func TestFindIssueRefs(t *testing.T) {
 		}
 	}
 }
-
-func TestBranchIssueRef(t *testing.T) {
-	for in, want := range map[string]string{
-		"kit/69-issue-first": "#69", "ben/7": "#7", "feat/x": "", "main": "", "kit/0-x": "", "kit/12abc": "",
-	} {
-		if got := BranchIssueRef(in); got != want {
-			t.Errorf("%q: got %q want %q", in, got, want)
-		}
-	}
-}

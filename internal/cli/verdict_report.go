@@ -51,12 +51,8 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 		add(it.ID)
 	}
 	if issue {
-		if keySource {
-			for _, id := range reportKeyItems(t.branch, "") {
-				add(id)
-			}
-		} else {
-			add(backlog.BranchIssueRef(t.branch))
+		if key, ok := worker.BranchIssue(t.branch); ok {
+			add(key.String())
 		}
 	}
 	// Match the existing review scope: file item IDs and issue closing references

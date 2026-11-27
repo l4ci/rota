@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -195,14 +194,12 @@ func otherSide(trust *worker.MarkerTrust, onSupport bool, comments []tracker.Com
 	return tracker.Comment{}, false
 }
 
-var branchIssue = regexp.MustCompile(`/(\d+)-`)
-
 // supportPRID names a support PR's entries: the issue its branch
 // `<round.support>-<agent>/<id>-<slug>` carries, else the first issue it
 // closes, else the encoded branch.
 func supportPRID(env round.Env, pr tracker.PR) string {
-	if m := branchIssue.FindStringSubmatch(pr.Branch); m != nil {
-		return m[1]
+	if k, ok := worker.BranchIssue(pr.Branch); ok {
+		return k.String()
 	}
 	if c := env.Forge.ClosedNumbers(pr.Body); len(c) > 0 {
 		return strconv.Itoa(c[0])

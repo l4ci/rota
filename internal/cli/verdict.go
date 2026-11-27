@@ -20,6 +20,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/verdict"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // verdictCommands is the `rota verdict` group (B2, #55). `rota debug verdict`
@@ -420,13 +421,13 @@ func reaskMalformed(t verdictBranch, kind string, cause error) error {
 // branchIsFollowUp is whether the issue leading the branch is a deferred-findings
 // item. Any lookup failure reads as no: the finding is then filed as before.
 func branchIsFollowUp(c *Ctx, root, branch string) bool {
-	ref := backlog.BranchIssueRef(branch)
-	if ref == "" {
+	key, ok := worker.BranchIssue(branch)
+	if !ok {
 		return false
 	}
 	var yes bool
 	withBackend(c, root, false, "", func(be backlog.Backend) (Result, error) {
-		if it, err := be.Get(ref); err == nil {
+		if it, err := be.Get(key.Ref()); err == nil {
 			yes = verdict.IsFollowUpTitle(it.Title)
 		}
 		return Result{}, nil

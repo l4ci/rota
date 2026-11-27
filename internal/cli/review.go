@@ -132,13 +132,13 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 	return info, nil
 }
 
-// reviewScanIssues fills info.IDs and info.Intents from the "#N" refs of the
-// branch name and the commits' closing keywords. A ref the tracker cannot
+// reviewScanIssues fills info.IDs and info.Intents from the branch's leading
+// issue and the "#N" refs of the commits' closing keywords. A ref the tracker cannot
 // resolve (offline, unknown) stays in IDs without an intent.
 func reviewScanIssues(c *Ctx, t branchTarget, bodies string, info *reviewInfo) {
 	var ids []string
-	if r := backlog.BranchIssueRef(t.Branch); r != "" {
-		ids = append(ids, r)
+	if k, ok := worker.BranchIssue(t.Branch); ok {
+		ids = append(ids, k.Ref())
 	}
 	for _, r := range backlog.FindIssueRefs(bodies) {
 		if !slices.Contains(ids, r) {

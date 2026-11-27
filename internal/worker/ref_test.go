@@ -1,7 +1,6 @@
 package worker
 
 import (
-	"github.com/l4ci/rota/internal/tracker"
 	"testing"
 
 	"github.com/l4ci/rota/internal/jsonx"
@@ -26,15 +25,6 @@ func TestSlotHeldID(t *testing.T) {
 	s := AsSlot(o)
 	if got := s.HeldID(); got != "12" {
 		t.Errorf("HeldID = %q, want 12", got)
-	}
-}
-
-func TestBranchIssue(t *testing.T) {
-	if n, ok := BranchIssue("nia/288-x"); !ok || n != tracker.NumKey(288) {
-		t.Errorf("BranchIssue = %s,%v", n, ok)
-	}
-	if _, ok := BranchIssue("park/nia"); ok {
-		t.Error("park branch holds no issue")
 	}
 }
 
