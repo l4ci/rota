@@ -93,6 +93,9 @@ func (c Clone) scan() ([]Topic, []string, error) {
 	var out []Topic
 	for _, t := range roots {
 		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return nil, nil, err
+		}
 		if err == nil {
 			if t.Split {
 				t.Bullets = len(t.bullets(string(body)))
@@ -103,7 +106,11 @@ func (c Clone) scan() ([]Topic, []string, error) {
 				}
 				for i := range t.Subtopics {
 					st := &t.Subtopics[i]
-					if sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File))); err == nil {
+					sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File)))
+					if err != nil && !errors.Is(err, os.ErrNotExist) {
+						return nil, nil, err
+					}
+					if err == nil {
 						st.Bullets = bulletCount(string(sb))
 					}
 				}

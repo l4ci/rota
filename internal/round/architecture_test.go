@@ -136,7 +136,7 @@ func TestArchitectureOffAndAreaFallback(t *testing.T) {
 		t.Fatalf("every 0 is off: %+v", a)
 	}
 	set.ArchitectureAreas = nil
-	if got := reviewAreas(root, set); len(got) != 1 || got[0] != WholeRepo {
+	if got, err := reviewAreas(root, set); err != nil || len(got) != 1 || got[0] != WholeRepo {
 		t.Fatalf("no map, no config: %v", got)
 	}
 	if err := os.MkdirAll(filepath.Join(root, ".rota", "map"), 0o755); err != nil {
@@ -145,8 +145,20 @@ func TestArchitectureOffAndAreaFallback(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, ".rota", "map", "claims.md"), []byte("---\nsubsystem: claims\n---\n# claims\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := reviewAreas(root, set); len(got) != 1 || got[0] != "claims" {
+	if got, err := reviewAreas(root, set); err != nil || len(got) != 1 || got[0] != "claims" {
 		t.Fatalf("subsystem map names: %v", got)
+	}
+}
+
+func TestArchitectureReportsUnreadableMap(t *testing.T) {
+	root, e, be, set := archFixture(t, 1, nil)
+	set.ArchitectureAreas = nil
+	path := filepath.Join(root, ".rota", "map", "broken.md")
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Architecture(context.Background(), root, be, set, nil); err == nil || !strings.Contains(err.Error(), path) {
+		t.Fatalf("expected unreadable map error naming %s, got %v", path, err)
 	}
 }
 

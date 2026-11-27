@@ -105,7 +105,7 @@ func dirQuery(c *Ctx, dir, what string, args []string) (Result, error) {
 func mapQuery(c *Ctx, args []string) (Result, error) { return dirQuery(c, "map", "subsystem", args) }
 func qaQuery(c *Ctx, args []string) (Result, error)  { return dirQuery(c, "qa", "target", args) }
 
-func indexVerb(c *Ctx, args []string, key string, body func(root string) string) (Result, error) {
+func indexVerb(c *Ctx, args []string, key string, body func(root string) (string, error)) (Result, error) {
 	if err := noArgs(args); err != nil {
 		return Result{}, err
 	}
@@ -113,7 +113,11 @@ func indexVerb(c *Ctx, args []string, key string, body func(root string) string)
 	if err != nil {
 		return Result{}, err
 	}
-	status, err := mapqa.WriteIndex(st.Root, key, body(st.Root))
+	text, err := body(st.Root)
+	if err != nil {
+		return Result{}, err
+	}
+	status, err := mapqa.WriteIndex(st.Root, key, text)
 	if err != nil {
 		return Result{}, err
 	}
@@ -137,7 +141,10 @@ func mapStats(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		subs := mapqa.Stats(c.deps().Repo(st.Root), st.Root)
+		subs, err := mapqa.Stats(c.deps().Repo(st.Root), st.Root)
+		if err != nil {
+			return Result{}, err
+		}
 		for _, s := range subs {
 			if s.CommitsBehindErr != nil {
 				return Result{}, fmt.Errorf("map %s: counting commits behind HEAD: %w", s.Name, s.CommitsBehindErr)

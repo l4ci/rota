@@ -509,30 +509,36 @@ func TestKnowledgeExternalMissingAndStraysSameWithMatch(t *testing.T) {
 	}
 }
 
-// An unreadable stray fails the stats walk; doctor must say so, not drop its
-// size and layout checks without a word.
-func TestDoctorReportsUnreadableExternalStray(t *testing.T) {
-	project, clone := extWalkFixture(t)
-	stray := filepath.Join(clone, "topics", "git.md")
-	if err := os.Remove(stray); err != nil {
-		t.Fatal(err)
+// Doctor reports unreadable indexed files and strays through its real stats walk.
+func TestDoctorReportsUnreadableExternalFiles(t *testing.T) {
+	for _, rel := range []string{"README.md", "topics/go.md", "topics/git/README.md", "topics/git/hooks.md", "topics/git.md"} {
+		t.Run(rel, func(t *testing.T) {
+			project, clone := extWalkFixture(t)
+			if strings.HasSuffix(rel, "hooks.md") {
+				knWrite(t, filepath.Join(clone, "topics/git/README.md"), "# Git\n\n- [Hooks](hooks.md) — checks\n")
+			}
+			source := filepath.Join(clone, rel)
+			if err := os.Remove(source); err != nil && !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(source, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			_, out, _ := rotaInWith(t, doctorDeps(t, nil), project, "doctor", "--json")
+			var env struct {
+				Data struct {
+					Checks []struct{ Name, Status, Detail string }
+				}
+			}
+			if err := json.Unmarshal([]byte(out), &env); err != nil {
+				t.Fatalf("%v: %s", err, out)
+			}
+			for _, c := range env.Data.Checks {
+				if c.Name == "external knowledge size" && c.Status == "warn" && strings.Contains(c.Detail, rel) {
+					return
+				}
+			}
+			t.Fatalf("doctor does not report unreadable %s: %s", rel, out)
+		})
 	}
-	if err := os.Mkdir(stray, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	_, out, _ := rotaInWith(t, doctorDeps(t, nil), project, "doctor", "--json")
-	var env struct {
-		Data struct {
-			Checks []struct{ Name, Status, Detail string }
-		}
-	}
-	if err := json.Unmarshal([]byte(out), &env); err != nil {
-		t.Fatalf("%v: %s", err, out)
-	}
-	for _, c := range env.Data.Checks {
-		if c.Name == "external knowledge size" && c.Status == "warn" && strings.Contains(c.Detail, "topics/git.md") {
-			return
-		}
-	}
-	t.Fatalf("doctor does not report the unreadable stray: %s", out)
 }

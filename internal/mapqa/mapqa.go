@@ -75,14 +75,19 @@ type Entry struct {
 }
 
 // Entries lists the map files under root that Query can name, sorted by name.
-func Entries(root string) []Entry {
-	files := fsio.GlobDir(rotatree.File(root, rotatree.MapDir), "*.md")
-	sort.Strings(files)
+func Entries(root string) ([]Entry, error) {
+	files, err := sourceFiles(rotatree.File(root, rotatree.MapDir))
+	if err != nil {
+		return nil, err
+	}
 	var out []Entry
 	for _, f := range files {
 		raw, err := fsio.ReadText(f)
-		if err != nil {
+		if os.IsNotExist(err) {
 			continue
+		}
+		if err != nil {
+			return nil, err
 		}
 		fm, _, body := frontmatter.Parse(raw)
 		if name := fileName(f); validName(name) {
@@ -90,7 +95,26 @@ func Entries(root string) []Entry {
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
+	return out, nil
+}
+
+// sourceFiles lists Markdown files in name order. Missing directories are
+// empty; other errors must not publish an incomplete index.
+func sourceFiles(dir string) ([]string, error) {
+	files, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, f := range files {
+		if strings.HasSuffix(f.Name(), ".md") {
+			out = append(out, filepath.Join(dir, f.Name()))
+		}
+	}
+	return out, nil
 }
 
 // CommitDate is the date of the last commit that touched rel, asked of repo;
@@ -119,8 +143,11 @@ func (e Entry) TouchedIn(repo git.Repo, root string) (time.Time, bool) {
 }
 
 // MapIndexBlock is the body of the rota-map managed block.
-func MapIndexBlock(root string) string {
-	entries := Entries(root)
+func MapIndexBlock(root string) (string, error) {
+	entries, err := Entries(root)
+	if err != nil {
+		return "", err
+	}
 	bullets := "- _(no subsystems yet — write `.rota/map/<name>.md` as you discover subsystems)_"
 	if len(entries) > 0 {
 		lines := make([]string, len(entries))
@@ -129,27 +156,32 @@ func MapIndexBlock(root string) string {
 		}
 		bullets = strings.Join(lines, "\n")
 	}
-	return "## Project Map\n\nSubsystems live in `.rota/MAP.md` (detail in `.rota/map/<name>.md`). Pull with `rota map query <name>`.\n\n" + bullets
+	return "## Project Map\n\nSubsystems live in `.rota/MAP.md` (detail in `.rota/map/<name>.md`). Pull with `rota map query <name>`.\n\n" + bullets, nil
 }
 
 // QAIndexBlock is the body of the rota-qa managed block.
-func QAIndexBlock(root string) string {
-	files := fsio.GlobDir(rotatree.File(root, rotatree.QADir), "*.md")
-	sort.Strings(files)
+func QAIndexBlock(root string) (string, error) {
+	files, err := sourceFiles(rotatree.File(root, rotatree.QADir))
+	if err != nil {
+		return "", err
+	}
 	bullets := "- _(no QA strategy yet — run `/rota-qa first-run` to scaffold)_"
 	if len(files) > 0 {
 		var lines []string
 		for _, f := range files {
 			raw, err := fsio.ReadText(f)
-			if err != nil {
+			if os.IsNotExist(err) {
 				continue
+			}
+			if err != nil {
+				return "", err
 			}
 			fm, _, _ := frontmatter.Parse(raw)
 			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", fileName(f), strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
 		}
 		bullets = strings.Join(lines, "\n")
 	}
-	return "## Project QA\n\nQA strategies live in `.rota/QA.md` (detail in `.rota/qa/<target>.md`). Pull with `rota qa query <target>`. `/rota-qa run` consumes these; the skill never hardcodes runners.\n\n" + bullets
+	return "## Project QA\n\nQA strategies live in `.rota/QA.md` (detail in `.rota/qa/<target>.md`). Pull with `rota qa query <target>`. `/rota-qa run` consumes these; the skill never hardcodes runners.\n\n" + bullets, nil
 }
 
 // WriteIndex upserts body as the key block of the project's instructions file.
@@ -176,12 +208,19 @@ var entryRe = regexp.MustCompile(`(?m)^- ([^:\s]+):(\d+)\b`)
 
 // Stats measures every map file: size, last touch, and how many of its
 // "Entry points" references no longer resolve to a line of a file.
-func Stats(repo git.Repo, root string) []Subsystem {
+func Stats(repo git.Repo, root string) ([]Subsystem, error) {
+	entries, err := Entries(root)
+	if err != nil {
+		return nil, err
+	}
 	out := []Subsystem{}
-	for _, e := range Entries(root) {
+	for _, e := range entries {
 		fi, err := os.Stat(e.Path)
-		if err != nil {
+		if os.IsNotExist(err) {
 			continue
+		}
+		if err != nil {
+			return nil, err
 		}
 		touched := ""
 		if d, ok := e.TouchedIn(repo, root); ok {
@@ -197,7 +236,7 @@ func Stats(repo git.Repo, root string) []Subsystem {
 		n, nerr := commitsBehind(repo, frontmatter.Str(e.FM, "last_mapped_commit"))
 		out = append(out, Subsystem{Name: e.Name, Bytes: fi.Size(), Touched: touched, EntryPoints: len(refs), BrokenRefs: broken, CommitsBehind: n, CommitsBehindErr: nerr})
 	}
-	return out
+	return out, nil
 }
 
 var shaRe = regexp.MustCompile(`^[0-9a-f]{4,64}$`)

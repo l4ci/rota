@@ -93,8 +93,20 @@ func Blocks(root string, milestone func() (changed bool, err error)) BlocksResul
 			return "unchanged", err
 		}},
 		{"decisions", func() (string, error) { return st.RegenerateBlock("decisions", scope("decisions")) }},
-		{"map", func() (string, error) { return mapqa.WriteIndex(root, "map", mapqa.MapIndexBlock(root)) }},
-		{"qa", func() (string, error) { return mapqa.WriteIndex(root, "qa", mapqa.QAIndexBlock(root)) }},
+		{"map", func() (string, error) {
+			body, err := mapqa.MapIndexBlock(root)
+			if err != nil {
+				return "", err
+			}
+			return mapqa.WriteIndex(root, "map", body)
+		}},
+		{"qa", func() (string, error) {
+			body, err := mapqa.QAIndexBlock(root)
+			if err != nil {
+				return "", err
+			}
+			return mapqa.WriteIndex(root, "qa", body)
+		}},
 	}
 	for _, s := range steps {
 		status, err := s.fn()

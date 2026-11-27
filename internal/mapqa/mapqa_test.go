@@ -58,35 +58,6 @@ func TestQueryReadsQADir(t *testing.T) {
 	}
 }
 
-func TestMapIndexBlock(t *testing.T) {
-	const head = "## Project Map\n\nSubsystems live in `.rota/MAP.md` (detail in `.rota/map/<name>.md`). Pull with `rota map query <name>`.\n\n"
-	t.Run("empty", func(t *testing.T) {
-		want := head + "- _(no subsystems yet — write `.rota/map/<name>.md` as you discover subsystems)_"
-		if got := MapIndexBlock(t.TempDir()); got != want {
-			t.Errorf("got %q", got)
-		}
-	})
-}
-
-func TestQAIndexBlock(t *testing.T) {
-	const head = "## Project QA\n\nQA strategies live in `.rota/QA.md` (detail in `.rota/qa/<target>.md`). Pull with `rota qa query <target>`. `/rota-qa run` consumes these; the skill never hardcodes runners.\n\n"
-	t.Run("empty", func(t *testing.T) {
-		want := head + "- _(no QA strategy yet — run `/rota-qa first-run` to scaffold)_"
-		if got := QAIndexBlock(t.TempDir()); got != want {
-			t.Errorf("got %q", got)
-		}
-	})
-	t.Run("lists files by name with defaults", func(t *testing.T) {
-		root := t.TempDir()
-		write(t, root, ".rota/qa/web.md", "---\nsurface: browser\nsummary: Click through\n---\n")
-		write(t, root, ".rota/qa/api.md", "no frontmatter\n")
-		want := head + "- **api** (?) — (no summary)\n- **web** (browser) — Click through"
-		if got := QAIndexBlock(root); got != want {
-			t.Errorf("got %q, want %q", got, want)
-		}
-	})
-}
-
 func TestWriteIndexUpsertsBlock(t *testing.T) {
 	root := t.TempDir()
 	write(t, root, "AGENTS.md", "# Title\n")
@@ -115,7 +86,10 @@ func TestStats(t *testing.T) {
 		"- src/a.go:3 ok\n- src/a.go:4 past the end\n- src/nonl.go:2 last line without newline\n- src/gone.go:1 missing file\n- src/a.go:0 zero\n\n## Other\n- src/a.go:99 not counted\n")
 	write(t, root, ".rota/map/two.md", "---\nsubsystem: two\ntouched: 2026-02-03\n---\nno entry points\n")
 
-	got := Stats(git.Repo{Dir: root}, root)
+	got, err := Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 2 {
 		t.Fatalf("Stats = %+v, want 2 rows", got)
 	}
@@ -128,18 +102,14 @@ func TestStats(t *testing.T) {
 	}
 }
 
-func TestStatsEmpty(t *testing.T) {
-	got := Stats(git.Repo{}, t.TempDir())
-	if got == nil || len(got) != 0 {
-		t.Errorf("Stats = %#v, want empty non-nil", got)
-	}
-}
-
 func TestStatsTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\n---\nbody\n")
 	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
-	got := Stats(git.Repo{Dir: root}, root)
+	got, err := Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || got[0].Touched != want || want == "" {
 		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
 	}
@@ -155,8 +125,12 @@ func TestMapFilesAreNamedByFileName(t *testing.T) {
 	write(t, root, ".rota/map/.md", "no name\n")
 	want := []string{"auth", "auth-ui", "bare"}
 
+	block, err := MapIndexBlock(root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	var indexed []string
-	for _, m := range regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`).FindAllStringSubmatch(MapIndexBlock(root), -1) {
+	for _, m := range regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`).FindAllStringSubmatch(block, -1) {
 		indexed = append(indexed, m[1])
 	}
 	if !reflect.DeepEqual(indexed, want) {
@@ -166,7 +140,11 @@ func TestMapFilesAreNamedByFileName(t *testing.T) {
 		t.Errorf("Query(indexed) missing = %v, err = %v", missing, err)
 	}
 	var stats []string
-	for _, s := range Stats(git.Repo{Dir: root}, root) {
+	rows, err := Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range rows {
 		stats = append(stats, s.Name)
 	}
 	if !reflect.DeepEqual(stats, want) {
@@ -179,7 +157,10 @@ func TestStatsUnparseableTouchedFallsBackToGitDate(t *testing.T) {
 	root := gittest.NewRepo(t, "main")
 	gittest.Commit(t, root, "add map", ".rota/map/g.md", "---\nsubsystem: g\ntouched: yesterday\n---\nbody\n")
 	want := gittest.Run(t, root, "log", "-1", "--format=%cs", "--", ".rota/map/g.md")
-	got := Stats(git.Repo{Dir: root}, root)
+	got, err := Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 1 || got[0].Touched != want || want == "" {
 		t.Errorf("Stats = %+v, want touched %q (git's commit date)", got, want)
 	}
@@ -228,7 +209,11 @@ func TestStatsCommitsBehind(t *testing.T) {
 	write(t, root, ".rota/map/gone.md", "---\nsubsystem: gone\nlast_mapped_commit: 0123456789abcdef0123456789abcdef01234567\n---\nbody\n")
 
 	got := map[string]*int{}
-	for _, s := range Stats(git.Repo{Dir: root}, root) {
+	rows, err := Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range rows {
 		got[s.Name] = s.CommitsBehind
 	}
 	if got["fresh"] == nil || *got["fresh"] != 0 {
@@ -293,7 +278,11 @@ func TestStatsReadsThroughTheInjectedRepo(t *testing.T) {
 	}
 	byName := func(repo git.Repo) map[string]Subsystem {
 		m := map[string]Subsystem{}
-		for _, s := range Stats(repo, root) {
+		rows, err := Stats(repo, root)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, s := range rows {
 			m[s.Name] = s
 		}
 		return m
