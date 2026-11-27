@@ -58,8 +58,14 @@ TIER="$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")"
 [ "$TIER" = "confirmed/2" ] || fail "Foo rule sidecar lost tier/hits after move: $TIER"
 pass "per-bullet move: sidecar tier+hits follow to new key"
 
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Architecture" --title "Foo rule") || vfail
-[ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old sidecar key 'Architecture::Foo rule' not cleared: $OLD"
+# `tier get` refuses a title whose bullet is gone, so read the records themselves.
+tracked() {
+  hvj -C "$TMP_KR" knowledge tier list | jget data.entries | python3 -c '
+import json, sys
+print(sum(1 for e in json.load(sys.stdin) if (e["topic"], e["title"]) == (sys.argv[1], sys.argv[2])))' "$1" "$2"
+}
+OLD=$(tracked "Architecture" "Foo rule") || vfail
+[ "$OLD" = "0" ] || fail "old sidecar key 'Architecture::Foo rule' not cleared: $OLD"
 pass "per-bullet move: old sidecar key removed"
 
 # ---------- Per-bullet error: missing target heading ----------
@@ -90,8 +96,8 @@ pass "whole-topic rename: heading renamed, bullets follow"
 
 NEW=$(hvj -C "$TMP_KR" knowledge tier get --topic "Tooling & Build" --title "Baz rule" | jget data.tier || echo missing) || vfail
 [ "$NEW" = "provisional" ] || fail "Baz rule sidecar entry missing under new topic: $NEW"
-OLD=$(hvj -C "$TMP_KR" knowledge tier get --topic "Build & Tooling" --title "Baz rule") || vfail
-[ "$(jget data.found <<<"$OLD")" = "false" ] || fail "old 'Build & Tooling::Baz rule' sidecar key not cleared: $OLD"
+OLD=$(tracked "Build & Tooling" "Baz rule") || vfail
+[ "$OLD" = "0" ] || fail "old 'Build & Tooling::Baz rule' sidecar key not cleared: $OLD"
 pass "whole-topic rename: sidecar entries follow to new topic prefix"
 
 # ---------- Whole-topic error: target heading already exists ----------

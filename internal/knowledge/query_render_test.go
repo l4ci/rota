@@ -58,7 +58,7 @@ func TestQueryRenderPreservesScopeOrderAndSourceTiers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.TierSet("web", "a", "Local", Confirmed); err != nil {
+	if _, err := s.TierSet("web", "a", "Local", Confirmed); err != nil {
 		t.Fatal(err)
 	}
 	for _, tc := range []struct{ scope, want string }{
