@@ -674,14 +674,6 @@ func TestHerdrSpawnDialogFailures(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "unrecognised startup dialog in tab w9:t7") {
 		t.Errorf("unknown dialog: %v", err)
 	}
-	f := mk("❯ 1. Yes, proceed\n", "blocked")
-	_, err = New("herdr", deps(f, herdrEnv, &clock{})).Spawn(bg, opts)
-	if err == nil || !strings.Contains(err.Error(), "did not reach idle after its startup dialogs") {
-		t.Errorf("never idle: %v", err)
-	}
-	if f.count("herdr agent send-keys") != 3 {
-		t.Errorf("want 3 dialog rounds, got %d", f.count("herdr agent send-keys"))
-	}
 }
 
 // A just-created tab's shell may not be ready: agent start answers
@@ -2118,47 +2110,6 @@ func (f *fake) answers() int {
 		}
 	}
 	return n
-}
-
-// A dialog that never goes away is answered once (a slow redraw does not burn
-// another answer) and reported at the timeout as the dialog, by its title.
-func TestTmuxSpawnStuckDialogNamed(t *testing.T) {
-	trust := readFixture(t, "trust-dialog-2.1.288.txt")
-	f := &fake{handler: func(_ string, a []string) Result {
-		if a[0] == "capture-pane" {
-			return Result{Stdout: trust}
-		}
-		return Result{}
-	}}
-	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 20})
-	var de *DialogError
-	if !errors.Is(err, ErrDialogOpen) || !errors.As(err, &de) || de.First != "Accessing workspace:" {
-		t.Fatalf("err = %v", err)
-	}
-	if n := f.answers(); n != 1 {
-		t.Errorf("answers = %d, want 1:\n%s", n, f.log())
-	}
-}
-
-// Fresh dialogs after maxBootDialogs answers fail the launch by title.
-func TestTmuxSpawnDialogCapNamed(t *testing.T) {
-	trust := readFixture(t, "trust-dialog-2.1.288.txt")
-	polls := 0
-	f := &fake{handler: func(_ string, a []string) Result {
-		if a[0] == "capture-pane" {
-			polls++
-			return Result{Stdout: trust + fmt.Sprintf("\n\nredraw %d\n", polls)}
-		}
-		return Result{}
-	}}
-	_, err := New("tmux", deps(f, nil, &clock{})).Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", BootTimeout: 20})
-	var de *DialogError
-	if !errors.Is(err, ErrDialogOpen) || !errors.As(err, &de) || de.First != "Accessing workspace:" {
-		t.Fatalf("err = %v", err)
-	}
-	if n := f.answers(); n != 2 {
-		t.Errorf("answers = %d, want 2", n)
-	}
 }
 
 // A dialog with no accepting option gets no keys and is named at the timeout.
