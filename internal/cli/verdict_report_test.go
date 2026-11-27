@@ -239,3 +239,26 @@ func TestShipPRPostsPrePRVerdict(t *testing.T) {
 		t.Fatalf("ship must deliver pre-PR review exactly once on PR and item: %+v notes=%v items=%+v", out, notes, items.Issues)
 	}
 }
+
+// On a key tracker the report finds its issue from the branch name alone, so it
+// reaches it with a local forge: `rota work start` writes rota/<id>-<slug> in
+// lower case, which is not the round grammar worker.BranchIssue reads.
+func TestVerdictReportKeyBranchLocalForge(t *testing.T) {
+	dir := verdictRepo(t)
+	srv, conn, it := linearSource(t, dir)
+	deps := testDeps()
+	deps.TrackerOptions = append(deps.TrackerOptions, conn)
+	write(t, filepath.Join(dir, ".rota", "config.json"), linearCfg)
+	if key, err := it.Create(context.Background(), "Widen the seam", "body", nil, ""); err != nil || key != "ENG-1" {
+		t.Fatal(key, err)
+	}
+	gittest.Run(t, dir, "checkout", "-q", "-b", "rota/eng-1-widen-the-seam")
+
+	code, out, errOut := rotaInWith(t, deps, dir, "verdict", "add", "--kind", "qa", "--verdict", "PASS", "--json")
+	if code != 0 {
+		t.Fatalf("record: %d %s %s", code, out, errOut)
+	}
+	if got := srv.CommentBodies("ENG-1"); len(got) != 1 || !strings.Contains(got[0], "PASS") {
+		t.Errorf("ENG-1 comments = %v, want the report; output %s", got, out)
+	}
+}

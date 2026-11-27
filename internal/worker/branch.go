@@ -7,9 +7,10 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 )
 
-// The one owner of the `<agent>/<issue>-<slug>` branch grammar a round cuts for
-// an issue: BranchName writes it, branchIssue (and so BranchIssue, RoundBranch,
-// HeldID, IssueFromBranch) parse it. Nothing else reads a branch's leading issue. Change one half and branch_test.go's
+// The one owner of the `<agent>/<issue>[-<slug>]` branch grammar a round cuts
+// for an issue: BranchName writes it, branchIssue (and so BranchIssue,
+// RoundBranch, HeldID, IssueFromBranch) parse it. Nothing else reads a branch's
+// leading issue. Change one half and branch_test.go's
 // round-trip fails.
 
 var (
@@ -50,7 +51,7 @@ func branchID(id string) string {
 	return strings.ToLower(id)
 }
 
-// branchIssue is the issue text leading a `<agent>/<issue>-<slug>` branch.
+// branchIssue is the issue text leading a `<agent>/<issue>[-<slug>]` branch.
 func branchIssue(branch string) (string, bool) {
 	m := reIssueBranch.FindStringSubmatch(branch)
 	if m == nil {
@@ -68,7 +69,7 @@ func BranchIssue(branch string) (tracker.IssueKey, bool) {
 	return tracker.ParseKey(id)
 }
 
-// RoundBranch reports whether name has the `<agent>/<issue>-<slug>` shape a
+// RoundBranch reports whether name has the `<agent>/<issue>[-<slug>]` shape a
 // round cuts for a worker.
 func RoundBranch(name string) bool {
 	_, ok := branchIssue(name)

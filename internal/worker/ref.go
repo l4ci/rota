@@ -29,7 +29,7 @@ func NormID(id string) string {
 }
 
 // HeldID is the item a slot holds, in the backend's spelling: the task when
-// set (`#12`, `12`, `B07`), else the number leading `<agent>/<issue>-<slug>`.
+// set (`#12`, `12`, `B07`), else the issue leading `<agent>/<issue>[-<slug>]`.
 // A parked slot (`park/<name>`) with no task holds none.
 func HeldID(task, branch, name string) string {
 	if t := NormID(task); t != "" {
@@ -118,7 +118,7 @@ func prNumText(ref string) string {
 }
 
 // IssueFromBranch is the issue number a branch name carries: the number leading
-// `<agent>/<issue>-<slug>`, else an `issue-N` or `#N` token. "" when none.
+// `<agent>/<issue>[-<slug>]`, else an `issue-N` or `#N` token. "" when none.
 func IssueFromBranch(name string) string {
 	if id, ok := branchIssue(name); ok {
 		return id
