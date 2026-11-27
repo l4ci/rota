@@ -381,91 +381,26 @@ func (b *Issues) releaseNotes(mid string, optional bool) ([]NoteSection, error) 
 	return out, nil
 }
 
-// writeCounter counts the writes that go through it.
-type writeCounter struct {
-	MilestoneTracker
-	n int
-}
-
-func (w *writeCounter) Edit(ctx context.Context, key tracker.IssueKey, e tracker.IssueEdit) error {
-	w.n++
-	return w.MilestoneTracker.Edit(ctx, key, e)
-}
-
-func (w *writeCounter) AddLabels(ctx context.Context, key tracker.IssueKey, labels []string, auto bool) error {
-	w.n++
-	return w.MilestoneTracker.AddLabels(ctx, key, labels, auto)
-}
-
-func (w *writeCounter) RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error {
-	w.n++
-	return w.MilestoneTracker.RemoveLabels(ctx, key, labels)
-}
-
-func (w *writeCounter) Close(ctx context.Context, key tracker.IssueKey, reason, comment string) error {
-	w.n++
-	return w.MilestoneTracker.Close(ctx, key, reason, comment)
-}
-
-func (w *writeCounter) Reopen(ctx context.Context, key tracker.IssueKey) error {
-	w.n++
-	return w.MilestoneTracker.Reopen(ctx, key)
-}
-
-func (w *writeCounter) AddComment(ctx context.Context, key tracker.IssueKey, body string) (string, error) {
-	w.n++
-	return w.MilestoneTracker.AddComment(ctx, key, body)
-}
-
-func (w *writeCounter) EditMilestone(ctx context.Context, number int, e tracker.MilestoneEdit) error {
-	w.n++
-	return w.MilestoneTracker.EditMilestone(ctx, number, e)
-}
-
-type releaseTrackerCounter struct {
-	*writeCounter
-	rt ReleaseTracker
-}
-
-func (r releaseTrackerCounter) IssuesInMilestone(ctx context.Context, title, state string) ([]tracker.Issue, error) {
-	return r.rt.IssuesInMilestone(ctx, title, state)
-}
-
 // ReleaseClose labels `released` and comments `Released in <tag>` on each
 // completed issue of milestone mid (skipping what is there), then closes the
 // native milestone and marks it shipped (IssueBackend.release_close). It
 // returns the number of completed issues, and whether it wrote anything: a
-// second run on a closed-out milestone writes nothing.
+// second run on a closed-out milestone writes nothing. On an error, changed
+// says whether a write landed before it.
 func (b *Issues) ReleaseClose(mid, tag string) (issues int, changed bool, err error) {
-	cp, wc, err := b.counting()
-	if err != nil {
-		return 0, false, err
+	if issues, changed, err = b.labelReleased(mid, tag, false); err != nil {
+		return issues, changed, err
 	}
-	if issues, err = cp.labelReleased(mid, tag, false); err != nil {
-		return issues, wc.n > 0, err
-	}
-	_, err = cp.MilestoneStatus(mid, "shipped")
-	return issues, wc.n > 0, err
-}
-
-// counting is a copy of b whose tracker counts the writes made through it.
-func (b *Issues) counting() (*Issues, *writeCounter, error) {
-	rt, err := capability[ReleaseTracker](b, noMilestoneSupport)
-	if err != nil {
-		return nil, nil, err
-	}
-	wc := &writeCounter{MilestoneTracker: rt}
-	cp := *b
-	cp.Tracker = releaseTrackerCounter{wc, rt}
-	return &cp, wc, nil
+	shipped, err := b.MilestoneStatus(mid, "shipped")
+	return issues, changed || shipped, err
 }
 
 // labelReleased labels and comments the completed issues of mid
-// (_label_released) and returns how many there are.
-func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err error) {
+// (_label_released) and returns how many there are and whether it wrote.
+func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, changed bool, err error) {
 	all, err := b.releaseIssuesOpt(mid, optional)
 	if err != nil {
-		return 0, err
+		return 0, false, err
 	}
 	label := config.Label(b.Cfg, "released")
 	// The marker keeps the comment from reading as a human's answer to an
@@ -479,12 +414,13 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 		issues++
 		if !slices.Contains(is.Labels, label) {
 			if err := b.Tracker.AddLabels(b.ctx(), is.Key, []string{label}, b.AutoCreate()); err != nil {
-				return issues, err
+				return issues, changed, err
 			}
+			changed = true
 		}
 		comments, err := b.Tracker.Comments(b.ctx(), is.Key)
 		if err != nil {
-			return issues, err
+			return issues, changed, err
 		}
 		seen := false
 		for _, c := range comments {
@@ -493,11 +429,12 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, err 
 		}
 		if !seen {
 			if _, err := b.Tracker.AddComment(b.ctx(), is.Key, body); err != nil {
-				return issues, err
+				return issues, changed, err
 			}
+			changed = true
 		}
 	}
-	return issues, nil
+	return issues, changed, nil
 }
 
 // ---- umbrella --------------------------------------------------------------
@@ -591,36 +528,37 @@ func (u *Umbrella) ReleaseClose(mid, tag string) (issues int, changed bool, err 
 	if err != nil {
 		return 0, false, err
 	}
-	cp, wc, err := s.counting()
+	mt, err := s.milestoneTracker()
 	if err != nil {
 		return 0, false, err
 	}
-	if issues, err = cp.labelReleased(mid, tag, true); err != nil {
-		return issues, wc.n > 0, err
+	if issues, changed, err = s.labelReleased(mid, tag, true); err != nil {
+		return issues, changed, err
 	}
 	// fetchNatives reads every sub-repo, so one whose forge fails stops the
 	// close after the labels and comments went out. That is safe: they are
 	// skipped when present, so a re-run picks up where this one stopped.
 	set, err := u.fetchNatives()
 	if err != nil {
-		return issues, wc.n > 0, err
+		return issues, changed, err
 	}
 	nat := set.of(mid)
 	if ms, ok := nat[name]; ok && ms.State != "closed" {
 		closed := "closed"
-		if err := wc.EditMilestone(u.ctx(), ms.Number, tracker.MilestoneEdit{State: &closed}); err != nil {
-			return issues, true, err
+		if err := mt.EditMilestone(u.ctx(), ms.Number, tracker.MilestoneEdit{State: &closed}); err != nil {
+			return issues, changed, err
 		}
+		changed = true
 		ms.State = "closed"
 		nat[name] = ms
 	}
 	for _, ms := range nat {
 		if ms.State != "closed" {
-			return issues, wc.n > 0, nil
+			return issues, changed, nil
 		}
 	}
 	shipped, err := u.milestoneShipped(mid)
-	return issues, wc.n > 0 || shipped, err
+	return issues, changed || shipped, err
 }
 
 // milestoneShipped marks mid shipped on the home tracking issue
@@ -628,12 +566,5 @@ func (u *Umbrella) ReleaseClose(mid, tag string) (issues int, changed bool, err 
 // milestone is closed, so no other sub-repo's milestone is left to close). It
 // reports whether it wrote anything.
 func (u *Umbrella) milestoneShipped(mid string) (bool, error) {
-	return viaHome(u, func(home *Issues) (bool, error) {
-		hc, hw, err := home.counting()
-		if err != nil {
-			return false, err
-		}
-		_, err = hc.MilestoneStatus(mid, "shipped")
-		return hw.n > 0, err
-	})
+	return viaHome(u, func(home *Issues) (bool, error) { return home.MilestoneStatus(mid, "shipped") })
 }
