@@ -101,7 +101,7 @@ Tag each finding with a **dependency category**, which sets the test approach at
 - **Remote-owned**: a service the project owns across a network boundary. Put a port at the seam; test with an in-memory adapter, and the real one with a contract test.
 - **True external**: a third party the project does not control. Put a port at the seam; mock only at that adapter.
 
-Before filing a finding, grep for the seam it proposes: one that already exists is no finding. Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
+Before filing a finding, grep for the seam it proposes: one that already exists is no finding. Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: batch them per the small-finding rule above when they meet it, otherwise file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
 ### Step 4 — File
 
@@ -124,7 +124,7 @@ rota tracker call -- issue list --label refactor --state all --limit 200 --json 
 - Closed match: skip unless the friction demonstrably came back; then file a new issue citing it (`Related: #<n>`).
 - Closed as "won't do": rejected, do not re-file.
 
-**Create.** Build one JSON record per finding, one finding at a time: its title, summary (`desc`) and full body come from that same finding, never from a title list and a body list kept apart. Write the array to a scratch file and file it in one call:
+**Create.** Build one JSON record per issue: one per finding, or one per batch of small findings (Step 3). A batch record's title names the area, its body lists each item (path, line range, kind, estimate), and its tier is the highest item tier. Build one record at a time: its title, summary (`desc`) and full body come from that same finding or batch, never from a title list and a body list kept apart. Write the array to a scratch file and file it in one call:
 
 ```bash
 rota item create --json --batch-file <scratch.json>
