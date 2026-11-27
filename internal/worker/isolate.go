@@ -16,9 +16,9 @@ var goCacheVars = []string{"GOCACHE", "GOMODCACHE", "GOPATH", "GOENV"}
 
 // IsolatedEnviron is environ with host and ssh identity removed (the hostenv
 // prefixes, SSH_AUTH_SOCK, SSH_AGENT_PID) and HOME and the XDG dirs pinned under
-// root, created on the way. Go's caches are resolved from environ first and
-// pinned, so they survive the HOME change. It is test.isolate (#388): the
-// shape of test/lib/isolate.sh for projects that run `rota test run`.
+// root, created on the way. Go's caches and pnpm's store are resolved from
+// environ first and pinned, so they survive the HOME change. It is test.isolate
+// (#388): the shape of test/lib/isolate.sh for projects that run `rota test run`.
 func IsolatedEnviron(environ []string, root string) ([]string, error) {
 	pins := []string{
 		"HOME=" + root + "/home",
@@ -35,6 +35,7 @@ func IsolatedEnviron(environ []string, root string) ([]string, error) {
 	drop := map[string]bool{"SSH_AUTH_SOCK": true, "SSH_AGENT_PID": true, "HOME": true,
 		"XDG_CONFIG_HOME": true, "XDG_CACHE_HOME": true, "XDG_DATA_HOME": true, "XDG_STATE_HOME": true}
 	caches := goCaches(environ)
+	caches = append(caches, pnpmStore(environ)...)
 	for _, v := range goCacheVars {
 		drop[v] = true
 	}
@@ -48,6 +49,27 @@ func IsolatedEnviron(environ []string, root string) ([]string, error) {
 	}
 	out = append(out, caches...)
 	return append(out, pins...), nil
+}
+
+// pnpmStore resolves the store before HOME and the XDG dirs move. An explicit
+// override, including an empty one, belongs to the caller and stays untouched.
+func pnpmStore(environ []string) []string {
+	for _, kv := range environ {
+		k, _, _ := strings.Cut(kv, "=")
+		switch k {
+		case "pnpm_config_store_dir", "PNPM_CONFIG_STORE_DIR", "npm_config_store_dir", "NPM_CONFIG_STORE_DIR":
+			return nil
+		}
+	}
+	res, err := proc.Run(context.Background(), proc.Cmd{Name: "pnpm", Args: []string{"store", "path"}, Environ: environ})
+	if err != nil || res.ExitCode != 0 {
+		return nil
+	}
+	store := strings.TrimSpace(res.Stdout)
+	if store == "" {
+		return nil
+	}
+	return []string{"pnpm_config_store_dir=" + store}
 }
 
 // goCaches is KEY=value for each Go cache variable: environ's own value when
