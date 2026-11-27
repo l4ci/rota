@@ -5,7 +5,6 @@ import (
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itemid"
-	"github.com/l4ci/rota/internal/rotastate"
 	"slices"
 	"sort"
 	"strings"
@@ -347,16 +346,9 @@ func (u *Umbrella) Detail(ref string) (string, bool, error) {
 
 // CwdSubRepo is _cwd_repo: the registered sub-repo that cwd is inside (a
 // Layout B worktree counts, through git's common dir), "" when none.
-func CwdSubRepo(cwd string, list []repos.Repo) string {
-	main, ok, err := rotastate.MainCheckoutVia(context.Background(), gitx.Exec, cwd)
-	if err != nil || !ok {
-		return ""
-	}
-	root := repos.Realpath(main)
-	for _, r := range list {
-		if r.Path == root {
-			return r.Name
-		}
+func CwdSubRepo(run gitx.Runner, cwd string, list []repos.Repo) string {
+	if r, err := repos.Lookup(run, cwd, list); err == nil {
+		return r.Name
 	}
 	return ""
 }

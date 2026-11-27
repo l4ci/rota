@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,9 +14,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/golden"
 	"github.com/l4ci/rota/internal/knowledge"
 )
+
+func TestKnowledgeScopeUsesCallerGit(t *testing.T) {
+	root := knProject(t, true)
+	deps := testDeps()
+	deps.Git = func(context.Context, string, ...string) (git.Result, error) {
+		return git.Result{Stdout: filepath.Join(root, "web", ".git")}, nil
+	}
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "knowledge", "query", "Architecture")
+	if code != 0 || !strings.Contains(get(env, "data", "text").(string), "Web rule") {
+		t.Fatalf("caller git should select web knowledge: exit=%d text=%v stderr=%s", code, get(env, "data", "text"), stderr)
+	}
+}
 
 // The parity tests run a rota verb on a fixture and compare its output and the
 // resulting .rota/ tree delta with a golden: what the retired bin/ helper

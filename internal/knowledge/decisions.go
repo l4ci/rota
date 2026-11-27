@@ -64,6 +64,22 @@ func (s Store) DecisionsStats() ([]Stat, error) {
 	return stats, nil
 }
 
+// DecisionTopicNames lists the topics of DECISIONS.md that hold an active
+// decision, with the headings DecisionsQuery accepts. A missing file has none.
+func (s Store) DecisionTopicNames() ([]string, error) {
+	content, err := ReadFile(s.decisionsPath())
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, t := range decisionSections(ActiveDecisions(content)) {
+		if t.Name != "" && strings.TrimSpace(t.Body) != "" {
+			names = append(names, t.Name)
+		}
+	}
+	return names, nil
+}
+
 // retiredStatus marks a decision entry lifted by /rota-decide --retire or
 // --supersede: a line "*Status.* Retired ..." or "*Status.* Superseded ...".
 var retiredStatus = regexp.MustCompile(`(?m)^\*Status\.\* (Retired|Superseded)\b`)
