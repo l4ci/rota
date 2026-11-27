@@ -25,6 +25,12 @@ import (
 //   - launch preference: the autoLaunch and inPaneNeedsBinary fields. A kind
 //     with autoLaunch is picked outside any pane, in table order; ResolveLaunch
 //     walks the table and holds no per-kind case.
+//   - setup suggestion: internal/cli/setup_signals.go and
+//     TestSetupDispatchSuggestions in internal/cli/setup_signals_test.go. Decide
+//     explicitly whether to suggest the kind and add its input/evidence cases.
+//     Setup has its own preference: Core markers, then herdr on PATH, then tmux
+//     on PATH inside a session; Orca is not suggested. Do not substitute Resolve
+//     or ResolveLaunch: their session and installation requirements differ.
 //   - panes.go: CurrentPaneAny, if the host supports detection without a kind.
 //   - internal/config/keys.go: round.dispatch choices; internal/config/schema.go:
 //     setup help for that choice. Regenerate the config reference and update
