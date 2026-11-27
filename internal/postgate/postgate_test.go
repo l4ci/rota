@@ -137,3 +137,11 @@ func TestGateIntegrationLandsMembers(t *testing.T) {
 		t.Fatalf("refused landing: %v %v", err, b.calls)
 	}
 }
+
+// A merged-remotely gate that changed the base landed the PR (#4305).
+func TestGateMergedRemotelyEndsTheItem(t *testing.T) {
+	b := &fakeBook{}
+	if err := Gate(b, "root", "5", landing.GateResult{Verdict: landing.GateMergedRemotely, Changed: true, TargetSlot: "ben"}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
+		t.Fatalf("%v %v", err, b.calls)
+	}
+}

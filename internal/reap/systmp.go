@@ -57,6 +57,7 @@ func findSysTmp(_ context.Context, s *state) ([]Candidate, error) {
 	if s.in.SystemTemp == "" {
 		return nil, nil
 	}
+	s.progress("walking the system temp dir")
 	dirents, err := os.ReadDir(s.in.SystemTemp)
 	if err != nil {
 		if !os.IsNotExist(err) {
@@ -84,7 +85,7 @@ func findSysTmp(_ context.Context, s *state) ([]Candidate, error) {
 		return nil, nil
 	}
 	sort.Slice(ents, func(i, j int) bool { return ents[i].name < ents[j].name })
-	uses, usesErr := s.readUses()
+	uses, usesErr := s.findUses()
 	var out []Candidate
 	for _, e := range ents {
 		out = append(out, Candidate{ID: KindSysTmp + ":" + e.name, Kind: KindSysTmp, Name: e.name, Path: e.path,

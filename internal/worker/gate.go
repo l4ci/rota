@@ -485,6 +485,9 @@ const (
 	gateHeadWait  = 2 * time.Second
 )
 
+// gateFetchTries bounds the retries of the fetch after a forge merge.
+const gateFetchTries = 3
+
 func indentTail(text string, n int) string {
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
 	if len(lines) > n {
