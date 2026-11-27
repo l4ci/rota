@@ -26,9 +26,13 @@ func TestDeferredAbove(t *testing.T) {
 }
 
 func TestDeferredAboveMajorFloor(t *testing.T) {
-	fs := []Finding{{Severity: "major", Title: "m", Blocking: new(bool)}, {Severity: "minor", Title: "n"}}
+	fs := []Finding{
+		{Severity: "blocker", Title: "b", Blocking: new(bool)},
+		{Severity: "major", Title: "m", Blocking: new(bool)},
+		{Severity: "minor", Title: "n"},
+	}
 	got := DeferredAbove(fs, FloorMajor)
-	if len(got) != 1 || got[0].Title != "m" {
+	if len(got) != 2 || got[0].Title != "b" || got[1].Title != "m" {
 		t.Errorf("major floor kept %v", got)
 	}
 }
