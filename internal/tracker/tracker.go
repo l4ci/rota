@@ -198,16 +198,23 @@ type PR struct {
 	SameRepository bool
 }
 
-// BranchPR is the one answer to "which open PR belongs to this branch": the
-// first PR of an OpenPRs listing headed by branch in the project's own
-// repository. A fork may reuse the branch name, so its PR never counts.
-func BranchPR(prs []PR, branch string) (PR, bool) {
+// BranchPRs is the one answer to "which open PR belongs to a branch": for each
+// head branch of an OpenPRs listing, its first PR in the project's own
+// repository. A fork may reuse a branch name, so its PR never counts.
+func BranchPRs(prs []PR) map[string]PR {
+	out := map[string]PR{}
 	for _, p := range prs {
-		if p.Branch == branch && p.SameRepository {
-			return p, true
+		if _, seen := out[p.Branch]; !seen && p.SameRepository {
+			out[p.Branch] = p
 		}
 	}
-	return PR{}, false
+	return out
+}
+
+// BranchPR is BranchPRs for one branch.
+func BranchPR(prs []PR, branch string) (PR, bool) {
+	p, ok := BranchPRs(prs)[branch]
+	return p, ok
 }
 
 // PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or

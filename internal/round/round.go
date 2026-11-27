@@ -787,8 +787,8 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 		fs.ok = false
 		rep.unavailable(SourceForge, err.Error())
 	} else {
-		for i := range list {
-			fs.prs[list[i].Branch] = &list[i]
+		for branch, pr := range tracker.BranchPRs(list) {
+			fs.prs[branch] = &pr
 		}
 	}
 	if fs.ok {

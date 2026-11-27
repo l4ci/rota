@@ -39,9 +39,9 @@ func supportHandoffFixture(t *testing.T) (string, Env, *fakeRemote) {
 	fb.add("614", "Busy", "M01", false, "## Acceptance\n- [ ] ok\n")
 	fb.add("615", "Odd", "M01", false, "## Acceptance\n- [ ] ok\n")
 	fb.prs = []tracker.PR{
-		{Number: 70, Branch: "mac-ben/612-thing", URL: "https://github.com/o/r/pull/70", Body: "Closes #612"},
-		{Number: 71, Branch: "mac-kit/614-busy", URL: "https://github.com/o/r/pull/71", Body: "Closes #614"},
-		{Number: 72, Branch: "mac-nia", URL: "https://github.com/o/r/pull/72", Body: "Closes #615"},
+		{Number: 70, SameRepository: true, Branch: "mac-ben/612-thing", URL: "https://github.com/o/r/pull/70", Body: "Closes #612"},
+		{Number: 71, SameRepository: true, Branch: "mac-kit/614-busy", URL: "https://github.com/o/r/pull/71", Body: "Closes #614"},
+		{Number: 72, SameRepository: true, Branch: "mac-nia", URL: "https://github.com/o/r/pull/72", Body: "Closes #615"},
 	}
 	fb.prViews = map[int]tracker.PRInfo{70: {Head: "mac-ben/612-thing", State: "OPEN"}}
 	fb.labels = map[int][]string{612: {"needs-review"}, 614: {"in-progress"}, 615: {"needs-review"}}
@@ -126,7 +126,7 @@ func TestReconcileSupportBounced(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	fb.prs = []tracker.PR{{Number: 70, Branch: "mac-ben/12-thing", URL: "https://github.com/o/r/pull/70"}}
+	fb.prs = []tracker.PR{{Number: 70, SameRepository: true, Branch: "mac-ben/12-thing", URL: "https://github.com/o/r/pull/70"}}
 	fb.prViews = map[int]tracker.PRInfo{70: {Head: "mac-ben/12-thing", HeadSHA: "abc1234567", State: "OPEN"}}
 	fb.prNotes = map[int][]tracker.Comment{70: {
 		{ID: "1", Author: "me", Body: marker.ReviewBounce("abc1234") + "\nFix the nil map."},

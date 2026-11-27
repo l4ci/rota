@@ -95,7 +95,7 @@ func fixture(t *testing.T) (string, Env, *fakeRemote) {
 		}),
 	)
 	forge := &fakeRemote{
-		prs:      []tracker.PR{{Number: 12, Branch: "kit/56-bar", URL: "https://github.com/o/r/pull/12"}, {Number: 13, Branch: "nia/60-new", URL: "https://github.com/o/r/pull/13"}},
+		prs:      []tracker.PR{{Number: 12, SameRepository: true, Branch: "kit/56-bar", URL: "https://github.com/o/r/pull/12"}, {Number: 13, SameRepository: true, Branch: "nia/60-new", URL: "https://github.com/o/r/pull/13"}},
 		states:   map[int]string{9: "merged"},
 		labelled: []int{56, 57, 60, 99},
 	}

@@ -47,7 +47,7 @@ func TestReadHostAnswersSoloUnavailableAndErrorAlone(t *testing.T) {
 
 func TestReadForgeAnswersAndFailsAlone(t *testing.T) {
 	ctx := context.Background()
-	r := &fakeRemote{prs: []tracker.PR{{Number: 7, Branch: "ben/7-x"}}, labelled: []int{7}, closedLabelled: []int{3}}
+	r := &fakeRemote{prs: []tracker.PR{{Number: 7, SameRepository: true, Branch: "ben/7-x"}}, labelled: []int{7}, closedLabelled: []int{3}}
 	rep := &Report{}
 	fs := Env{Forge: r.asForge(), Label: config.Label(nil, "inProgress")}.readForge(ctx, rep)
 	if !fs.ok || !fs.labelsOK || fs.prs["ben/7-x"] == nil || !fs.labelled[tracker.NumKey(7)] || !reflect.DeepEqual(fs.stale, []tracker.IssueKey{"3"}) || len(rep.Unavailable) != 0 {
@@ -83,7 +83,7 @@ func (f listFailForge) List(ctx context.Context, fl tracker.ListFilter) ([]track
 
 func TestReadForgeLabelListFailuresKeepWhatWasRead(t *testing.T) {
 	ctx := context.Background()
-	r := &fakeRemote{prs: []tracker.PR{{Number: 7, Branch: "ben/7-x"}}, labelled: []int{7}, closedLabelled: []int{3}}
+	r := &fakeRemote{prs: []tracker.PR{{Number: 7, SameRepository: true, Branch: "ben/7-x"}}, labelled: []int{7}, closedLabelled: []int{3}}
 	cases := []struct {
 		state              string
 		labelsOK           bool
