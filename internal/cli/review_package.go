@@ -28,9 +28,14 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 	baseFlag := fs.String("base", "", "base ref to diff against (default: the resolved base)")
 	sinceFlag := fs.String("since", "", "package only the commits after this sha (re-review after fixes)")
 	return func(c *Ctx, args []string) (Result, error) {
-		t, err := reviewTarget(c, args, "package", *baseFlag, *sinceFlag)
+		t, err := resolveReviewSpan(c, args, *baseFlag, *sinceFlag)
 		if err != nil {
 			return Result{}, err
+		}
+		// Explicit package ranges reach the empty-range check below; --since
+		// may even select commits when the explicit base equals the branch.
+		if *baseFlag == "" && t.Branch == t.Base {
+			return Result{}, Failed("cannot package base branch '%s' against itself", t.Base)
 		}
 		ctx := c.Context()
 		r := c.deps().Repo(t.Dir)

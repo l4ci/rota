@@ -663,6 +663,40 @@ func TestReviewPackage(t *testing.T) {
 	}
 }
 
+// Empty ranges keep each verb's established exit contract. An explicit
+// package base equal to its feature tip is a resolution failure, not a
+// refusal to review the project's base branch.
+func TestReviewEmptyRangeExitCodes(t *testing.T) {
+	plain, _ := reviewProject(t)
+	for _, tc := range []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"scope base", []string{"review", "scope", "main"}, 1},
+		{"scope empty", []string{"review", "scope", "empty"}, 0},
+		{"brief base", []string{"review", "brief", "main"}, 1},
+		{"brief empty", []string{"review", "brief", "empty"}, 1},
+		{"scaffolding base", []string{"review", "scaffolding", "main", "--base", "main"}, 0},
+		{"scaffolding empty", []string{"review", "scaffolding", "empty"}, 0},
+		{"classify base", []string{"change", "classify", "main"}, 1},
+		{"classify empty", []string{"change", "classify", "empty"}, 0},
+		{"classify explicit self", []string{"change", "classify", "feat/x", "--base", "feat/x"}, 1},
+		{"package base", []string{"review", "package", "main"}, 1},
+		{"package empty", []string{"review", "package", "empty"}, 3},
+		{"package explicit self", []string{"review", "package", "feat/x", "--base", "feat/x"}, 3},
+		{"package since tip", []string{"review", "package", "feat/x", "--since", "feat/x"}, 3},
+		{"package explicit self with since", []string{"review", "package", "feat/x", "--base", "feat/x", "--since", "main"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := trRun(t, plain, "", tc.args...)
+			if o.code != tc.want {
+				t.Errorf("%v: exit %d, want %d: %s", tc.args, o.code, tc.want, o.stderr)
+			}
+		})
+	}
+}
+
 func TestReviewDepth(t *testing.T) {
 	plain, _ := reviewProject(t)
 	depth := func(args ...string) (int, map[string]any) {
