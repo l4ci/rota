@@ -418,6 +418,10 @@ Every candidate has one of four scope sources, shown as `scopeSource` in `rota r
 
 `candidates`, `assign`, `transfer` and `adopt` compare inferred entries like declared ones, but a clash that involves an inferred entry on either side only warns, even under `round.scopeOverlap: block`. The overlap detail says `inferred scopes`, and the JSON overlap carries `inferred: true`. A shared file path still blocks as before.
 
+The slot's local changes include individual untracked files, even inside a new directory.
+If a candidate names one of those files, the overlap check refuses it. Paths with spaces or
+non-ASCII characters are matched by their actual names, including when filtering `round.sharedPaths`.
+
 The overlap check cannot see files an issue will create, paths nobody wrote down, two issues editing
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.
@@ -803,7 +807,10 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
    `round.autoBundle` on, strictly related small issues go to one slot as a bundle, see
    [Bundles](#bundles-one-worker-several-small-issues)). A done slot whose PR this tick lands gets
    its next issue first (assign-ahead), before the gate starts, and the PR then lands from the
-   review list. A refused assign leaves the slot a plain merge target; a PR the queue does not
+   review list. Merge and assign-ahead check the same PR-head holds and train readiness.
+   If the PR head cannot be read, the slot keeps its current issue and the tick reports
+   the read failure in `needsYou`; it tries again on the next tick.
+   A refused assign leaves the slot a plain merge target; a PR the queue does not
    hold after the assign is dropped from the tick and shows in `needsYou` as kind `assign-ahead`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
    down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
@@ -1633,6 +1640,12 @@ claim, PR update or origin branch activity. `rota round candidates` keeps that i
 visible with `blockedBy: stale-claim`, `staleHolder` and `lastActivity`; `rota doctor`
 adds a warning with the same holder and time. Local held items use the existing stalled
 and claim-mismatch checks instead.
+
+Claim times come from the tracker's server timestamps, for both marker comments
+and plain claims on Jira, Linear and Itsaplan. Releasing a plain claim retains its
+original time and comment identity in the release record before deleting the claim
+comment, so adopt can still recognize a later takeover. Older releases without that
+history cannot prove a takeover.
 
 The default threshold is four hours for bugs, tasks and Minor/Cosmetic features, eight
 hours for Major features. Configure `round.claimStaleMinutes` and

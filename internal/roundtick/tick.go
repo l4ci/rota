@@ -509,38 +509,26 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 	var run []string
 	heads := map[string]string{}
 	for _, t := range targets {
-		why, held := HoldReason(e.Held, r.FailedHeads, t, "")
-		if e.Head != nil {
-			head, err := e.Head(ctx, t)
-			if err != nil || head == "" {
-				detail := "cannot read PR head; not retrying the gate"
-				if err != nil {
-					detail += ": " + strutil.FirstLine(err.Error())
-				}
-				r.NeedsYou = append(r.NeedsYou, Item{Kind: "gate-failed", Target: t, Why: detail})
-				continue
-			}
+		a := e.targetDue(ctx, r.FailedHeads, t)
+		if head := a.head; head != "" {
 			heads[t] = head
-			why, held = HoldReason(e.Held, r.FailedHeads, t, head)
 			if prev, ok := r.FailedHeads[t]; ok && prev.Head != head {
 				delete(r.FailedHeads, t)
 			}
-			if held {
+			if a.held {
 				for old, prev := range r.FailedHeads {
 					if old != t && prev.Head == head {
 						delete(r.FailedHeads, old)
 					}
 				}
-				r.FailedHeads[t] = FailedHead{Head: head, Why: why}
+				r.FailedHeads[t] = FailedHead{Head: head, Why: a.why}
 			}
 		}
-		if held {
-			r.Held[t] = why
-			r.NeedsYou = append(r.NeedsYou, heldItem(t, why, e.Head != nil))
-			continue
+		if a.held {
+			r.Held[t] = a.why
 		}
-		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(t) && (e.FillBypass == nil || !e.FillBypass(t)) {
-			r.NeedsYou = append(r.NeedsYou, Item{Kind: "awaiting-review", Target: t, Why: "PR is not ready for train fill; waiting for current-head review readiness"})
+		if !a.due() {
+			r.NeedsYou = append(r.NeedsYou, a.blocked)
 			continue
 		}
 		if e.TrainFill.Enabled() || len(run) < e.cap() {

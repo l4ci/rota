@@ -173,6 +173,9 @@ func orcaReady(p string) bool {
 }
 
 func (o *orca) ReadPane(ctx context.Context, slot, h string, lines int) (string, error) {
+	if h == "" {
+		return "", nil
+	}
 	v, e := o.decodeOrca(h)
 	if e != nil {
 		return "", e

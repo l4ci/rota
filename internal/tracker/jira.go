@@ -960,7 +960,7 @@ var _ ClaimStore = (*Jira)(nil)
 // claimStore is the shared claim-comment rule over Jira's comments.
 func (j *Jira) claimStore() claimComments {
 	return claimComments{
-		list: func(ctx context.Context, key IssueKey) ([]Comment, error) { return j.comments(ctx, key, nil) },
+		list: j.Comments,
 		add: func(ctx context.Context, key IssueKey, body string) error {
 			_, err := j.AddComment(ctx, key, body)
 			return err
@@ -982,4 +982,9 @@ func (j *Jira) PutClaim(ctx context.Context, key IssueKey, id string) error {
 // DropClaim records the release and deletes every claim comment of id; none is a no-op.
 func (j *Jira) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
 	return j.claimStore().DropClaim(ctx, key, id, byHand)
+}
+
+// ClaimState returns claim times and history from the shared comment store.
+func (j *Jira) ClaimState(ctx context.Context, key IssueKey) (ClaimState, error) {
+	return j.claimStore().ClaimState(ctx, key)
 }

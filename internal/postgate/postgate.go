@@ -55,7 +55,7 @@ func Gate(book Book, root, issue string, r landing.GateResult) error {
 	// already-merged is a retry after the forge merged it but a later step failed.
 	if (r.OK() || r.Verdict == landing.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
 		for _, m := range r.IntegrationMembers {
-			if err := landed(book, root, m, r.Slot); err != nil {
+			if err := landed(book, root, m, r.TargetSlot); err != nil {
 				return err
 			}
 		}
@@ -66,7 +66,7 @@ func Gate(book Book, root, issue string, r landing.GateResult) error {
 	}
 	switch m := landing.ClassifyVerdict(r.Verdict); {
 	case r.OK():
-		return landed(book, root, issue, r.Slot)
+		return landed(book, root, issue, r.TargetSlot)
 	case m.Notify:
 		return notify(book, root, r)
 	}

@@ -327,6 +327,25 @@ func TestPrunableWorktreeIsACandidate(t *testing.T) {
 	}
 }
 
+func TestPrunableOnlyApplyKeepsRestoredCheckout(t *testing.T) {
+	g := repo([]wt{{"gone", "kit/1-a", "prunable gone"}}, nil, "HEAD")
+	in := input(g, nil, []host.Agent{}, nil)
+	in.PrunableOnly = true
+	found := find(t, in, KindWorktree)
+	if len(found.Candidates) != 1 {
+		t.Fatalf("candidates: %+v", found.Candidates)
+	}
+	// The directory was restored between discovery and apply; it is now a
+	// clean, merged checkout an unrestricted reap could remove.
+	g.resp["worktree list --porcelain"] = repo([]wt{{"gone", "kit/1-a", ""}}, nil).resp["worktree list --porcelain"]
+	g.clean("gone")
+	g.resp["worktree remove /r/.worktrees/gone"] = gitResp{}
+	out := Apply(bg, in, found.Candidates)
+	if len(out.Reaped) != 0 || len(out.Failed) != 1 || !strings.Contains(out.Failed[0].Error, "no longer prunable") {
+		t.Fatalf("restored checkout must survive prunable-only apply: %+v", out)
+	}
+}
+
 func tab(id, cwd string, agentless bool) host.Tab {
 	return host.Tab{ID: id, Cwds: []string{cwd}, Agentless: agentless}
 }

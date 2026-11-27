@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/itemid"
-	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -952,10 +951,11 @@ func (b *Issues) Status(ref string) (*Status, error) {
 			state = append(state, l)
 		}
 	}
-	held, err := tracker.HeldClaimsIn(b.ctx(), b.Tracker, is.Key, comments)
+	claims, err := tracker.ReadClaimsIn(b.ctx(), b.Tracker, is.Key, comments)
 	if err != nil {
 		return nil, err
 	}
+	held := claims.Held
 	notes := []string{}
 	for _, c := range comments {
 		nt, ok := marker.ParseNote(c.Body)
@@ -967,19 +967,11 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	if title == "" {
 		title = "(untitled)"
 	}
-	fold := marker.FoldClaims(tracker.ClaimComments(comments))
-	// Only a claim the tracker holds has an age or can be handed back: a stray
-	// marker comment on a claim-store tracker is not claim state. Unknown
-	// timestamps carry no activity evidence and keep legacy output stable.
-	claimedAt := fold.ClaimedAt
-	maps.DeleteFunc(claimedAt, func(id string, at time.Time) bool { return at.IsZero() || !slices.Contains(held, id) })
-	// ClaimStore claims are plain comments: an open claim supersedes an
-	// older hand release without carrying a claim marker of its own.
-	handReleased := slices.DeleteFunc(fold.HandReleased, func(id string) bool { return slices.Contains(held, id) })
-	st := &Status{ClaimedAt: claimedAt,
+
+	st := &Status{ClaimedAt: claims.ClaimedAt,
 		ID: is.Key.String(), Type: b.Letter(is), Title: title, Status: is.State,
 		State: strings.Join(state, ","), Assignees: append([]string{}, is.Assignees...),
-		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""), HandReleased: handReleased,
+		Milestone: milestone(is, block), Body: is.Body, Notes: notes, Comments: commentRows(comments, ""), HandReleased: claims.HandReleased,
 	}
 	if len(held) > 0 {
 		st.Claim = held[0]

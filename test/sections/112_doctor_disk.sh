@@ -14,7 +14,7 @@ dd_doctor() { # dd_doctor <free:total>: doctor text in the fixture; the exit cod
   ( cd "$TMP_DD/proj" && TMPDIR="$TMP_DD/tmpdir" ROTA_TEST_DOCTOR_PATH="$TMP_DD/bin" ROTA_TEST_DOCTOR_DISK="$1" "$ROTA_BIN" doctor 2>&1 ) || true
 }
 dd_field() { # dd_field <check> <field>: from the --json envelope
-  ( cd "$TMP_DD/proj" && TMPDIR="$TMP_DD/tmpdir" ROTA_TEST_DOCTOR_PATH="$TMP_DD/bin" ROTA_TEST_DOCTOR_DISK="$3" "$ROTA_BIN" --json doctor 2>/dev/null || true ) | python3 -c '
+  ( cd "${4:-$TMP_DD/proj}" && TMPDIR="$TMP_DD/tmpdir" ROTA_TEST_DOCTOR_PATH="$TMP_DD/bin" ROTA_TEST_DOCTOR_DISK="$3" "$ROTA_BIN" --json doctor 2>/dev/null || true ) | python3 -c '
 import json,sys
 cs={c["name"]:c for c in json.load(sys.stdin)["data"]["checks"]}
 print(cs[sys.argv[1]].get(sys.argv[2],"ABSENT") if sys.argv[1] in cs else "NOCHECK")' "$1" "$2"
@@ -24,7 +24,13 @@ OUT="$(dd_doctor 1000:100000)"
 case "$OUT" in *$'warn\tdisk\t'*"under the 10% threshold"*) ;; *) fail "1% free should warn about disk: $OUT" ;; esac
 [ "$(dd_field disk status 1000:100000)" = "warn" ] || fail "disk check status should be warn"
 case "$(dd_field disk hint 1000:100000)" in *"1 leaked temp dirs"*) ;; *) fail "the warning should name the leaked temp dir (and not the fresh one): $(dd_field disk hint 1000:100000)" ;; esac
-pass "low free disk warns and names the leaked temp dirs"
+HINT="$(dd_field disk hint 1000:100000)"
+case "$HINT" in *"rota reap"*) fail "a project outside git must not name an unrunnable reap command: $HINT" ;; esac
+mkdir -p "$TMP_DD/no-project"
+HINT="$(dd_field disk hint 1000:100000 "$TMP_DD/no-project")"
+case "$HINT" in *"1 leaked temp dirs"*"inspect these directories manually"*) ;; *) fail "no-project doctor must retain the count and manual advice: $HINT" ;; esac
+case "$HINT" in *"rota reap"*) fail "no-project doctor must not name an unrunnable reap command: $HINT" ;; esac
+pass "low free disk names leaked temp dirs without unrunnable cleanup commands"
 
 [ "$(dd_field disk status 50000:100000)" = "NOCHECK" ] || fail "a healthy disk should add no disk line"
 pass "a healthy disk adds no line"

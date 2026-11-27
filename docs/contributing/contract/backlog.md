@@ -76,7 +76,7 @@ exit: 3 item unknown; tracker
 old: hv-item-release <ID> --as <claim-id>
 shim: old prints nothing, so `changed` is true when the backend is issues and rc 0, false for file backend; the Go port reports false when no open claim matched.
 note: release removes that claim's `claimed:` label (best effort) once no remaining claim maps to it; two rounds held by the same agent share one label. Closing an item through `item complete` removes every `claimed:` label beside its state labels.
-note: the release comment carries a hand-release marker (issue and umbrella backends), so `round reconcile --apply` does not post the claim again. ClaimStore trackers (Jira, Linear and Itsaplan) retain the same release marker while deleting the claim record. A later explicit claim clears the hand-release signal; an ordinary release does not revive it.
+note: the release comment carries a hand-release marker (issue and umbrella backends), so `round reconcile --apply` does not post the claim again. ClaimStore trackers (Jira, Linear and Itsaplan) retain the same release marker while deleting the claim record. Their release record also archives the original claim's server timestamp and comment id in a hidden `claim-history` marker, so the claim surface can report ordered history after deletion; older bare releases remain insufficient evidence of a takeover. A later explicit claim clears the hand-release signal; an ordinary release does not revive it.
 
 ### rota item ready
 rota item ready <ID>

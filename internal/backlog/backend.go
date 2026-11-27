@@ -96,7 +96,7 @@ type Capabilities struct {
 	// flag exactly when it implements the interface (TestCapabilitiesMatchInterfaces).
 	// SharedClaims: SharedClaimer, an item can hold several claims.
 	SharedClaims bool
-	// ClaimHistory: ClaimHistorian, raw claim comments can be read back.
+	// ClaimHistory: ClaimHistorian, claim events can be read back.
 	ClaimHistory bool
 	// ClaimLabels: ClaimLabelSyncer, claim-derived labels can be repaired.
 	ClaimLabels bool
