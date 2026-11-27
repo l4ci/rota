@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/fsio"
@@ -436,7 +437,7 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 		still = append(still, issueRow(is))
 		lines = append(lines, "warning: "+is.Key.Ref()+" "+is.Title+" (still open)")
 	}
-	check, line := releaseCheckLine(c, args[0])
+	check, line := releaseCheckLine(c, be, args[0])
 	lines = append(lines, line)
 	res := Result{Data: jsonx.Obj("clear", len(blocked) == 0, "blocked", bl, "stillOpen", still, "check", check), Text: strings.Join(lines, "\n")}
 	if len(blocked) > 0 {
@@ -446,9 +447,12 @@ func releaseMilestoneCheck(c *Ctx, args []string) (Result, error) {
 }
 
 // releaseCheckLine is the informational `check:` line: the fault and
-// uncovered counts of `rota milestone check`, or "unavailable" (data nil)
-// when the milestone or its items cannot be read. It never fails the verb.
-func releaseCheckLine(c *Ctx, id string) (any, string) {
+// uncovered counts, or "unavailable" (data nil) when the milestone or its
+// items cannot be read. It never fails the verb. Faults are those of `rota
+// milestone check` on the open items; coverage also counts closed features
+// (dropped ones excepted) and has no feature-count threshold, because by
+// release time the features that serve the criteria are closed.
+func releaseCheckLine(c *Ctx, be backlog.IssueBackend, id string) (any, string) {
 	st, err := openStore(c)
 	if err != nil {
 		return nil, "check: unavailable"
@@ -463,8 +467,17 @@ func releaseCheckLine(c *Ctx, id string) (any, string) {
 	}
 	r := ms.Check(body, kids, false)
 	faults := len(r.NoChange) + len(r.Unknown) + len(r.NoMigration) + len(r.BadTouches) + len(r.BadCapability)
-	uncovered := len(r.Uncovered)
-	data := jsonx.Obj("faults", faults, "uncovered", uncovered, "ok", faults+uncovered == 0)
+	bodies, err := be.ReleaseFeatures(id)
+	if err != nil {
+		return nil, "check: unavailable"
+	}
+	var feats []ms.Child
+	for _, b := range bodies {
+		feats = append(feats, ms.Child{Type: "F", Body: b})
+	}
+	ids := ms.Uncovered(body, feats)
+	uncovered := len(ids)
+	data := jsonx.Obj("faults", faults, "uncovered", uncovered, "uncoveredIds", jsonx.Strings(ids), "ok", faults+uncovered == 0)
 	if faults+uncovered == 0 {
 		return data, "check: clean"
 	}

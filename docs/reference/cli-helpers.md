@@ -604,7 +604,7 @@ Scope, brief, scaffolding, package, depth and change classification use the open
 | `rota release notes --from commits [--since <ref>]` | release notes from commits |
 | `rota release changelog <X.Y.Z> --body-file <path\|-> [--path <file>]` | add a release section to the changelog; refuses (exit 3) a leftover `## Unreleased` section: fold it into the notes and delete it first |
 | `rota release pending` | how much has landed since the last release tag |
-| `rota release milestone-check <MNN>` | list the open issues that block a milestone release, then one informational `check:` line from `rota milestone check` (`data.check`) |
+| `rota release milestone-check <MNN>` | list the open issues that block a milestone release, then one informational `check:` line with fault and uncovered-criterion counts (`data.check`) |
 | `rota release close-milestone <MNN> --release <X.Y.Z>` | close out a released milestone |
 | `rota release push <X.Y.Z> [--branch <name>] [--tag-only\|--branch-only] --confirm --confirm-note <answer>` | push the release tag and branch to origin, or one of them (manual gate) |
 | `rota release publish <X.Y.Z> --title <text> --body-file <path\|-> [--draft] --confirm --confirm-note <answer>` | create the GitHub or GitLab release, or finish the draft the release workflow made (manual gate) |
