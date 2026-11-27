@@ -131,5 +131,10 @@ func prunableWorktrees(ctx context.Context, in Input) (c Count, warnings []strin
 		}
 		return c, []string{"worktrees not checked: " + err.Error()}
 	}
-	return unheld(res.Candidates), nil
+	for _, cd := range res.Candidates {
+		if cd.Held == "" {
+			c.N++
+		}
+	}
+	return c, nil
 }
