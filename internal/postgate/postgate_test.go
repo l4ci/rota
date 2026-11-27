@@ -110,51 +110,6 @@ func TestLandedStopsAtTheFirstFailure(t *testing.T) {
 	}
 }
 
-func TestTrainLandsMembersAndNotifiesTheCulprit(t *testing.T) {
-	b := &fakeBook{}
-	r := landing.TrainResult{
-		Verdict: landing.GateStale,
-		Culprit: "kit",
-		Members: []landing.TrainMember{
-			{Target: "good", Landed: true},
-			{Target: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"},
-			{Target: "noissue", Landed: true},
-		},
-	}
-	fails := Train(b, "root", map[string]string{"good": "1", "kit": "2"}, nil, r)
-	if len(fails) != 0 {
-		t.Fatalf("failures %+v", fails)
-	}
-	if !reflect.DeepEqual(b.calls, landedCalls("1")) {
-		t.Errorf("calls %v, want only the landed member with an item", b.calls)
-	}
-	if len(b.posts) != 1 || b.posts[0].branch != "mac-kit/2-x" {
-		t.Errorf("posts %+v, want one for the culprit's branch", b.posts)
-	}
-}
-
-func TestTrainReportsFailuresPerTarget(t *testing.T) {
-	b := &fakeBook{failOn: "start"}
-	r := landing.TrainResult{Members: []landing.TrainMember{{Target: "a", Landed: true}, {Target: "b", Landed: true}}}
-	fails := Train(b, "root", map[string]string{"a": "1", "b": "2"}, nil, r)
-	if len(fails) != 2 || fails[0].Target != "a" || fails[1].Target != "b" {
-		t.Errorf("failures %+v", fails)
-	}
-}
-
-func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
-	b := &fakeBook{}
-	r := landing.TrainResult{Verdict: landing.GateStale, Culprit: "kit"}
-	targets := map[string]GateTarget{"kit": {Name: "kit", Branch: "mac-kit/2-x", PR: "https://github.com/o/r/pull/9"}}
-	fails := Train(b, "root", map[string]string{"kit": "2"}, targets, r)
-	if len(fails) != 0 {
-		t.Fatalf("failures %+v", fails)
-	}
-	if len(b.posts) != 1 || b.posts[0].branch != "mac-kit/2-x" || b.posts[0].pr != "https://github.com/o/r/pull/9" {
-		t.Errorf("posts %+v, want one for the registry's branch and PR", b.posts)
-	}
-}
-
 // A landed integration PR ends every member issue, though the gate's own
 // target (the integration PR) has none.
 func TestGateIntegrationLandsMembers(t *testing.T) {
@@ -180,17 +135,5 @@ func TestGateIntegrationLandsMembers(t *testing.T) {
 	b = &fakeBook{}
 	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateStale, Slot: "#42", TargetSlot: "ben", IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 || len(b.releases) != 0 {
 		t.Fatalf("refused landing: %v %v", err, b.calls)
-	}
-}
-
-// A landed train member releases its target's slot claim. Gate ownership is
-// covered with the real bookkeeping adapter in internal/cli.
-func TestTrainReleasesTheLandedMembersSliceClaim(t *testing.T) {
-	b := &fakeBook{}
-	r := landing.TrainResult{Members: []landing.TrainMember{{Target: "t1", Landed: true}, {Target: "t2"}}}
-	fails := Train(b, "root", map[string]string{"t1": "8", "t2": "9"},
-		map[string]GateTarget{"t1": {Name: "dana"}, "t2": {Name: "kit"}}, r)
-	if len(fails) != 0 || !reflect.DeepEqual(b.releases, []string{"8@dana"}) {
-		t.Errorf("train release = %v, fails %v", b.releases, fails)
 	}
 }

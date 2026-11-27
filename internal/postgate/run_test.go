@@ -106,6 +106,159 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 	}
 }
 
+func TestRunTrainEndsResolvedExternalItem(t *testing.T) {
+	for _, tc := range []struct {
+		name, snapshot, resolved, slot, want string
+	}{
+		{"external", "", "123", "", "123"},
+		{"resolved beats snapshot", "old", "123", "dana", "123"},
+		{"snapshot fallback", "123", "", "dana", "123"},
+		{"unknown issue", "", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			b := &fakeBook{targets: map[string]GateTarget{"#20": {Name: tc.slot, Issue: tc.snapshot, PR: "20"}}, origin: true}
+			var reports []Report
+			e := Env{Book: b, Git: headGit, Runner: fakeRunner{train: func(context.Context, TrainOpts) (TrainResult, error) {
+				// Landing may remove a queued target before postgate can read it again.
+				b.targets = nil
+				return TrainResult{Verdict: landing.GatePass, SHA: "abc1234", Members: []landing.TrainMember{
+					{Target: "#20", Branch: "feature", PR: "20", Landed: true, ResolvedIssue: tc.resolved},
+					{Target: "waiting", ResolvedIssue: "999"},
+					{Target: "unknown", Landed: true},
+				}}, nil
+			}}, Report: func(_ context.Context, _ string, r Report) error {
+				reports = append(reports, r)
+				return nil
+			}}
+			run := e.Run(context.Background(), "root", Request{Train: &TrainOpts{Targets: []string{"#20"}}}).Train
+			if run.Err != nil || run.Refused || len(run.Book) != 0 {
+				t.Fatalf("train: %+v", run)
+			}
+			wantCalls := []string{"targets:#20"}
+			var wantReleases []string
+			if tc.want != "" {
+				wantCalls = append(wantCalls, landedCalls(tc.want)...)
+				wantReleases = []string{tc.want + "@" + tc.slot}
+			}
+			if !reflect.DeepEqual(b.calls, wantCalls) || !reflect.DeepEqual(b.releases, wantReleases) || len(b.posts) != 0 {
+				t.Errorf("book: %+v, want cleanup %v and releases %v", b, wantCalls, wantReleases)
+			}
+			if len(reports) != 1 || reports[0].Gate.Issue != tc.want || reports[0].Gate.PR != "20" {
+				t.Errorf("reports: %+v", reports)
+			}
+		})
+	}
+}
+
+func TestRunTrainPreservesResolvedCulpritIssue(t *testing.T) {
+	for _, tc := range []struct {
+		name, snapshot, member, gate, want string
+	}{
+		{"supplied external issue", "", "", "234", "234"},
+		{"supplied beats snapshot", "old", "", "234", "234"},
+		{"supplied beats member", "old", "123", "234", "234"},
+		{"resolved external member", "", "123", "", "123"},
+		{"resolved member beats snapshot", "old", "123", "", "123"},
+		{"failure before member resolution", "123", "", "", "123"},
+		{"unknown issue", "", "", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			target := GateTarget{Issue: tc.snapshot, Branch: "feature", PR: "20"}
+			if tc.member != "" || tc.gate != "" {
+				target.Branch, target.PR = "old-feature", "old-pr"
+			}
+			b := &fakeBook{targets: map[string]GateTarget{"#20": target}, origin: true}
+			var reports []Report
+			e := Env{Book: b, Git: headGit, Runner: fakeRunner{train: func(context.Context, TrainOpts) (TrainResult, error) {
+				b.targets = nil
+				r := TrainResult{Verdict: landing.GateStale, Culprit: "#20", Err: "merge conflicts"}
+				if tc.gate != "" {
+					r.CulpritGate = GateResult{Issue: tc.gate, Branch: "feature", PR: "20", SHA: "resolved-head"}
+				}
+				if tc.member != "" {
+					r.Members = []landing.TrainMember{{Target: "#20", Branch: "feature", PR: "20", ResolvedIssue: tc.member}}
+				}
+				return r, nil
+			}}, Report: func(_ context.Context, _ string, r Report) error {
+				reports = append(reports, r)
+				return nil
+			}}
+			run := e.Run(context.Background(), "root", Request{Train: &TrainOpts{Targets: []string{"#20"}}}).Train
+			if run.Err != nil || run.Refused || len(run.Book) != 0 || run.Result.CulpritGate.Issue != tc.want {
+				t.Errorf("train: %+v", run)
+			}
+			if len(reports) != 1 || reports[0].Gate.Issue != tc.want {
+				t.Errorf("reports: %+v", reports)
+			}
+			head := "abcdef0"
+			if tc.gate != "" {
+				head = "resolved-head"
+			}
+			var wantPosts []post
+			if tc.want != "" {
+				wantPosts = []post{{branch: "feature", pr: "20", head: head, why: "merge conflicts"}}
+			}
+			if !reflect.DeepEqual(b.posts, wantPosts) {
+				t.Errorf("notifications: %+v, want %+v", b.posts, wantPosts)
+			}
+			if !reflect.DeepEqual(b.calls, []string{"targets:#20"}) || len(b.releases) != 0 {
+				t.Errorf("culprit cleared item state: %+v", b)
+			}
+			if len(reports) == 1 && (reports[0].Gate.SHA != head || reports[0].Gate.Branch != "feature" || reports[0].Gate.PR != "20") {
+				t.Errorf("report and notification identity differ: %+v", reports)
+			}
+		})
+	}
+}
+
+func TestRunTrainReportsBookFailuresPerTarget(t *testing.T) {
+	b := &fakeBook{failOn: "start", targets: map[string]GateTarget{"a": {Issue: "old"}, "b": {Issue: "old"}}}
+	e := Env{Book: b, Runner: fakeRunner{train: func(context.Context, TrainOpts) (TrainResult, error) {
+		return TrainResult{Verdict: landing.GatePass, Members: []landing.TrainMember{
+			{Target: "a", Landed: true, ResolvedIssue: "1"}, {Target: "b", Landed: true, ResolvedIssue: "2"},
+		}}, nil
+	}}}
+	run := e.Run(context.Background(), "root", Request{Train: &TrainOpts{Targets: []string{"a", "b"}}}).Train
+	if run.Err != nil || run.Refused || run.Result.Verdict != landing.GatePass {
+		t.Fatalf("train: %+v", run)
+	}
+	if len(run.Book) != 2 || run.Book[0].Target != "a" || run.Book[1].Target != "b" {
+		t.Fatalf("book failures: %+v", run.Book)
+	}
+	for _, f := range run.Book {
+		if f.Err == nil || f.Err.Error() != "start failed" {
+			t.Errorf("book failure: %+v", f)
+		}
+	}
+	if !reflect.DeepEqual(b.calls, []string{"targets:a,b", "start:1", "start:2"}) || len(b.releases)+len(b.posts) != 0 {
+		t.Errorf("book: %+v", b)
+	}
+}
+
+func TestRunTrainReportsExcludedCulpritIssues(t *testing.T) {
+	b := &fakeBook{targets: map[string]GateTarget{"a": {Issue: "old"}, "b": {Issue: "2"}}}
+	var reports []Report
+	e := Env{Book: b, Git: headGit, Runner: fakeRunner{train: func(context.Context, TrainOpts) (TrainResult, error) {
+		return TrainResult{Verdict: landing.GatePass, Culprits: []landing.TrainCulprit{
+			{Target: "a", Gate: GateResult{Issue: "1", Branch: "feature", SHA: "head-a", Verdict: landing.GateStale}},
+			{Target: "b", Gate: GateResult{Branch: "feature", SHA: "head-b", Verdict: landing.GateStale}},
+		}}, nil
+	}}, Report: func(_ context.Context, _ string, r Report) error {
+		reports = append(reports, r)
+		return nil
+	}}
+	run := e.Run(context.Background(), "root", Request{Train: &TrainOpts{Targets: []string{"a", "b"}}}).Train
+	if run.Err != nil || run.Refused || len(run.Book) != 0 {
+		t.Fatalf("train: %+v", run)
+	}
+	if len(reports) != 2 || reports[0].Gate.Issue != "1" || reports[1].Gate.Issue != "2" {
+		t.Errorf("reports: %+v", reports)
+	}
+	if !reflect.DeepEqual(b.calls, []string{"targets:a,b"}) || len(b.posts)+len(b.releases) != 0 {
+		t.Errorf("excluded targets changed item state: %+v", b)
+	}
+}
+
 func TestRunPreviewsNeverReportOrBookkeep(t *testing.T) {
 	for _, train := range []bool{false, true} {
 		t.Run(map[bool]string{false: "gate", true: "train"}[train], func(t *testing.T) {
