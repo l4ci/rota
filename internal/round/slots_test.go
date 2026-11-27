@@ -183,3 +183,26 @@ func TestIdleSlotInRoundSkipsSlotsPastTheSlotCount(t *testing.T) {
 		t.Fatalf("got %q %v, want dana", got, ok)
 	}
 }
+
+// Receives is Transfer's own receiver rule: a done slot with a recorded PR
+// receives only while its worktree can be parked.
+func TestReceivesFollowsTheParkableCheck(t *testing.T) {
+	f := newMoveFx(t)
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) {
+		s.SetPR("https://github.com/o/r/pull/9")
+		_ = s.MarkState("done", "")
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reg := worker.LoadRegistryTolerant(f.root)
+	receives := func() error { return f.env.Receives(bg, f.root, f.be, reg, "ben", false) }
+	if err := receives(); err != nil {
+		t.Fatalf("clean done slot: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(reg.Slot("ben").Worktree(), "dirty.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := receives(); blockedBy(t, err) != blockedby.SlotBusy {
+		t.Fatalf("dirty done slot: %v", err)
+	}
+}

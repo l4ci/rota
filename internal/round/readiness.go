@@ -460,8 +460,8 @@ func (e Env) openPRFiles(ctx context.Context) *openPRFiles {
 		o.err = "cannot list open PRs: " + err.Error()
 		return o
 	}
-	for _, p := range prs {
-		o.byHead[p.Branch] = p.Number
+	for branch, p := range tracker.BranchPRs(prs) {
+		o.byHead[branch] = p.Number
 	}
 	return o
 }

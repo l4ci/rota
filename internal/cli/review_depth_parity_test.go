@@ -31,7 +31,7 @@ func TestGateAndReviewDepthPrintTheSameReason(t *testing.T) {
 		line := strings.Join(cmd.Args, " ")
 		switch {
 		case strings.HasPrefix(line, "pr list"):
-			b, _ := json.Marshal([]map[string]any{{"number": 7, "title": "t", "headRefName": prBranch, "url": prURL, "body": prBody}})
+			b, _ := json.Marshal([]map[string]any{{"number": 7, "title": "t", "isCrossRepository": false, "headRefName": prBranch, "url": prURL, "body": prBody}})
 			return proc.Result{Stdout: string(b)}, nil
 		case strings.HasPrefix(line, "pr view"):
 			b, _ := json.Marshal(map[string]any{"headRefName": prBranch, "headRefOid": headSHA, "baseRefName": "main", "state": "OPEN", "title": "t", "body": prBody})

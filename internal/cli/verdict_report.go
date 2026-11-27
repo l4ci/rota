@@ -100,11 +100,8 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 		} else if prs, err := f.OpenPRs(c.Context()); err != nil {
 			dst.pending = append(dst.pending, err)
 		} else {
-			for _, pr := range prs {
-				if pr.Branch == t.branch && pr.SameRepository {
-					dst.pr, body, title = pr.Number, pr.Body, pr.Title
-					break
-				}
+			if pr, ok := tracker.BranchPR(prs, t.branch); ok {
+				dst.pr, body, title = pr.Number, pr.Body, pr.Title
 			}
 		}
 		if dst.pr == 0 {
