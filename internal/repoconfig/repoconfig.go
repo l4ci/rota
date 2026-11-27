@@ -133,8 +133,8 @@ func Record(ctx context.Context, run Runner, dir string) error {
 	return fsio.WriteFileAtomic(path, []byte(b.String()))
 }
 
-// Check compares the current repo-scope config with the baseline. It never
-// writes. With no baseline recorded it reports HasBaseline false, nothing
+// Check compares the current repo-scope config with the baseline, ignoring
+// branch tracking keys. It never writes. With no baseline recorded it reports HasBaseline false, nothing
 // drifted, and the risky keys already present.
 func Check(ctx context.Context, run Runner, dir string) (Drift, error) {
 	path, err := baselinePath(ctx, run, dir)
@@ -177,10 +177,22 @@ func Check(ctx context.Context, run Runner, dir string) (Drift, error) {
 			d.Removed = append(d.Removed, k)
 		}
 	}
+	// Filtered here, not in read, so a baseline that already holds these
+	// keys does not report them removed.
+	d.Added = slices.DeleteFunc(d.Added, tracking)
+	d.Changed = slices.DeleteFunc(d.Changed, tracking)
+	d.Removed = slices.DeleteFunc(d.Removed, tracking)
 	sort.Strings(d.Added)
 	sort.Strings(d.Changed)
 	sort.Strings(d.Removed)
 	return d, nil
+}
+
+// tracking reports a branch.<name>.remote or .merge key, which git writes
+// itself on a checkout of a remote branch or a push -u. The name may hold dots.
+func tracking(k string) bool {
+	return strings.HasPrefix(k, "branch.") &&
+		(strings.HasSuffix(k, ".remote") || strings.HasSuffix(k, ".merge"))
 }
 
 // riskyKeys run a program in rota's git calls or set the commit identity.
