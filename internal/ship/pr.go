@@ -15,7 +15,7 @@ type Forge interface {
 }
 
 // PRRequest is one PR to open. Body is the text as given; the Closes lines
-// are appended to it.
+// are appended to it, except for an issue the body names on a Refs line.
 type PRRequest struct {
 	Branch, Title, Body string
 	Items               []string
@@ -50,7 +50,7 @@ func OpenPR(ctx context.Context, p PRPorts, r PRRequest) (PR, error) {
 	if err != nil {
 		return PR{}, err
 	}
-	if lines != "" {
+	if lines = dropReferenced(lines, r.Body); lines != "" {
 		body += "\n\n" + lines
 	}
 	if err := p.Verdict(r.Branch); err != nil {
