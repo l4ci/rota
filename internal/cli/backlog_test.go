@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 func get(v any, path ...string) any {
@@ -131,6 +132,13 @@ func TestBacklogOnHoldJSONPreservesTitle(t *testing.T) {
 			if got, want := get(rows[i], "onHold"), i == 0; got != want {
 				t.Errorf("onHold = %v, want %v", got, want)
 			}
+		}
+	}
+	b := buildBrowser(t, backlogView, dataOf(env))
+	frame := tui.Strip(b.Render(180, vh, tui.Style{}))
+	for _, kind := range []string{"bug", "feature", "task"} {
+		if !strings.Contains(frame, "Waiting "+kind+" (on hold)") {
+			t.Errorf("terminal view lacks %s hold marker:\n%s", kind, frame)
 		}
 	}
 	wd, _ := os.Getwd()

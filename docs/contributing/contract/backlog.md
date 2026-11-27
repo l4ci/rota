@@ -222,7 +222,7 @@ shim: parse the markdown tables (`### In Progress`, `### Bugs`, `### Features`, 
 note: Single spelling `--grep <pattern>` (the `--grep=<p>` form still parses under Go `flag`).
 note: `related` entries use the rule-11 `id` spelling, so in issue mode they are bare issue numbers.
 note: `rota backlog list --ui` browses the same lists as rows (id, kind, priority or size, milestone, title). The filter matches the whole row; Enter reads the item's body. Terminal only.
-note: Bug, feature and task rows keep `title` unchanged and carry `onHold`: true when the issue has the configured `issues.labels.onHold` label, false otherwise (including file mode). Only text output appends ` (on hold)` to held titles; it is not part of the stored title or the `--grep` search.
+note: Bug, feature and task rows keep `title` unchanged and carry `onHold`: true when the issue has the configured `issues.labels.onHold` label, false otherwise (including file mode). Plain text output and the terminal browser append ` (on hold)` to held titles for display; it is not part of the stored title or the `--grep` search.
 
 ### rota backlog ids
 rota backlog ids --milestone <id>
