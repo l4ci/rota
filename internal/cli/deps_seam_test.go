@@ -61,11 +61,12 @@ func TestDepsRepoRunsThroughGit(t *testing.T) {
 // equals, so a hardcoded label fails.
 func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 	root := t.TempDir()
-	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"support":"mac"},"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "legacy-x"}}}`)
+	write(t, filepath.Join(root, ".rota", "config.json"), `{"round":{"support":"mac"},"issues": {"labels": {"inProgress": "wip-x", "needsHuman": "human-x", "needsReview": "review-x", "support": "legacy-x", "onHold": "hold-x"}}}`)
 	e := buildRoundEnv(context.Background(), root, defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	for role, c := range map[string]struct{ got, want string }{
 		"inProgress":  {e.Label, "wip-x"},
 		"needsHuman":  {e.NeedsHuman, "human-x"},
+		"onHold":      {e.OnHold, "hold-x"},
 		"needsReview": {e.NeedsReview, "review-x"},
 		"support":     {e.SupportLabel, "machine:mac"},
 	} {
@@ -77,7 +78,7 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 
 func TestDefaultRoundEnvDefaultLabels(t *testing.T) {
 	e := buildRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false, defaultDeps().workerEnv(), nil)
-	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "" {
+	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "" || e.OnHold != "on-hold" {
 		t.Errorf("default labels = %q, %q, %q, %q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel)
 	}
 }

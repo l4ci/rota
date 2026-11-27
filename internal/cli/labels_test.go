@@ -109,14 +109,20 @@ func TestLabelsSyncDryRunAndApply(t *testing.T) {
 	if len(fake.upserts) == 0 {
 		t.Fatal("apply did not create missing labels")
 	}
-	extraUpdated := false
+	extraUpdated, holdCreated := false, false
 	for _, label := range fake.upserts {
+		if label.Name == "on-hold" && label.Description == "Valid work waiting until a person releases the hold." && label.Color == "d4c5f9" {
+			holdCreated = true
+		}
 		if label.Name == "bug" || label.Name == "claimed:old@main" || label.Name == "site:support" {
 			t.Errorf("apply changed report-only label: %+v", label)
 		}
 		if label.Name == "area:api" && label.Description == "API ownership" {
 			extraUpdated = true
 		}
+	}
+	if !holdCreated {
+		t.Error("sync did not create hold metadata from registry")
 	}
 	if !extraUpdated {
 		t.Error("project extra did not receive its declared description")

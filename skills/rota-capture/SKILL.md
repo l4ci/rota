@@ -103,6 +103,8 @@ ID=$(rota item create --json --kind bugs --title "Short title" --tag P1 --desc "
 
 Flags: `--kind bugs|features|tasks`, `--tag` (`P0`-`P3` for bugs, `Major`/`Minor`/`Cosmetic` for features, none for tasks), `--desc`, `--related`, `--milestone`, `--repos`, `--subsystem`, `--body-file`, `--depends-on`. See `rota item create --help` and `docs/contributing/contract/backlog.md` (*rota item create*) for ID minting, field order, the `Since:` stamp, detail-file placement and the issue-backend mapping.
 
+When the user says to capture an item on hold (valid work that must wait), create it normally on the issue backend, then immediately label its new ID before reporting it: read `rota config show issues.labels.onHold --json` for the effective label (`data.entries[0].value`, default `on-hold`) and run `rota issues label <ID> --add <effective-label>`. An empty label setting disables holds: explain that and leave the item unlabelled. A hold keeps the issue open, marks it in the backlog and excludes it from round candidates, assignment and no-argument `/rota-work` suggestions. Only a person removes the label to release it; do not substitute `blocked`, `needs-human` or `needs-info`. File backend: explain that holds require the issue backend.
+
 When the text names a harness ("with codex") or a model, read [`harness-model.md`](harness-model.md) before creating. Add nothing when the text names neither.
 
 Judgment calls:

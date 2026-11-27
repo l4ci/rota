@@ -252,13 +252,28 @@ func assessReadiness(in readinessIn) (lead Readiness, bundle []Readiness, err er
 // readinessFor gathers the readiness facts from the board and runs assessReadiness.
 func (e Env) readinessFor(ctx context.Context, root string, be Board, o AssignOpts, it *backlog.Item, members []*backlog.Item, resuming, hasOpenPR bool) (Readiness, []Readiness, error) {
 	set := e.Round
+	held, err := e.labelled(ctx, be, e.OnHold)
+	if err != nil {
+		return Readiness{}, nil, err
+	}
+	keys := map[string]tracker.IssueKey{it.ID: it.IssueKey()}
+	for _, member := range members {
+		keys[member.ID] = member.IssueKey()
+	}
 	tracked := e.trackedFiles(ctx, root)
 	return assessReadiness(readinessIn{
 		lead: it, members: members,
 		inFlight:      e.InFlightItems(ctx, root, be, tracked, set.SharedPaths),
 		waiveTemplate: resuming || (o.AcceptOpenPR && hasOpenPR),
 		assess: func(id string, inFlight []InFlight) (Readiness, error) {
-			return AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, o.SettledAnswers, set.BlockScopeOverlap)
+			r, err := AssessScoped(be, id, tracked, set.SharedPaths, inFlight, o.AcceptOverlap, o.SettledAnswers, set.BlockScopeOverlap)
+			if err != nil {
+				return r, err
+			}
+			if held[keys[id]] {
+				r.Checks = append(r.Checks, Check{Name: e.OnHold, Detail: []string{"on hold: a person must remove " + e.OnHold + " before work starts"}})
+			}
+			return r, nil
 		},
 	})
 }

@@ -153,7 +153,7 @@ func (u *Umbrella) Capabilities() Capabilities {
 }
 
 // Rows lists the open issues of every sub-repo, each naming its owner.
-func (u *Umbrella) Rows() ([]Row, error) { return issueRows(u, true) }
+func (u *Umbrella) Rows() ([]Row, error) { return issueRows(u, true, config.Label(u.Cfg, "onHold")) }
 
 // ---- reads -----------------------------------------------------------------
 

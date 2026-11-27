@@ -25,7 +25,7 @@ var skillLabelArg = regexp.MustCompile("(?:--label|--add|--remove) +([^ \t`;)]+)
 func labelLiterals(root string) ([]string, error) {
 	var distinctive []string
 	for _, d := range definitions() {
-		if d.Prefix || strings.ContainsAny(d.Name, ":/") || d.Name == PartialSlice || d.Name == Refactor || d.Name == NeedsInfo || d.Name == NeedsHuman || d.Name == MilestoneTracker {
+		if d.Prefix || strings.ContainsAny(d.Name, ":/") || d.Name == PartialSlice || d.Name == Refactor || d.Name == NeedsInfo || d.Name == NeedsHuman || d.Name == OnHold || d.Name == MilestoneTracker {
 			distinctive = append(distinctive, d.Name)
 		}
 		if d.Name == PriorityPrefix {

@@ -106,7 +106,7 @@ func (b *Issues) Capabilities() Capabilities {
 }
 
 // Rows lists the open issues.
-func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false) }
+func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false, config.Label(b.Cfg, "onHold")) }
 
 // Letter is the item type of an issue: the letter of the first type label it
 // carries, else "T" (_letter).
