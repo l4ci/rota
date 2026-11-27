@@ -110,7 +110,7 @@ Three explicit flags bypass the heuristic flow when you already know what you wa
 - `/rota-learn --deprecate <topic> "<title>"`: marks `deprecated`. Manual deprecations do NOT touch the contradiction queue. That queue is for heuristic candidates only.
 - `/rota-learn --amend <topic> "<title>"`: rewrites the body of one bullet while preserving its tier and hits. Use when you want sharper wording without resetting the validation history.
 
-All three operate on `(topic, title)` pairs. The tier sidecar is the source of truth for the lifecycle state. `KNOWLEDGE.md` itself stays human-readable without tier annotations.
+All three operate on `(topic, title)` pairs. `rota knowledge tier get` and `tier set` match the title as `knowledge hit` does: case and surrounding space are ignored, and a title that names no bullet under the topic is refused (exit 3). The tier sidecar is the source of truth for the lifecycle state. `KNOWLEDGE.md` itself stays human-readable without tier annotations.
 
 ### Tier identity and legacy repair
 

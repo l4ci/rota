@@ -116,7 +116,7 @@ func TestTierSetFoldsBufferedHitsFirst(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.TierSet(Umbrella, "Arch", "bullet", Provisional); err != nil {
+	if _, err := s.TierSet(Umbrella, "Arch", "bullet", Provisional); err != nil {
 		t.Fatal(err)
 	}
 	e, _, err := s.TierGet(Umbrella, "Arch", "bullet")
@@ -349,6 +349,7 @@ func TestPartialFoldRecoveryKeepsDeferredHits(t *testing.T) {
 	for _, rewritten := range []bool{false, true} {
 		t.Run(fmt.Sprintf("buffer-rewritten-%v", rewritten), func(t *testing.T) {
 			s := lockedStore(t)
+			writeBullets(t, s, "## Safe\n\n- **Known** — safe\n")
 			p := mustTier(t, s)
 			// Safe hits are persisted, but cleanup may have stopped on either side of
 			// the atomic claimed-file rewrite. Both states have the same receipt.

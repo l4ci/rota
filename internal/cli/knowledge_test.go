@@ -371,11 +371,7 @@ func TestKnowledgeTierReads(t *testing.T) {
 	if !strings.Contains(n.stdout, `"title": "Alpha rule"`) || strings.Contains(n.stdout, "Beta") {
 		t.Errorf("list: %s", n.stdout)
 	}
-	g := knNew(t, dir, "", "knowledge", "tier", "get", "--topic", "Architecture", "--title", "Nope", "--json")
-	if g.rc != 0 || !strings.Contains(g.stdout, `"found": false`) {
-		t.Errorf("get untracked: rc=%d %s", g.rc, g.stdout)
-	}
-	g = knNew(t, dir, "", "knowledge", "tier", "get", "--topic", "Architecture", "--title", "Alpha rule", "--json")
+	g := knNew(t, dir, "", "knowledge", "tier", "get", "--topic", "Architecture", "--title", "Alpha rule", "--json")
 	if !strings.Contains(g.stdout, `"tier": "confirmed", "hits": 4, "lastSeen": "2026-03-01"`) {
 		t.Errorf("get: %s", g.stdout)
 	}

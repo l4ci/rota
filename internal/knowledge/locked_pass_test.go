@@ -67,12 +67,12 @@ func TestTierSetReportsExactlyOneChangeUnderConcurrency(t *testing.T) {
 	changed := 0
 	var mu sync.Mutex
 	parallel(n, func(int) {
-		_, ch, err := s.TierSet(Umbrella, "Arch", "bullet", Confirmed)
+		res, err := s.TierSet(Umbrella, "Arch", "bullet", Confirmed)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		if ch {
+		if res.Changed {
 			mu.Lock()
 			changed++
 			mu.Unlock()
@@ -117,7 +117,7 @@ func TestRenameTopicMovesEveryBulletUnderConcurrency(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < n; i++ {
-		if _, _, err := s.TierSet(Umbrella, "Old", fmt.Sprintf("b%02d", i), Confirmed); err != nil {
+		if _, err := s.TierSet(Umbrella, "Old", fmt.Sprintf("b%02d", i), Confirmed); err != nil {
 			t.Fatal(err)
 		}
 	}
