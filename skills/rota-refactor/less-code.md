@@ -29,4 +29,4 @@ Each finding adds one line: `If skipped: <what happens>`.
 
 ## Small findings
 
-A finding is small when its estimated net change is 20 lines or fewer and it needs no design choice. Batch small findings in one package directory into one issue of at most 10 items. List each item with its path, line range, kind and estimate. The issue takes the highest tier of its items.
+Small findings are batched into one issue per package directory. The rule is in `SKILL.md` Step 3.
