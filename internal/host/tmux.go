@@ -63,33 +63,25 @@ func (t *tmux) pane(ctx context.Context, window string) string {
 	return t.tmux(ctx, "capture-pane", "-pJ", "-t", window).Stdout
 }
 
-// maxBootDialogs is how many startup dialogs the boot wait answers (trust,
-// then bypass), as herdr's does.
-const maxBootDialogs = 2
-
 // tmuxKeys maps DialogKeys names to tmux send-keys names.
 var tmuxKeys = map[string]string{"enter": "Enter", "up": "Up", "down": "Down"}
 
 // waitReady blocks until the pane looks like a booted Claude Code UI.
 // Pasting into a shell that has not yet handed off to Claude Code loses the
 // text silently, which is the failure this exists to prevent. A startup
-// dialog is answered with DialogKeys, up to maxBootDialogs times; a pane that
-// still shows one after that, or at the timeout, is a *DialogError.
+// dialog is answered under the bootDialogs policy; a new one past
+// maxBootDialogs, or one still shown at the timeout, is a *DialogError.
 func (t *tmux) waitReady(ctx context.Context, window string, timeout int) (bool, error) {
-	answered, last := 0, ""
+	var dialogs bootDialogs
 	for waited := 0; waited < timeout; waited += 2 {
 		p := t.pane(ctx, window)
 		if looksBooted(p) {
 			return true, nil
 		}
-		// The same pane text as the last answered dialog is a slow redraw, not
-		// a new dialog: wait for it instead of burning another answer.
-		if keys, ok := DialogKeys(p); ok && p != last {
-			if answered == maxBootDialogs {
-				return false, &DialogError{First: dialogTitle(p)}
-			}
-			answered++
-			last = p
+		switch keys, step := dialogs.next(p); step {
+		case dialogExhausted:
+			return false, &DialogError{First: dialogTitle(p)}
+		case dialogAnswer:
 			args := []string{"send-keys", "-t", window}
 			for _, k := range keys {
 				args = append(args, tmuxKeys[k])

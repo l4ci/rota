@@ -10,10 +10,10 @@ import (
 )
 
 // This file owns how rota reads a harness startup dialog: the option grammar,
-// the recognition of a dialog on the prompt line (ReadDialog, isDialog) and
-// the keys that accept one at spawn (DialogKeys). Harness-specific trust option
-// text lives in harness, shared with its recovery hint; captured wording lives
-// in testdata.
+// the recognition of a dialog on the prompt line (ReadDialog, isDialog), the
+// keys that accept one at spawn (DialogKeys) and how many are answered there
+// (bootDialogs). Harness-specific trust option text lives in harness, shared
+// with its recovery hint; captured wording lives in testdata.
 
 // optionRow is one option of a dialog: an optional cursor (❯, or > on a plain
 // terminal), an optional number (Claude Code numbered its options before
@@ -155,6 +155,45 @@ func DialogKeys(pane string) (keys []string, ok bool) {
 		keys = append(keys, step)
 	}
 	return append(keys, "enter"), true
+}
+
+// maxBootDialogs is how many startup dialogs a spawn answers: three, for the
+// first-run theme picker, folder trust and the bypass warning.
+const maxBootDialogs = 3
+
+type dialogStep int
+
+const (
+	dialogNone      dialogStep = iota // not a dialog DialogKeys can accept
+	dialogAnswer                      // a new dialog: send the keys
+	dialogRedraw                      // unchanged since the last answer: wait
+	dialogExhausted                   // a new dialog past maxBootDialogs
+)
+
+// bootDialogs is the answer policy of one spawn, shared by the hosts that
+// answer startup dialogs. Each host reads the pane, sends keys and waits in
+// its own way.
+type bootDialogs struct {
+	answered int
+	last     string
+}
+
+// next judges one pane read. A dialog counts as new when the pane text differs
+// from the last answered one; the same text is a slow redraw, which must not
+// burn another answer. dialogAnswer counts the answer, so the caller sends it.
+func (b *bootDialogs) next(pane string) ([]string, dialogStep) {
+	keys, ok := DialogKeys(pane)
+	switch {
+	case !ok:
+		return nil, dialogNone
+	case pane == b.last:
+		return nil, dialogRedraw
+	case b.answered == maxBootDialogs:
+		return nil, dialogExhausted
+	}
+	b.answered++
+	b.last = pane
+	return keys, dialogAnswer
 }
 
 // DialogError is ErrDialogOpen with the dialog's first line, for the refusal message.
