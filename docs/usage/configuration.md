@@ -1066,7 +1066,7 @@ Outside a project, rota follows the XDG Base Directory spec. An `XDG_*` variable
 | Kind | Location | Holds |
 |---|---|---|
 | Config | `$XDG_CONFIG_HOME/rota`, default `~/.config/rota` | `config.json` (the global config layer), its `config.version` stamp and `connections.json` |
-| State | `$XDG_STATE_HOME/rota`, default `~/.local/state/rota` | `projects.json` (the project registry) and its lock. `rota doctor` prints the path. |
+| State | `$XDG_STATE_HOME/rota`, default `~/.local/state/rota` | `projects.json` (the project registry) and its lock (`rota doctor` prints the path), and herdr-core ownership records in `herdr-core/` (`ROTA_CORE_STATE_DIR` replaces that directory). |
 | Cache | `$XDG_CACHE_HOME/rota/skills` (the OS user cache dir) | the extracted embedded skills |
 | Data | `$XDG_DATA_HOME/rota`, default `~/.local/share/rota` | the secrets fallback file (`secrets.json`), in a `0700` dir |
 
