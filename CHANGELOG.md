@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.39.0 — 2026-11-27
+
+Refactor reviews gain a less-code lens, on-hold issues stay out of work selection, and landing and cleanup get safer when a step fails.
+
+### New
+
+- **Less-code lens in `/rota-refactor`.** The exploration pass also looks for code to delete or shrink, under the same 8 to 12 finding cap. Each finding gets an impact tier (must, should, nice) with an `If skipped:` line and a net line estimate. Small findings (20 lines or fewer, no design choice) are batched per package directory, at most 10 per issue (#4379).
+- **On-hold issues stay out of work selection.** An issue labelled `on-hold` (new key `issues.labels.onHold`) is no candidate for a round, and `round assign` refuses it (exit 4). The terminal backlog browser and `backlog --json` keep its hold marker (#4261).
+
+### Changed
+
+- **Landing.** When the fetch after a forge merge fails, `worker gate` tries it three times, then reports `merged-remotely` instead of `check-broke`. The merge gets one ledger entry and the usual item bookkeeping (#4305). A renamed file counts under both names for merge approval in `ship merge`, `ship pr-merge`, `worker gate` and `worker train`. Fork PRs are no longer adopted as a slot's unrecorded PR.
+- **`rota reap`.** The preview reads the process table once and prints progress on stderr; `--apply` still checks each entry before it deletes it (#4287). Tab and skill-cache removal stay fail-closed: old skill versions are kept while this repository's round lease may still use them.
+- **Releases and plans.** `release milestone-check` counts uncovered plan criteria in its `check:` line, also below three features, counting closed features and every sub-repo; `--json` lists them as `data.check.uncoveredIds`. It still only warns (#4304). `plan check` reads acceptance ids from the design note when the issue body has none (#4302).
+- **Ship and config.** `ship pr --items` no longer adds `Closes #N` for an issue the body already names in a `Refs #N` line (#4301). The repo config drift check ignores the `branch.<name>.remote` and `.merge` keys git writes itself (#4286).
+- **Tests.** Isolated test runs keep the pnpm store at its real path through `pnpm_config_store_dir`, like the Go caches (#4303).
+- **Knowledge and doctor.** `knowledge replace` and bullet moves refuse a title that already exists in the topic. Milestone creation refuses to overwrite an existing detail file. Doctor reports unreadable external topics, and its cleanup hints only name commands that can run.
+- Review views and change classification all use the PR's base and its integration-fix boundary; review issue references accept tracker keys such as `PROJ-12`. Map indexes and stale reports key subsystems by file name.
+- Large internal cleanup: one seam each for branch PR lookup, footprints, process reads and terminal key decoding.
+- Exit codes and JSON for scripts:
+  - Unreadable knowledge, map and other user source files exit 5; some used to succeed with partial results.
+  - `knowledge replace` and bullet moves onto an existing title, and a whitespace-only `knowledge add` title, exit 4.
+  - `knowledge tier get/set` exit 3 on an unknown title and 4 on an ambiguous one, and print the stored title.
+  - File-mode milestone creation over an existing detail file exits 4.
+  - `plan check` exits 1 on a plan with neither acceptance ids nor tasks.
+  - GitHub merge approval exits 5 at the 3,000-file API limit.
+  - Explicit review package ranges that are empty exit 3 again.
+  - `worker gate` reports `merged-remotely` after a confirmed forge merge whose fetch failed (still exit 1).
+  - `reap` has a `--prunable` flag (with `--kind worktree`); `release close` reports `changed` from writes that succeeded.
+
+### Stats
+
+216 commits, 465 files changed, +9374 −3304 lines
+
+**Full changelog:** https://github.com/l4ci/rota/compare/v0.38.0...v0.39.0
+
 ## v0.38.0 — 2026-11-23
 
 Autopilot gives done slots their next issue before it lands their PRs, manual assigns no longer wait for a slot's own gate, and train retries reuse a green rerun.
