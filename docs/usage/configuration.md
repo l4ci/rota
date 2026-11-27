@@ -1035,6 +1035,7 @@ The git remote round workers fetch from and push to. `rota worker done` checks t
 | `issues.labels.notPlanned` | `"not-planned"` | Label name. |
 | `issues.labels.blocked` | `"blocked"` | Label name set by `rota item complete --reason blocked`; the issue stays open. |
 | `issues.labels.needsHuman` | `"needs-human"` | Label `rota round transfer --to human` puts on an issue handed to the human. `rota round candidates` skips an issue that carries it; removing the label puts it back in the set. Silent default, not written by `rota init`. |
+| `issues.labels.onHold` | `"on-hold"` | Label for valid work that must wait. Round candidates, assignment and no-argument `/rota-work` skip it, and the backlog marks it. A person removes it to release the hold. Empty disables the label. Silent default, not written by `rota init`. |
 | `issues.labels.milestoneTracker` | `"milestone-tracker"` | Label name. |
 | `issues.labels.types.bug` / `.feature` / `.task` | `"type:bug"` / `"type:feature"` / `"type:task"` | Label names per item type. |
 | `issues.labels.priorityPrefix` | `"p"` | Prefix for priority labels. |

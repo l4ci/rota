@@ -21,6 +21,7 @@ Colors are six-digit RGB: blue for milestones and sizes, purple for routing and 
 | `not-planned` | Closed without a planned implementation. | `cfd3d7` | state | `issues.labels.notPlanned` | item complete; tracker close | backlog; tracker close reason | reopen or next state |
 | `blocked` | Work is blocked and remains open. | `b60205` | state | `issues.labels.blocked` | item complete --reason blocked | backlog | next state |
 | `needs-human` | Work is handed to the maintainer. | `b60205` | state | `issues.labels.needsHuman` | round transfer --to human | round candidates | return to worker queue |
+| `on-hold` | Valid work waiting until a person releases the hold. | `d4c5f9` | state | `issues.labels.onHold` | maintainer; capture | round candidates; round assign; backlog; /rota-work | person removes label |
 | `milestone-tracker` | Tracking issue for a rota milestone. | `0052cc` | milestone | `issues.labels.milestoneTracker` | milestone create | milestone lookup; backlog filtering | retained |
 | `type:bug` | A defect to fix. | `d73a4a` | type | `issues.labels.types.bug` | item create; migrate | backlog type | type change |
 | `type:feature` | A capability to build. | `a2eeef` | type | `issues.labels.types.feature` | item create; migrate | backlog type | type change |
