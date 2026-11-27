@@ -54,7 +54,7 @@ The `codex` integration check uses the same resolved host as worker preflight: a
 
 `ports` also appears only when something is wrong. For each live slot that holds a port block (see [`round.portBase`](configuration.md#roundportbase-and-roundportblock-a-port-range-per-worker-slot)), doctor lists the machine's TCP listeners with `ss -ltnp`, else `lsof`, and prints `warn ports` when one inside the block belongs to a process whose working directory is outside that slot's worktree, or whose owner cannot be read. It never fails the run; the hint names the config key that moves the range. Where `/proc` is absent (macOS) the process directory comes from `lsof`. When neither tool is installed or both fail, doctor prints `skip ports` saying the blocks were not checked.
 
-`disk` also appears only when something is wrong. When the free share of the volume holding the project (else the working directory) is under `doctor.minFreeDiskPercent` (default 10; `0` turns it off), doctor prints `warn disk`, which never fails the run, and its hint names what rota left behind that would give space back: temp dirs a smoke, gate or review run leaked (`rota-smoke.*`, `rota-gate-tmp.*`, `rota-review-<digits>` in the system temp dir; preview with `rota reap --kind systmp`, `--apply` to remove), entries older than 1h under the project temp root (`.rota/tmp/`; preview with `rota reap --kind tmp`, `--apply` to remove) and git worktrees whose directory is gone. `rota reap` lists the rest of the stale scratch worktrees. `go-cache-disk` is the same warning for the volume holding the Go build cache (`go env GOCACHE`), under the same threshold; a full cache volume fails a gate with `no space left on device`. Its hint is `go clean -cache`. See [`doctor.minFreeDiskPercent`](configuration.md#doctorminfreediskpercent).
+`disk` also appears only when something is wrong. When the free share of the volume holding the project (else the working directory) is under `doctor.minFreeDiskPercent` (default 10; `0` turns it off), doctor prints `warn disk`, which never fails the run, and its hint names what rota left behind that would give space back: temp dirs a smoke, gate or review run leaked (`rota-smoke.*`, `rota-gate-tmp.*`, `rota-review-<digits>` in the system temp dir; preview with `rota reap --kind systmp`, `--apply` to remove), entries older than 1h under the project temp root (`.rota/tmp/`; preview with `rota reap --kind tmp`, `--apply` to remove) and scratch worktrees whose directory is gone (preview with `rota reap --kind worktree --prunable`, `--apply` to remove only those checkouts). Outside a rota project or Git repository, doctor still counts leaked system temp dirs but asks you to inspect them manually; it gives no reap command that would refuse there. An invalid registry or round config also suppresses cleanup commands until repaired. `rota reap` lists the rest of the stale scratch worktrees. `go-cache-disk` is the same warning for the volume holding the Go build cache (`go env GOCACHE`), under the same threshold; a full cache volume fails a gate with `no space left on device`. Its hint is `go clean -cache`. See [`doctor.minFreeDiskPercent`](configuration.md#doctorminfreediskpercent).
 
 `repo config` also appears only when something is wrong. Linked worktrees share one `.git/config`, so a worker, a test or a tool such as husky that writes repo config changes it for the orchestrator, the gate and every slot. `rota round start` records a baseline of `git config --local --list` (a digest per key, no values) under `<git-common-dir>/rota/`; doctor records one the first time it runs without one. Doctor and `rota round status` then warn when keys were added, changed or removed since, naming the keys, and `round start` warns before it re-records. Rota does not pin program-running keys such as `core.hooksPath` in its own git calls; it only reports the drift.
 
@@ -73,6 +73,7 @@ lease whose orchestrator died. `rota reap` finds them.
 ```sh
 rota reap                          # preview: list candidates, delete nothing
 rota reap --apply                  # delete the candidates that hold no work
+rota reap --kind worktree --prunable # preview only missing scratch checkouts
 rota reap --kind branch,lease      # only these kinds
 ```
 
@@ -111,6 +112,8 @@ round lease may be live, and checks the lease again before removal. Stale `.extr
 directories keep their existing age rule. The cache is shared across repositories; reap
 checks only the current repository's lease, so finish rounds in other repositories using
 the same cache before removing old skill trees.
+
+`--prunable` requires `--kind worktree` and limits both preview and apply to checkouts Git marks prunable. The same ownership and hold rules still apply.
 
 **What reap never removes.**
 
