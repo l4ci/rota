@@ -146,6 +146,14 @@ into target resolution, record checks, freshness, verification, merge and
 bookkeeping stages. Test a step with supplied inputs before adding a
 whole gate or train fixture, and check that it leaves the caller's answer unchanged.
 
+Normal train git reads, merges and ancestry checks use `trainRun`'s invocation
+context, including planning, diagnosis and integration assembly. Tests can give
+`Env.Ctx` a different value or cancellation state without changing those calls.
+Recovery, scratch cleanup and a member landing already started keep their explicit
+cancellation shields; ledger lookups use the train context at the bookkeeping
+boundary. Tracker factories still capture their context during CLI environment
+construction, before the train starts.
+
 There are no servers and no ports in this repo.
 
 ## Contract doc stamps

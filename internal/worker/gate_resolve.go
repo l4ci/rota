@@ -328,10 +328,11 @@ func (g *gateRun) prInfo() (tracker.PRInfo, bool) {
 	return info, err == nil
 }
 
-// openPRForBranch finds the open PR headed by the gate's branch. Without an
-// origin remote or a forge CLI there is no remote to hold one, and the local
-// merge stands. Any other failure to ask is a check-broke message: guessing
-// "none" would fail open into a local merge of a branch whose PR may be open.
+// openPRForBranch finds the same-repository open PR headed by the gate's
+// branch. Without an origin remote or a forge CLI there is no remote to hold
+// one, and the local merge stands. Any other failure to ask is a check-broke
+// message: guessing "none" would fail open into a local merge of a branch whose
+// PR may be open.
 func (g *gateRun) openPRForBranch() (url, brokeMsg string) {
 	if _, code := g.git(g.root, "remote", "get-url", g.rem()); code != 0 {
 		return "", ""
@@ -343,10 +344,8 @@ func (g *gateRun) openPRForBranch() (url, brokeMsg string) {
 		}
 		return "", fmt.Sprintf("slot %s records no PR and the open PRs of %s could not be listed to look for one headed by %s: %v", g.o.Slot, g.provider, g.branch, err)
 	}
-	for _, p := range prs {
-		if p.Branch == g.branch {
-			return p.URL, ""
-		}
+	if p, ok := tracker.BranchPR(prs, g.branch); ok {
+		return p.URL, ""
 	}
 	return "", ""
 }
