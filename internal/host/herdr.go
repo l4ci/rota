@@ -249,27 +249,32 @@ func (h *herdr) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		h.herdr(ctx, "tab", "close", tab)
 		return "", fmt.Errorf("herdr agent start failed for slot '%s' (%s; tab closed): %s%s", o.Slot, tab, strings.TrimSpace(r.Stderr), detail)
 	}
-	// Blocked at startup: answer up to two dialogs (trust, then bypass).
-	for i := 0; ; {
+	// Blocked at startup: answer the dialogs under the bootDialogs policy. A
+	// redraw is waited on within the boot budget.
+	var dialogs bootDialogs
+	for redrawn := 0; ; {
 		text := paneText(h.herdr(ctx, "agent", "read", name, "--source", "visible", "--format", "text"))
-		keys, ok := DialogKeys(text)
-		if !ok && looksBooted(text) {
+		keys, step := dialogs.next(text)
+		switch {
+		case step == dialogNone && looksBooted(text):
 			// herdr did not call the session ready, but the pane is a booted
 			// session idle at its empty prompt: nothing is left to answer.
 			return tab, nil
-		}
-		if !ok {
+		case step == dialogNone:
 			// The tab is returned with the error: a session is running in it,
 			// and the caller records it so the next dispatch reaps it.
 			return tab, fmt.Errorf("slot '%s' is stuck on an unrecognised startup dialog in tab %s", o.Slot, tab)
+		case step == dialogExhausted || step == dialogRedraw && redrawn >= o.BootTimeout:
+			return tab, fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
+		case step == dialogRedraw:
+			h.d.settle(2 * time.Second)
+			redrawn += 2
+		default:
+			h.herdr(ctx, append([]string{"agent", "send-keys", name}, keys...)...)
 		}
-		h.herdr(ctx, append([]string{"agent", "send-keys", name}, keys...)...)
 		w := h.herdr(ctx, "agent", "wait", name, "--until", "idle", "--until", "blocked", "--timeout", timeoutMs)
 		if jget(w.Stdout, "result.agent.agent_status") == "idle" {
 			return tab, nil
-		}
-		if i++; i >= 3 {
-			return tab, fmt.Errorf("slot '%s' did not reach idle after its startup dialogs (tab %s)", o.Slot, tab)
 		}
 	}
 }
