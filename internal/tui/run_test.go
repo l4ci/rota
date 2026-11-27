@@ -14,9 +14,8 @@ import (
 	"time"
 )
 
-// fakeTerm scripts the terminal: each chunk is one Read, as a real terminal
-// delivers one key press (or escape sequence) per read. After the script the
-// input is at EOF. It is safe for the signal and resize tests, where the
+// fakeTerm scripts the terminal: a Read takes from one chunk and leaves what
+// does not fit for the next. After the script the input is at EOF. It is safe for the signal and resize tests, where the
 // driver's goroutine writes while the test reads.
 type fakeTerm struct {
 	mu       sync.Mutex
@@ -42,7 +41,9 @@ func (t *fakeTerm) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 	n := copy(p, t.chunks[0])
-	t.chunks = t.chunks[1:]
+	if t.chunks[0] = t.chunks[0][n:]; len(t.chunks[0]) == 0 {
+		t.chunks = t.chunks[1:]
+	}
 	return n, nil
 }
 
@@ -594,7 +595,7 @@ func TestRunTick(t *testing.T) {
 		t.Error("SetReadDeadline never called")
 	}
 
-	// Without Tick the deadline is never armed, and a deadline error is just
+	// Without Tick no deadline runs out between whole keys, and a deadline error is just
 	// a failed read: Run ends.
 	ti = newTickIn("a", "tick", "b")
 	tc = ti.fakeTerm.term()
@@ -603,8 +604,8 @@ func TestRunTick(t *testing.T) {
 	if err := Run(tc, tm{r: r}); err != nil {
 		t.Fatal(err)
 	}
-	if ti.deadlines != 0 || r.trace() != "a" {
-		t.Errorf("no Tick: deadlines %d trace %q", ti.deadlines, r.trace())
+	if r.trace() != "a" {
+		t.Errorf("no Tick: trace %q", r.trace())
 	}
 }
 
