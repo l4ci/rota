@@ -159,47 +159,38 @@ func TestTrainNotifiesACulpritKnownOnlyFromTheRegistry(t *testing.T) {
 // target (the integration PR) has none.
 func TestGateIntegrationLandsMembers(t *testing.T) {
 	b := &fakeBook{}
-	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GatePass, IntegrationMembers: []string{"5", "6"}}); err != nil {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GatePass, Slot: "#42", TargetSlot: "ben", IntegrationMembers: []string{"5", "6"}}); err != nil {
 		t.Fatal(err)
 	}
 	if want := append(landedCalls("5"), landedCalls("6")...); !reflect.DeepEqual(b.calls, want) {
 		t.Errorf("calls %v, want %v", b.calls, want)
 	}
+	if !reflect.DeepEqual(b.releases, []string{"5@ben", "6@ben"}) {
+		t.Errorf("integration release = %v", b.releases)
+	}
 	// A retry after the forge merged it ends them too.
 	b = &fakeBook{}
-	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateAlreadyMerged, IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateAlreadyMerged, Slot: "#42", TargetSlot: "ben", IntegrationMembers: []string{"5"}}); err != nil || !reflect.DeepEqual(b.calls, landedCalls("5")) {
 		t.Fatalf("already-merged retry: %v %v", err, b.calls)
+	}
+	if !reflect.DeepEqual(b.releases, []string{"5@ben"}) {
+		t.Errorf("integration retry release = %v", b.releases)
 	}
 	// A refused integration landing ends nothing.
 	b = &fakeBook{}
-	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateStale, IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 {
+	if err := Gate(b, "root", "", landing.GateResult{Verdict: landing.GateStale, Slot: "#42", TargetSlot: "ben", IntegrationMembers: []string{"5"}}); err != nil || len(b.calls) != 0 || len(b.releases) != 0 {
 		t.Fatalf("refused landing: %v %v", err, b.calls)
 	}
 }
 
-// A landed PR gives its slot's claim up through the book (#3629): a gate by
-// the result's slot, a train member by its target's slot, and a failed or
-// bounced gate releases nothing.
-func TestLandedPRReleasesTheSlotsSliceClaim(t *testing.T) {
+// A landed train member releases its target's slot claim. Gate ownership is
+// covered with the real bookkeeping adapter in internal/cli.
+func TestTrainReleasesTheLandedMembersSliceClaim(t *testing.T) {
 	b := &fakeBook{}
-	if err := Gate(b, "root", "7", landing.GateResult{Verdict: landing.GatePass, Slot: "ben"}); err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(b.releases, []string{"7@ben"}) {
-		t.Errorf("gate release = %v", b.releases)
-	}
-
-	b = &fakeBook{}
 	r := landing.TrainResult{Members: []landing.TrainMember{{Target: "t1", Landed: true}, {Target: "t2"}}}
 	fails := Train(b, "root", map[string]string{"t1": "8", "t2": "9"},
 		map[string]GateTarget{"t1": {Name: "dana"}, "t2": {Name: "kit"}}, r)
 	if len(fails) != 0 || !reflect.DeepEqual(b.releases, []string{"8@dana"}) {
 		t.Errorf("train release = %v, fails %v", b.releases, fails)
-	}
-
-	b = &fakeBook{}
-	_ = Gate(b, "root", "7", landing.GateResult{Verdict: landing.GateStale, Slot: "ben"})
-	if len(b.releases) != 0 {
-		t.Errorf("a stale gate released %v", b.releases)
 	}
 }
