@@ -77,6 +77,10 @@ rota reap --kind worktree --prunable # preview only missing scratch checkouts
 rota reap --kind branch,lease      # only these kinds
 ```
 
+Sizing large temp trees and reading the process table can take a while, so reap names each of those
+steps on stderr before it starts (`rota reap: walking the project temp root`). The process table is
+read once per preview.
+
 The default is a preview (`warning: preview only; pass --apply`). `--apply` needs no `--confirm`,
 because everything it deletes is proven unowned and merged, and anything holding work is skipped.
 A bare `rota reap --apply` (no `--kind`) also deletes in the system temp dir: the `systmp` kind removes

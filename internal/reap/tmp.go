@@ -75,7 +75,7 @@ func tmpName(name string) bool {
 
 // heldTmp returns "" when nothing owns the entry at path, else why it is held.
 // Anything it cannot prove is held. uses and usesErr are one read of the
-// process table (readUses); walkErr is entryStat's, an unreadable part whose
+// process table (findUses or readUses); walkErr is entryStat's, an unreadable part whose
 // mtime newest does not cover.
 func (s *state) heldTmp(path string, newest time.Time, walkErr error, uses []ProcUse, usesErr error) string {
 	if walkErr != nil {
@@ -119,7 +119,30 @@ func (s *state) heldTmp(path string, newest time.Time, walkErr error, uses []Pro
 	return ""
 }
 
-// readUses reads the process table once; no reader is an error.
+// usesRead is one read of the process table.
+type usesRead struct {
+	uses []ProcUse
+	err  error
+}
+
+// findUses is the read every finder of one Find shares: without /proc a read
+// is a whole lsof run. Removers call readUses, never this.
+func (s *state) findUses() ([]ProcUse, error) {
+	if s.found == nil {
+		s.progress("reading the process table")
+		uses, err := s.readUses()
+		s.found = &usesRead{uses, err}
+	}
+	return s.found.uses, s.found.err
+}
+
+func (s *state) progress(step string) {
+	if s.in.Progress != nil {
+		s.in.Progress(step)
+	}
+}
+
+// readUses reads the process table afresh; no reader is an error.
 func (s *state) readUses() ([]ProcUse, error) {
 	if s.in.ProcessUses == nil {
 		return nil, errors.New("no process table on this host")
@@ -171,6 +194,9 @@ func ListTmp(root string) (ents []TmpEntry, warning string) {
 }
 
 func findTmp(_ context.Context, s *state) ([]Candidate, error) {
+	if s.in.TempRoot != "" {
+		s.progress("walking the project temp root")
+	}
 	ents, warning := ListTmp(s.in.TempRoot)
 	if warning != "" {
 		s.warn("%s", warning)
@@ -178,7 +204,7 @@ func findTmp(_ context.Context, s *state) ([]Candidate, error) {
 	if len(ents) == 0 {
 		return nil, nil
 	}
-	uses, usesErr := s.readUses()
+	uses, usesErr := s.findUses()
 	var out []Candidate
 	for _, e := range ents {
 		out = append(out, Candidate{ID: KindTmp + ":" + e.Name, Kind: KindTmp, Name: e.Name, Path: e.Path,
