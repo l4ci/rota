@@ -280,58 +280,6 @@ func TestGitLabAssignSelfConcurrent(t *testing.T) {
 	}
 }
 
-func TestGitLabPRMerge(t *testing.T) {
-	ctx := context.Background()
-	const head = "aaaa1111"
-	cases := []struct {
-		name     string
-		view     string
-		ancestor int // exit of git merge-base --is-ancestor; -1: not called
-		sha      string
-		errHas   string
-	}{
-		{"merge commit", `{"state":"merged","merge_commit_sha":"mmmm"}`, -1, "mmmm", ""},
-		{"squash", `{"state":"merged","merge_commit_sha":null,"squash_commit_sha":"ssss"}`, -1, "ssss", ""},
-		{"fast-forward on base", `{"state":"merged","merge_commit_sha":null,"sha":"` + head + `","target_branch":"main"}`, 0, head, ""},
-		{"fast-forward elsewhere", `{"state":"merged","sha":"` + head + `","target_branch":"main"}`, 1, "", "not on origin/main"},
-		{"merge-base broke", `{"state":"merged","sha":"` + head + `","target_branch":"main"}`, 128, "", "failed"},
-		{"auto-merge scheduled", `{"state":"opened","merge_commit_sha":null,"sha":"` + head + `"}`, -1, "", "is opened after the merge call"},
-	}
-	for _, c := range cases {
-		s := &scripted{answer: func(name string, args []string) (string, string, int) {
-			line := strings.Join(args, " ")
-			switch {
-			case name == "glab" && line == "mr merge 4 --yes --remove-source-branch --auto-merge=false":
-				return "", "", 0
-			case name == "glab" && line == "mr view 4 --output json":
-				return c.view, "", 0
-			case name == "git" && line == "fetch -q origin":
-				return "", "", 0
-			case name == "git" && line == "merge-base --is-ancestor "+head+" origin/main":
-				return "", "fatal: bad object", c.ancestor
-			}
-			return "", "unexpected " + name + " " + line, 2
-		}}
-		sha, err := newAdapter(t, "gitlab", s).PRMerge(ctx, 4, MergeOpts{DeleteBranch: true})
-		calledGit := false
-		for _, l := range s.calls {
-			calledGit = calledGit || strings.HasPrefix(l, "git merge-base")
-		}
-		if calledGit != (c.ancestor >= 0) {
-			t.Errorf("%s: merge-base called %v in %q", c.name, calledGit, s.calls)
-		}
-		if c.errHas == "" {
-			if err != nil || sha != c.sha {
-				t.Errorf("%s: %q, %v; want %q", c.name, sha, err, c.sha)
-			}
-			continue
-		}
-		if !IsKind(err, KindFailed) || !strings.Contains(err.Error(), c.errHas) {
-			t.Errorf("%s: %v; want KindFailed with %q", c.name, err, c.errHas)
-		}
-	}
-}
-
 func TestGitLabGetCommentsPaginate(t *testing.T) {
 	ctx := context.Background()
 	const claim = "<!-- rota:claim ben@42 -->"

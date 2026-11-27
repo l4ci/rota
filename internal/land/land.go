@@ -134,8 +134,8 @@ func RequestForge(ctx context.Context, f Requester, pr int, head string, deleteB
 	return f.PRRequestMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: deleteBranch})
 }
 
-// MergeRefusedError is the forge refusing to merge a PR: the merge call itself
-// failed with the CLI's own error. Nothing was merged.
+// MergeRefusedError is the forge refusing to merge a PR: the merge call failed,
+// or left the PR unmerged. Nothing was merged.
 type MergeRefusedError struct {
 	PR  int
 	Err error
@@ -145,16 +145,20 @@ func (e *MergeRefusedError) Error() string { return e.Err.Error() }
 func (e *MergeRefusedError) Unwrap() error { return e.Err }
 
 // MergeForge is RequestForge plus the confirmation: it returns the merge
-// commit sha, or fails when nothing landed. A merge the forge refused is a
-// *MergeRefusedError; an unreachable forge and a merge that landed but cannot
-// be read back pass through unchanged.
+// commit sha. A merge the forge refused is a *MergeRefusedError. A request the
+// forge accepted whose confirmation failed is a *tracker.UnconfirmedError,
+// returned with the sha it names, if any. An unreachable forge passes through
+// unchanged.
 func MergeForge(ctx context.Context, f Merger, pr int, head string, deleteBranch bool) (string, error) {
 	if head == "" {
 		return "", ErrUnpinned
 	}
 	sha, err := f.PRMerge(ctx, pr, tracker.MergeOpts{HeadSHA: head, DeleteBranch: deleteBranch})
-	var te *tracker.Error
-	if errors.As(err, &te) && te.Kind == tracker.KindFailed && !strings.HasPrefix(te.Message, "cannot read the merge commit") {
+	var unconfirmed *tracker.UnconfirmedError
+	if errors.As(err, &unconfirmed) {
+		return unconfirmed.SHA, err
+	}
+	if tracker.IsKind(err, tracker.KindFailed) {
 		return "", &MergeRefusedError{PR: pr, Err: err}
 	}
 	return sha, err

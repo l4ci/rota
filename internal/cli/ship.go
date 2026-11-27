@@ -513,6 +513,7 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		var refused *land.MergeRefusedError
 		var unproven *ship.UnprovenError
 		var gateRefused *ship.GateRefusedError
+		var unconfirmed *tracker.UnconfirmedError
 		switch {
 		case errors.As(err, &gateRefused):
 			return shipRefusal(gateRefused.Ref)
@@ -522,6 +523,16 @@ func shipPRMerge(fs *flag.FlagSet) RunFunc {
 		case errors.As(err, &unproven):
 			return Result{Data: jsonx.Obj("pr", pr, "merged", false, "unproven", unproven.IDs, "changesRequested", unproven.IDs, "changed", true)},
 				Refused("%s", err.Error())
+		case errors.As(err, &unconfirmed):
+			// The exit code stays the cause's own; the translated message names
+			// only the cause, which would read as a merge that never happened.
+			res, ferr := backlogFail(err)
+			var e *exitcode.Error
+			if errors.As(ferr, &e) {
+				e.Message = err.Error()
+				e.Hint = "check PR " + args[0] + " on the forge before merging again"
+			}
+			return res, ferr
 		case err != nil:
 			return backlogFail(err)
 		}
