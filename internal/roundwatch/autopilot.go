@@ -32,24 +32,29 @@ type AutopilotResult struct {
 // RunAutopilot is `round watch --autopilot`: tick first, then wait, tick on
 // every wake, and return for new attention, a completed merge (under train
 // fill), a stop, a failed tick or the heartbeat. Fill progress stays quiet.
+//
+// One switch classifies every tick, the closing one after the heartbeat
+// included. An interrupted watch runs no closing tick: a tick can merge and
+// assign, and its context is already cancelled.
 func RunAutopilot(ctx context.Context, env Env, o Opts, a AutopilotOpts) (AutopilotResult, error) {
 	deadline := env.Now().Add(o.Heartbeat)
+	var waited time.Duration // set when the next tick is the closing one
 	for {
 		tr, err := a.Tick()
 		left := deadline.Sub(env.Now())
 		switch {
 		case err != nil && roundtick.IsStopped(err):
-			return AutopilotResult{Result: Result{Reason: ReasonStopped}, StopErr: err}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonStopped, Waited: waited}, StopErr: err}, nil
 		case err != nil:
-			return AutopilotResult{Result: Result{Reason: ReasonChange}, TickErr: err}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonChange, Waited: waited}, TickErr: err}, nil
 		case tr.Stopped != nil:
-			return AutopilotResult{Result: Result{Reason: ReasonStopped}, Tick: &tr, StopErr: tr.Stopped}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonStopped, Waited: waited}, Tick: &tr, StopErr: tr.Stopped}, nil
 		case ctx.Err() != nil:
-			return AutopilotResult{Result: Result{Reason: ReasonInterrupt}, Tick: &tr}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonInterrupt, Waited: waited}, Tick: &tr}, nil
 		case wakes(tr, a.TrainFill):
-			return AutopilotResult{Result: Result{Reason: ReasonChange}, Tick: &tr}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonChange, Waited: waited}, Tick: &tr}, nil
 		case left <= 0:
-			return AutopilotResult{Result: Result{Reason: ReasonHeartbeat}, Tick: &tr}, nil
+			return AutopilotResult{Result: Result{Reason: ReasonHeartbeat, Waited: waited}, Tick: &tr}, nil
 		}
 		wo := o
 		wo.Heartbeat = left
@@ -57,13 +62,12 @@ func RunAutopilot(ctx context.Context, env Env, o Opts, a AutopilotOpts) (Autopi
 		if err != nil {
 			return AutopilotResult{}, err
 		}
-		if res.Reason == ReasonHeartbeat || res.Reason == ReasonInterrupt {
-			// Tick once more so the report is current; a failed tick is
-			// dropped here as it always was.
-			if t2, err := a.Tick(); err == nil {
-				tr = t2
-			}
+		switch res.Reason {
+		case ReasonInterrupt:
 			return AutopilotResult{Result: res, Tick: &tr}, nil
+		case ReasonHeartbeat:
+			waited = res.Waited // the deadline passed: tick once more, no pause
+			continue
 		}
 		// A slot the orchestrator already knows about wakes Run at once: the
 		// pause keeps the loop from spinning on it.
