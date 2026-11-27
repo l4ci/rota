@@ -534,16 +534,9 @@ func (e Env) changed(ctx context.Context, wt, base string, shared []string) []st
 			add(p)
 		}
 	}
-	if res, err := e.Git(ctx, wt, e.statusArgs("--porcelain")...); err == nil && res.ExitCode == 0 {
-		out := res.Stdout
-		for _, l := range strings.Split(out, "\n") {
-			if len(l) > 3 {
-				p := strings.TrimSpace(l[3:])
-				if i := strings.Index(p, " -> "); i >= 0 {
-					p = p[i+4:]
-				}
-				add(p)
-			}
+	if res, err := e.Git(ctx, wt, e.statusArgs("--porcelain", "-z", "-uall")...); err == nil && res.ExitCode == 0 {
+		for _, p := range git.StatusPaths(res.Stdout) {
+			add(p)
 		}
 	}
 	var out []string
