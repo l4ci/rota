@@ -117,6 +117,27 @@ func DiffFiles(ctx context.Context, run Runner, dir, span string) ([]string, err
 	return files, nil
 }
 
+// UnmergedPaths lists the paths the index of run's tree holds unmerged: the
+// conflicted files of a merge still in place, byte-exact as ChangedPaths
+// reports them. It takes a Bound, the shape a merge runs on. A non-zero exit
+// is an error.
+func UnmergedPaths(run Bound) ([]string, error) {
+	res, err := run("diff", "--name-only", "-z", "--diff-filter=U")
+	if err != nil {
+		return nil, err
+	}
+	if res.ExitCode != 0 {
+		return nil, &ExitError{"diff --name-only --diff-filter=U", res.ExitCode, res.Stderr}
+	}
+	var paths []string
+	for _, p := range strings.Split(res.Stdout, "\x00") {
+		if p != "" {
+			paths = append(paths, p)
+		}
+	}
+	return paths, nil
+}
+
 // ChangedLines counts the added and deleted lines `git diff --numstat <span>`
 // reports. A non-zero exit is an error.
 func ChangedLines(ctx context.Context, run Runner, dir, span string) (int, error) {
