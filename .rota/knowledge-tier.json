@@ -638,8 +638,8 @@
     },
     "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U2tpbGwgZmlsZXMgbGl2ZSBhdCB0aGUgdG9wIG9mIHRoZSBza2lsbCBmb2xkZXI": {
       "tier": "confirmed",
-      "hits": 4,
-      "lastSeen": "2026-10-31"
+      "hits": 5,
+      "lastSeen": "2026-11-27"
     },
     "QnVpbGQgJiBUb29saW5nOiBTbW9rZSB0ZXN0aW5nOiBHYXRlICYgZnJvemVuIHJlY29yZHM.QSBuZXcgY29uZmlnIGtleSBzaGlmdHMgZXZlcnkgbGF0ZXIgZnJvemVuIGNvbmZpZy1zaG93L2FsbCByb3c": {
       "tier": "confirmed",
@@ -693,8 +693,8 @@
     },
     "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.U21va2Ugc2VjdGlvbnMgZ3JlcCBza2lsbCB0ZXh0IHdoZXJlIGl0IGxpdmVz": {
       "tier": "provisional",
-      "hits": 0,
-      "lastSeen": "2026-10-27"
+      "hits": 1,
+      "lastSeen": "2026-11-27"
     },
     "QXJjaGl0ZWN0dXJlOiBTa2lsbCBhdXRob3Jpbmc.UmUtY2hlY2sgZ2VuZXJpYyBydWxlcyB3aGVuIGEgc2tpbGwgc3RlcCBiZWNvbWVzIGEgdmVyYg": {
       "tier": "provisional",
@@ -1440,6 +1440,21 @@
       "tier": "provisional",
       "hits": 0,
       "lastSeen": "2026-11-07"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.QSBtZXJnZWQtcmVtb3RlbHkgdmVyZGljdCBpcyBub3QgT0soKQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-27"
+    },
+    "QnVpbGQgJiBUb29saW5nOiBIZWxwZXJzICYgbWlncmF0aW9ucw.UHJvYmUgbnBtIGVudiB3YXJuaW5ncyB3aXRoIGEgY29uZmlnIGNvbW1hbmQ": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-27"
+    },
+    "QXJjaGl0ZWN0dXJlOiBIZWxwZXIgY29udmVudGlvbnMgJiBpbnZhcmlhbnRzOiBHbyB2ZXJicyAmIGZha2VzOiBHYXRlICYgdHJhY2tlciBwbHVtYmluZw.bWlsZXN0b25lQ2hpbGRyZW4gcmV0dXJucyBvcGVuIGl0ZW1zIG9ubHk": {
+      "tier": "provisional",
+      "hits": 0,
+      "lastSeen": "2026-11-27"
     }
   }
 }
