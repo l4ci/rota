@@ -14,8 +14,6 @@ type IssueBackend interface {
 	ReleaseClose(mid, tag string) (int, bool, error)
 	// MilestoneStore is the backend's milestone store.
 	MilestoneStore() ms.Store
-	// SetWarn routes notices (duplicate tracking issues) to warn.
-	SetWarn(warn func(string))
 	// HomeIssues is the Issues backend that holds slice plans and milestone
 	// plans: the backend itself, or an umbrella's home sub-repo.
 	HomeIssues() (*Issues, error)
@@ -26,15 +24,8 @@ var (
 	_ IssueBackend = (*Umbrella)(nil)
 )
 
-// SetWarn sets the notice sink.
-func (b *Issues) SetWarn(warn func(string)) { b.Warn = warn }
-
 // HomeIssues is b itself.
 func (b *Issues) HomeIssues() (*Issues, error) { return b, nil }
-
-// SetWarn sets the notice sink every sub-repo raises into, including those
-// already built.
-func (u *Umbrella) SetWarn(warn func(string)) { u.warn = warn }
 
 // HomeIssues is the home sub-repo.
 func (u *Umbrella) HomeIssues() (*Issues, error) { return u.homeSub() }

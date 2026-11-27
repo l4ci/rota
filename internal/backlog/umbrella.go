@@ -52,7 +52,9 @@ type Umbrella struct {
 	// NoteLimit is handed to every sub-repo backend; see Issues.NoteLimit.
 	NoteLimit string
 
-	warn func(string) // notice sink handed to every sub-repo; see SetWarn
+	// Warn is handed to every sub-repo backend; see Issues.Warn.
+	Warn func(string)
+
 	subs map[string]*Issues
 }
 
@@ -101,14 +103,9 @@ func (u *Umbrella) sub(name string) (*Issues, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Issues{Cfg: u.Cfg, Tracker: tr, Ctx: u.Ctx, Repo: name, CountProof: u.CountProof, LookupProof: u.LookupProof, NoteLimit: u.NoteLimit}
-	// The sink and clock are read through the umbrella at use time, so a
-	// sub-repo built before SetWarn or a Today assignment still sees them.
-	s.Warn = func(msg string) {
-		if u.warn != nil {
-			u.warn(msg)
-		}
-	}
+	s := &Issues{Cfg: u.Cfg, Tracker: tr, Ctx: u.Ctx, Repo: name, CountProof: u.CountProof, LookupProof: u.LookupProof, NoteLimit: u.NoteLimit, Warn: u.Warn}
+	// The clock is read through the umbrella at use time, so a sub-repo built
+	// before a Today assignment still sees it.
 	s.Today = func() time.Time {
 		if u.Today != nil {
 			return u.Today()
