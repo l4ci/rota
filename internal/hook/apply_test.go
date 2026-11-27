@@ -101,9 +101,7 @@ func TestApplySessionUnavailable(t *testing.T) {
 				case "invalid id":
 					in.SessionID = "../escape"
 				case "no handoff":
-					if action != StopHandoff {
-						t.Skip("only the orchestrator requires a resolved path")
-					}
+					in.Settings = Settings{Threshold: 75, StateMaxAge: 120, HandoffMaxBlks: 2}
 					if err := UpdateState(path, func(State, bool) State { return guardState(95, t0.Format(time.RFC3339)) }); err != nil {
 						t.Fatal(err)
 					}
