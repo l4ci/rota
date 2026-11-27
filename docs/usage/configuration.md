@@ -575,6 +575,10 @@ Door, risky paths and scope drift only lift a `light` review; a `default` of `no
 
 See [review and ship](review-and-ship.md) for the full `/rota-ship` workflow.
 
+## review.fileDeferred: floor for follow-up findings
+
+`review.fileDeferred` sets which deferred findings `rota verdict add --file-deferred` files in the follow-up item for a PR. `major` (default) files major and blocker findings; minor findings stay in the verdict record. `minor` files minor, major and blocker findings. `off` files none. Only non-blocking findings above `info` are deferred, and a PR that closes a deferred-findings item files none. See [review and ship](review-and-ship.md).
+
 ## review.accounts: logins kept for cross-harness review
 
 `review.accounts` (default `[]`, machine scope) holds `{ "kind", "name", "dir" }` entries like `round.accounts`, for the cross-harness reviewer. Setting it alone activates cross review; a label in `review.crossLabels` still decides which PRs need one. See [review and ship](review-and-ship.md#cross-harness-review).

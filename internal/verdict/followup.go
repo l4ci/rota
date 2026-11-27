@@ -3,6 +3,7 @@ package verdict
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -28,7 +29,7 @@ func IsFollowUpTitle(title string) bool {
 func DeferredAbove(findings []Finding, floor string) []Finding {
 	var out []Finding
 	for _, f := range findings {
-		if !f.IsDeferred() || floor == FloorOff || (floor == FloorMajor && f.Severity != "major") {
+		if !f.IsDeferred() || floor == FloorOff || (floor == FloorMajor && slices.Index(severities, f.Severity) > slices.Index(severities, FloorMajor)) {
 			continue
 		}
 		out = append(out, f)
