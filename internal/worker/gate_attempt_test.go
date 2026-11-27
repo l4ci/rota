@@ -112,3 +112,50 @@ func TestGateRefusesACommitFromASupersededAttempt(t *testing.T) {
 		})
 	}
 }
+
+// A PR onto a milestone branch that merges the default branch brings commits
+// other attempts already landed there: they are not this slot's pushes. A stale
+// stamp that only the PR head reaches is still refused (#4263).
+func TestGateAttemptCheckSkipsTheDefaultBranchOnAMilestoneBase(t *testing.T) {
+	const old, cur, landed = "aaaaaaaa", "bbbbbbbb", "cccccccc"
+	for _, c := range []struct {
+		name, config string
+		stale        bool
+		def, want    string
+	}{
+		{name: "merged default branch passes", def: "main", want: landing.GateFresh},
+		{name: "stale stamp after the merge", def: "main", stale: true, want: landing.GateStaleAttempt},
+		{name: "configured base branch", def: "develop", config: `,"git":{"baseBranch":"develop"}`, want: landing.GateFresh},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorld(t, ghURL)
+			w.setConfig(`{"test":{"full":["true"]}` + c.config + `}`)
+			gittest.Run(t, w.dir, "push", "-q", "origin", "main:refs/heads/milestone/M01")
+			gittest.Run(t, w.dir, "branch", "milestone/M01", "main")
+			if c.def != "main" {
+				gittest.Run(t, w.dir, "checkout", "-q", "-b", c.def)
+			}
+			os.WriteFile(filepath.Join(w.dir, "other.txt"), []byte("other\n"), 0o644)
+			gittest.Run(t, w.dir, "add", "other.txt")
+			gittest.Run(t, w.dir, "commit", "-q", "-m", "other work\n\n"+AttemptTrailer+": "+landed)
+			gittest.Run(t, w.dir, "push", "-q", "origin", c.def)
+			gittest.Run(t, w.worker, "fetch", "-q", "origin")
+			gittest.Run(t, w.worker, "merge", "-q", "--no-edit", "origin/"+c.def)
+			tip := w.pushStamped("b.txt", cur)
+			if c.stale {
+				tip = w.pushStamped("c.txt", old)
+			}
+			w.setAttemptSlot(cur, "")
+			w.forge("base", "milestone/M01")
+			w.forge("sha", tip)
+
+			res, err := w.gate(false, GateOpts{CheckOnly: true, Base: "milestone/M01"})
+			if err != nil || res.Verdict != c.want {
+				t.Fatalf("verdict = %q (%v), want %q: %+v", res.Verdict, err, c.want, res)
+			}
+			if c.stale && !strings.Contains(res.Err, old) {
+				t.Errorf("the refusal names the stale stamp, not the landed one: %q", res.Err)
+			}
+		})
+	}
+}

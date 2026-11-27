@@ -72,7 +72,7 @@ func (g gateRun) runGate(target GateTarget, result landing.GateResult) (landing.
 		return g.stepRefs(result, followed.Value.target.Branch, remote.Value)
 	})
 	attempt := runGateStage(refs, func(result landing.GateResult) (struct{}, landing.GateResult, bool, error) {
-		return g.stepAttempt(result, followed.Value.target, refs.Value)
+		return g.stepAttempt(result, followed.Value.target, remote.Value, refs.Value)
 	})
 	outcome := runGateStage(attempt, func(result landing.GateResult) (struct{}, landing.GateResult, bool, error) {
 		return g.stepOutcome(result, followed.Value.target, forged.Value, refs.Value.head)
