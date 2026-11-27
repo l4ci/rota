@@ -1,8 +1,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/proc"
+	"github.com/l4ci/rota/internal/tracker"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -181,6 +184,39 @@ func TestPRMergeEscalatePathsAndSendFailure(t *testing.T) {
 	d2, _ := env["data"].(map[string]any)
 	if o.code != 4 || d2["blockedBy"] != "manual gate" || d2["escalation"] != nil || !strings.Contains(o.stderr, "approval request not sent") {
 		t.Fatalf("send failure: %+v", o)
+	}
+}
+
+// renameForge is a8Forge with PRFiles answered by the real GitHub adapter, over
+// a gh that renames secret/key.go to public/key.go.
+type renameForge struct {
+	*a8Forge
+	gh tracker.Adapter
+}
+
+func (f renameForge) PRFiles(ctx context.Context, pr int) ([]string, error) {
+	return f.gh.PRFiles(ctx, pr)
+}
+
+func TestPRMergeApprovalRenameOutOfCoveredPath(t *testing.T) {
+	root, deps, f, th := prMergeProject(t, map[string]any{"mergeApproval": "paths", "mergeApprovalPaths": []any{"secret/**"}})
+	gh, err := tracker.New(context.Background(), tracker.Settings{Provider: "github"}, "", root,
+		tracker.WithExec(func(_ context.Context, cmd proc.Cmd) (proc.Result, error) {
+			if cmd.Args[0] == "api" {
+				return proc.Result{Stdout: `[{"filename":"public/key.go","previous_filename":"secret/key.go"}]`}, nil
+			}
+			return proc.Result{Stdout: "public/key.go\n"}, nil
+		}, func(string) (string, error) { return "/fake", nil }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deps.NewTracker = withTracker(t, renameForge{f, gh}).NewTracker
+	code, d, msg := a8RunWith(t, deps, root, "ship", "pr-merge", "10", "--escalate")
+	if code != 4 || len(f.merged) != 0 || posts(th) != 1 {
+		t.Fatalf("exit %d %v %s merged %v posts %d", code, d, msg, f.merged, posts(th))
+	}
+	if body := th.comments[0]["body"].(string); !strings.Contains(body, "- secret/key.go") {
+		t.Errorf("body: %s", body)
 	}
 }
 
