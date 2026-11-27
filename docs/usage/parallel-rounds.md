@@ -861,6 +861,7 @@ whose worker is busy, blocked or has uncommitted files is never taken.
 - **See it**: `rota round status` lists each PR in review (`review` in JSON).
 - **Merge it**: `rota worker gate <PR number> --base <branch>` (or `'#<N>'`, `'!<N>'` or the full PR URL; `12/foo`, `12?x` and a scheme-less URL are refused, see [PR references](../reference/cli-helpers.md#pr-references)). A pass drops it from the list, and so does
   a gate that left the PR merged with a red verify of the landed tree (`merged-remotely` included). A merged PR never stays under `review`.
+  If the fetch after a forge merge fails, the gate tries it three times, then reports `merged-remotely` (exit 1) instead of `check-broke`. The merge still gets one ledger entry and the usual item bookkeeping.
   `rota worker gate <slot>` on a slot whose PR moved to review is refused with the PR to gate, so a
   habitual slot gate never merges the slot's next branch.
 - **Send a relay about it**: `rota worker dispatch <slot> --relay --pr <N> --body-file <brief>`
