@@ -74,7 +74,7 @@ func FindReport(repo git.Repo, root, kind string, days int, today time.Time, tod
 	var err error
 	switch kind {
 	case "map":
-		es = findMap(repo, root, days, today)
+		es, err = findMap(repo, root, days, today)
 	case "knowledge":
 		es, err = findKnowledge(repo, root, days, today)
 	case "todo":
@@ -87,14 +87,18 @@ func FindReport(repo git.Repo, root, kind string, days int, today time.Time, tod
 
 func fmtDate(t time.Time) string { return stamp.Date(t) }
 
-func findMap(repo git.Repo, root string, days int, today time.Time) []Entry {
+func findMap(repo git.Repo, root string, days int, today time.Time) ([]Entry, error) {
+	entries, err := mapqa.Entries(root)
+	if err != nil {
+		return nil, err
+	}
 	var out []Entry
-	for _, e := range mapqa.Entries(root) {
+	for _, e := range entries {
 		if d, ok := e.TouchedIn(repo, root); ok && isStale(d, today, days) {
 			out = append(out, Entry{e.Name, fmtDate(d)})
 		}
 	}
-	return out
+	return out, nil
 }
 
 func findKnowledge(repo git.Repo, root string, days int, today time.Time) ([]Entry, error) {

@@ -9,9 +9,15 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
-// ErrUnreadable is wrapped by the error UpdateJSONStrict returns for a file
-// that exists but cannot be read or parsed.
+// ErrUnreadable is wrapped by the error for a file that exists but cannot be
+// read or parsed; the CLI exits 5 for it, not 70.
 var ErrUnreadable = errors.New("state file unreadable")
+
+// Unreadable marks err, a failed read of a user's file that names its path,
+// as ErrUnreadable.
+func Unreadable(err error) error {
+	return fmt.Errorf("%w: %w; fix or remove it", ErrUnreadable, err)
+}
 
 // LoadJSON reads a JSON document, or returns def when the file is missing
 // or does not parse, like hvlib_io.load_json. Objects retain key order in

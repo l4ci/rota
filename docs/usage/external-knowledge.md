@@ -58,6 +58,8 @@ rota knowledge query --external --all Godot      # also every subtopic
 rota knowledge stats --external                  # bullets, bytes and hits per topic file
 ```
 
+An unreadable topic or subtopic makes the read fail with its path. `rota doctor` reports files it cannot measure as an `external knowledge size` warning, including unreadable indexes and stray files.
+
 Before it reads, rota makes sure the clone is current. It fetches at most once per `knowledge.externalTTL` minutes (default 10; the stamp lives in the rota state dir), then fast-forwards when the remote is ahead. It never resets anything:
 
 - A clone with uncommitted changes, or one that has diverged from its remote, is read as-is, with a one-line warning.
