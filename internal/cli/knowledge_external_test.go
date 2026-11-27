@@ -450,9 +450,9 @@ func TestKnowledgeExternalAddUnknownSubtopicHead(t *testing.T) {
 
 // extWalkFixture is extFixture with two outdated bullets in Go and a split Git
 // topic that has a stray flat file. The project runs go 1.30.
-func extWalkFixture(t *testing.T) (project string) {
+func extWalkFixture(t *testing.T) (project, clone string) {
 	t.Helper()
-	project, clone, _ := extFixture(t, "")
+	project, clone, _ = extFixture(t, "")
 	gittest.Write(t, project, "go.mod", "module x\n\ngo 1.30\n")
 	gittest.Write(t, clone, "README.md", "# Knowledge index\n\n- [Go](topics/go.md) — testing quirks\n- [Git](topics/git/README.md) — vcs\n- [Git](topics/git.md) — vcs\n")
 	gittest.Write(t, clone, "topics/go.md", "# Go\n\n- **Table tests** — Use t.Run. <!-- 2026-01-02 source:rota seen:go@1.20 -->\n- **Vet** — Always vet. <!-- 2026-01-02 source:rota seen:go@1.21 -->\n")
@@ -461,11 +461,11 @@ func extWalkFixture(t *testing.T) (project string) {
 	gittest.Run(t, clone, "add", ".")
 	gittest.Run(t, clone, "commit", "-q", "-m", "walk fixture")
 	gittest.Run(t, clone, "push", "-q")
-	return project
+	return project, clone
 }
 
 func TestKnowledgeExternalMatchRecheckRowsFollowPrintedBullets(t *testing.T) {
-	project := extWalkFixture(t)
+	project, _ := extWalkFixture(t)
 	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "t.run", "--json")
 	var env struct {
 		Data struct {
@@ -482,7 +482,7 @@ func TestKnowledgeExternalMatchRecheckRowsFollowPrintedBullets(t *testing.T) {
 }
 
 func TestKnowledgeExternalMissingAndStraysSameWithMatch(t *testing.T) {
-	project := extWalkFixture(t)
+	project, _ := extWalkFixture(t)
 	for _, args := range [][]string{
 		{"knowledge", "query", "--external", "git", "nope", "", " ", "Nope "},
 		{"knowledge", "query", "--external", "--match", "zzz", "git", "nope", "", " ", "Nope "},
@@ -507,4 +507,32 @@ func TestKnowledgeExternalMissingAndStraysSameWithMatch(t *testing.T) {
 			t.Errorf("%v: %d stray warnings: %q", args, n, o.stderr)
 		}
 	}
+}
+
+// An unreadable stray fails the stats walk; doctor must say so, not drop its
+// size and layout checks without a word.
+func TestDoctorReportsUnreadableExternalStray(t *testing.T) {
+	project, clone := extWalkFixture(t)
+	stray := filepath.Join(clone, "topics", "git.md")
+	if err := os.Remove(stray); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(stray, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, doctorDeps(t, nil), project, "doctor", "--json")
+	var env struct {
+		Data struct {
+			Checks []struct{ Name, Status, Detail string }
+		}
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	for _, c := range env.Data.Checks {
+		if c.Name == "external knowledge size" && c.Status == "warn" && strings.Contains(c.Detail, "topics/git.md") {
+			return
+		}
+	}
+	t.Fatalf("doctor does not report the unreadable stray: %s", out)
 }
