@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/l4ci/rota/internal/cfgdir"
 	"github.com/l4ci/rota/internal/harness"
 )
 
@@ -199,15 +200,16 @@ func (h *coreHost) stateDir() (string, error) {
 	if p := h.d.Getenv("ROTA_CORE_STATE_DIR"); p != "" {
 		return p, nil
 	}
-	p := h.d.Getenv("XDG_STATE_HOME")
-	if p == "" {
-		home := h.d.Getenv("HOME")
-		if home == "" {
-			return "", fmt.Errorf("Core ownership persistence requires HOME or XDG_STATE_HOME")
+	d, e := cfgdir.StateDir(cfgdir.Env{Getenv: h.d.Getenv, Home: func() (string, error) {
+		if home := h.d.Getenv("HOME"); home != "" {
+			return home, nil
 		}
-		p = filepath.Join(home, ".local", "state")
+		return "", errors.New("HOME is not set")
+	}})
+	if e != nil {
+		return "", fmt.Errorf("Core ownership persistence: %w", e)
 	}
-	return filepath.Join(p, "rota", "herdr-core"), nil
+	return filepath.Join(d, "herdr-core"), nil
 }
 func coreEncode(v coreHandle) string {
 	b, _ := json.Marshal(v)
