@@ -79,6 +79,27 @@ func (e *Error) Error() string { return e.Message }
 
 func (e *Error) Unwrap() error { return e.Cause }
 
+// UnconfirmedError is a PRMerge whose merge request the forge accepted and
+// whose confirmation then failed: whether the merge landed is not proven either
+// way, so it is no refusal. A PRMerge error of any other type means nothing was
+// merged. SHA is the commit the failed check was judging, "" when none is known.
+type UnconfirmedError struct {
+	PR  int
+	SHA string
+	Err error
+}
+
+func (e *UnconfirmedError) Error() string {
+	at := ""
+	if e.SHA != "" {
+		at = " at " + e.SHA
+	}
+	return fmt.Sprintf("merge of PR %d%s requested but not confirmed: %v", e.PR, at, e.Err)
+}
+
+// Unwrap exposes the failure behind the confirmation, so its Kind still holds.
+func (e *UnconfirmedError) Unwrap() error { return e.Err }
+
 // Unavailable is a KindUnavailable error (exit code 3) with a formatted message.
 func Unavailable(format string, a ...any) *Error {
 	return &Error{Kind: KindUnavailable, Code: 3, Message: fmt.Sprintf(format, a...)}

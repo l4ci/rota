@@ -564,7 +564,8 @@ func (g *GitLab) PRRequestMerge(ctx context.Context, pr int, o MergeOpts) error 
 // pipeline runs, reports success and merges nothing). A squash merge returns
 // the squash commit. A fast-forward or rebase merge has no merge commit: the
 // MR must then be merged and its head an ancestor of origin/<target>, and the
-// head sha is returned.
+// head sha is returned. Once the MR reads as merged, or cannot be read, a
+// failure is an *UnconfirmedError.
 func (g *GitLab) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, error) {
 	n := strconv.Itoa(pr)
 	if err := g.PRRequestMerge(ctx, pr, o); err != nil {
@@ -578,7 +579,7 @@ func (g *GitLab) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, erro
 		SquashSHA      string `json:"squash_commit_sha"`
 	}
 	if err := g.json(ctx, []string{"mr", "view", n, "--output", "json"}, &d); err != nil {
-		return "", err
+		return "", &UnconfirmedError{PR: pr, Err: err}
 	}
 	switch {
 	case d.MergeCommitSHA != "":
@@ -588,9 +589,12 @@ func (g *GitLab) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, erro
 	case d.State != "merged":
 		return "", failed("MR %d is %s after the merge call (a scheduled auto-merge?); nothing was merged", pr, d.State)
 	case d.SHA == "" || d.TargetBranch == "":
-		return "", failed("cannot read the merge commit of MR %d", pr)
+		return "", &UnconfirmedError{PR: pr, SHA: d.SHA, Err: failed("cannot read the merge commit of MR %d", pr)}
 	}
-	return d.SHA, g.onBase(ctx, pr, d.SHA, d.TargetBranch)
+	if err := g.onBase(ctx, pr, d.SHA, d.TargetBranch); err != nil {
+		return d.SHA, &UnconfirmedError{PR: pr, SHA: d.SHA, Err: err}
+	}
+	return d.SHA, nil
 }
 
 // onBase checks a fast-forwarded MR's head is on origin/<target>.
