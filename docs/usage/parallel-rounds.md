@@ -126,7 +126,7 @@ Where it opens depends on where you ran it:
 
 `round.dispatch: tmux` skips the herdr-session row and uses tmux. The herdr session is rota's own,
 started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
-Under tmux, the boot wait answers a trust or startup dialog, up to twice. A pane that stays stuck
+Under tmux and herdr, a spawn answers up to three startup dialogs (theme, trust, bypass). A tmux pane that stays stuck
 reports the dialog by name instead of a generic boot timeout.
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
