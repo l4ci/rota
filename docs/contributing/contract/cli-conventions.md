@@ -93,7 +93,7 @@ The first line is `rota <group> <verb>: <message>`, with `warning:` before the m
 | 2 | `usage` | Bad invocation: unknown group or verb, unknown or missing flag, malformed argument. |
 | 3 | `resolution` | Something named or required could not be resolved: item, milestone, plan key, sub-repo, base branch, or the `.rota/` root itself. The name follows #47. |
 | 4 | `refused` | A mutating verb refused to break an invariant it enforces. Only mutating verbs exit 4: the target already exists, the operation would run on the base branch, proof is missing, a manual gate is not cleared. |
-| 5 | `unavailable` | An external dependency is missing or failing: `git`, `gh`, `glab`, auth, network, or the tracker. Also a state file that exists but cannot be read or parsed and that rota refuses to overwrite (`fsio.ErrUnreadable`, below). |
+| 5 | `unavailable` | An external dependency is missing or failing: `git`, `gh`, `glab`, auth, network, or the tracker. Also a state file that exists but cannot be read or parsed and that rota refuses to overwrite (`fsio.ErrUnreadable`, below), and a knowledge, decisions, map, QA or external-knowledge source file that exists but cannot be read (`fsio.Unreadable` marks it, so it is not a rota bug). |
 | 6 | `retry` | A transient condition that a later retry can clear: a rate limit, or a lock held past its timeout. |
 | 70 | `internal` | A bug in `rota`: unexpected state or an unhandled error. Report it. |
 | 71 | `not_implemented` | The verb is in the tree but not ported yet. Only exists until A9. |
