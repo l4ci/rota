@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func TestBranchName(t *testing.T) {
@@ -45,7 +45,7 @@ func TestBranchNameSlugCap(t *testing.T) {
 }
 
 func TestBranchNameKeepsIssueRef(t *testing.T) {
-	if got := backlog.BranchIssueRef(BranchName("2349", "Move ship and work bookkeeping")); got != "#2349" {
-		t.Fatalf("BranchIssueRef = %q, want #2349", got)
+	if got, ok := worker.BranchIssue(BranchName("2349", "Move ship and work bookkeeping")); !ok || got.String() != "2349" {
+		t.Fatalf("BranchIssue = %q, %v, want 2349", got, ok)
 	}
 }

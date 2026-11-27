@@ -51,12 +51,15 @@ func resolveReportTargets(c *Ctx, t verdictBranch, prRef string, bodies []verdic
 		add(it.ID)
 	}
 	if issue {
+		if key, ok := worker.BranchIssue(t.branch); ok {
+			add(key.String())
+		}
+		// A key tracker also closes by a key anywhere in the branch, in any
+		// case, and with a local forge no later read finds it.
 		if keySource {
 			for _, id := range reportKeyItems(t.branch, "") {
 				add(id)
 			}
-		} else {
-			add(backlog.BranchIssueRef(t.branch))
 		}
 	}
 	// Match the existing review scope: file item IDs and issue closing references
