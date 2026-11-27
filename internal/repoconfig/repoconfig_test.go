@@ -164,3 +164,43 @@ func TestRiskyCoversProgramRunningKeyFamilies(t *testing.T) {
 		}
 	}
 }
+
+// git writes branch.<name>.remote and .merge itself on a checkout or push -u,
+// so adding, changing or removing them is not drift.
+func TestBranchTrackingKeysAreNotDrift(t *testing.T) {
+	dir := newRepo(t)
+	gittest.Run(t, dir, "config", "--local", "branch.gone.remote", "origin")
+	gittest.Run(t, dir, "config", "--local", "branch.moved.merge", "refs/heads/a")
+	ctx := context.Background()
+	if err := Record(ctx, runner, dir); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, dir, "config", "--local", "branch.kit/1-v0.2.remote", "origin")
+	gittest.Run(t, dir, "config", "--local", "branch.kit/1-v0.2.merge", "refs/heads/kit/1-v0.2")
+	gittest.Run(t, dir, "config", "--local", "branch.moved.merge", "refs/heads/b")
+	gittest.Run(t, dir, "config", "--local", "--unset", "branch.gone.remote")
+	d, err := Check(ctx, runner, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d.Clean() {
+		t.Fatalf("want clean drift, got %q", d.Summary())
+	}
+}
+
+func TestOtherBranchKeysStillDrift(t *testing.T) {
+	dir := newRepo(t)
+	ctx := context.Background()
+	if err := Record(ctx, runner, dir); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, dir, "config", "--local", "branch.x.pushRemote", "elsewhere")
+	gittest.Run(t, dir, "config", "--local", "remote.x.merge", "v")
+	d, err := Check(ctx, runner, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := d.Summary(), "added: branch.x.pushremote, remote.x.merge"; got != want {
+		t.Fatalf("summary = %q, want %q", got, want)
+	}
+}

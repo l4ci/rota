@@ -503,3 +503,28 @@ func TestClearWorktreeInjectedOwners(t *testing.T) {
 		}
 	}
 }
+
+// A `Refs #n` line marks a slice that must not close #n, so --items does not
+// add `Closes #n` over it; other numbers and plain mentions still get theirs.
+func TestOpenPRRefsLineKeepsIssueOpen(t *testing.T) {
+	for _, tc := range []struct{ name, body, want string }{
+		{"all referenced", "Refs #4\nRefs #9", "Refs #4\nRefs #9"},
+		{"list marker, case and trailing text", "- refs: #4 (slice 1 of 3)\r\nmore", "- refs: #4 (slice 1 of 3)\r\nmore\n\nCloses #9"},
+		{"refs one of two", "Refs #4", "Refs #4\n\nCloses #9"},
+		{"refs list", "Refs #4, #9", "Refs #4, #9"},
+		{"longer number", "Refs #40", "Refs #40\n\nCloses #4\nCloses #9"},
+		{"mid-line mention", "This Refs #4 in passing.", "This Refs #4 in passing.\n\nCloses #4\nCloses #9"},
+		{"no mention", "B", "B\n\nCloses #4\nCloses #9"},
+	} {
+		g := &fakeGit{out: map[string]string{"worktree list --porcelain": "", "push -u origin feat": ""}}
+		f := &fakeForge{url: "https://example.test/pull/12"}
+		p := prPorts(g, f)
+		p.Closes = func([]string) (string, error) { return "Closes #4\nCloses #9", nil }
+		if _, err := OpenPR(context.Background(), p, PRRequest{Branch: "feat", Title: "T", Body: tc.body, Items: []string{"F01", "F02"}}); err != nil {
+			t.Fatal(err)
+		}
+		if f.spec.Body != tc.want {
+			t.Errorf("%s: body = %q, want %q", tc.name, f.spec.Body, tc.want)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package ship
 
 import (
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -34,4 +35,29 @@ func ClosesLines(b backlog.Backend, sub string, ids []string) (string, error) {
 		lines = append(lines, "Closes #"+strconv.Itoa(it.Number))
 	}
 	return strings.Join(lines, "\n"), nil
+}
+
+var (
+	// refsLineRe is a body line that opens with `Refs #n` (a list marker, a
+	// colon and a comma/"and" list of numbers allowed).
+	refsLineRe = regexp.MustCompile(`(?im)^[ \t]*(?:[-*+][ \t]+)?refs\b:?[ \t]*#\d+(?:[ \t]*(?:,|,?[ \t]+and\b)[ \t]*#\d+)*`)
+	refNumRe   = regexp.MustCompile(`#\d+`)
+)
+
+// dropReferenced removes from lines (ClosesLines output) each issue body
+// names on a Refs line: the author says this PR must not close it.
+func dropReferenced(lines, body string) string {
+	refs := map[string]bool{}
+	for _, l := range refsLineRe.FindAllString(body, -1) {
+		for _, n := range refNumRe.FindAllString(l, -1) {
+			refs[n] = true
+		}
+	}
+	var kept []string
+	for _, l := range strings.Split(lines, "\n") {
+		if !refs[strings.TrimPrefix(l, "Closes ")] {
+			kept = append(kept, l)
+		}
+	}
+	return strings.Join(kept, "\n")
 }

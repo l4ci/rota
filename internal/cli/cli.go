@@ -28,6 +28,8 @@ import (
 type Command struct {
 	Name    string
 	Summary string
+	// Details is extra --help text under the summary.
+	Details string
 	// Repo marks a verb that takes the global --repo flag.
 	Repo bool
 	// Verb defines the verb's flags on fs and returns the function that
@@ -613,6 +615,10 @@ func helpResult(path string, cmd *Command, verbFlags *flag.FlagSet) Result {
 	data.Set("command", path)
 	data.Set("summary", cmd.Summary)
 	fmt.Fprintf(&b, "%s: %s\n", path, cmd.Summary)
+	if cmd.Details != "" {
+		data.Set("details", cmd.Details)
+		fmt.Fprintf(&b, "\n%s\n", cmd.Details)
+	}
 	if cmd.Subs != nil {
 		subs := []any{}
 		fmt.Fprintf(&b, "\nUsage: %s <command> [flags]\n\nCommands:\n", path)
