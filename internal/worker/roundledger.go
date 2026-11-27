@@ -118,7 +118,7 @@ func gateLedger(env Env, m *landing.RoundMemo, root string, t GateTarget, res la
 	rec := env.ledgerIn(m)
 	rec.Note(root, e)
 	switch {
-	case res.Verdict == landing.GatePass:
+	case res.Verdict == landing.GatePass, res.Verdict == landing.GateMergedRemotely && res.Changed:
 		e.Kind, e.Detail = ledger.KindMerge, nil
 		rec.Note(root, e)
 	case res.AlreadyMerged && !mergeRecorded(root, e):

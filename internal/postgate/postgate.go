@@ -52,8 +52,10 @@ type Failure struct {
 // A landed integration PR (#3096) ends every member issue it carried, as a
 // train ends each member it landed.
 func Gate(book Book, root, issue string, r landing.GateResult) error {
+	// merged-remotely put the PR on the base, though the gate could not finish.
+	onBase := r.OK() || r.Verdict == landing.GateMergedRemotely && r.Changed
 	// already-merged is a retry after the forge merged it but a later step failed.
-	if (r.OK() || r.Verdict == landing.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
+	if (onBase || r.Verdict == landing.GateAlreadyMerged) && len(r.IntegrationMembers) > 0 {
 		for _, m := range r.IntegrationMembers {
 			if err := landed(book, root, m, r.TargetSlot); err != nil {
 				return err
@@ -65,7 +67,7 @@ func Gate(book Book, root, issue string, r landing.GateResult) error {
 		return nil
 	}
 	switch m := landing.ClassifyVerdict(r.Verdict); {
-	case r.OK():
+	case onBase:
 		return landed(book, root, issue, r.TargetSlot)
 	case m.Notify:
 		return notify(book, root, r)
