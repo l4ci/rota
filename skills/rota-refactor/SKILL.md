@@ -80,7 +80,7 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 Dispatch one exploration subagent on `orchestrator.model` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-Per finding it reports files with line ranges, one concrete case (Step 4), the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). It also reports the areas it did not read, sampled files included. No interface proposals.
+Read [`less-code.md`](less-code.md) into the brief: it also looks for code to delete or shrink, in the same pass and under the same cap. Per finding it reports files with line ranges, one concrete case (Step 4), the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). It also reports the areas it did not read, sampled files included. No interface proposals.
 
 ### Step 3 — Rank
 
@@ -90,6 +90,12 @@ Assign each finding a strength:
 - **Worth exploring**: plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative**: a hunch the code does not yet back.
 
+A less-code finding with a proven case, such as a deletion whose unused-code search is clean, can be Strong.
+
+Give each finding an **impact tier** beside its strength: **must**, **should** or **nice**, plus one `If skipped:` line (tiers in [`less-code.md`](less-code.md)). Order the findings by tier, then strength. The cap stays 8 to 12 across both lenses.
+
+When two fixes solve the same problem, take the one with the smaller net diff. Add a layer only when it removes more than it adds. Batch small findings (net change of 20 lines or fewer, no design choice) per package directory into one issue of at most 10 items. List each item with its path, line range, kind and estimate. The issue takes the highest tier of its items.
+
 Tag each finding with a **dependency category**, which sets the test approach at its seam:
 
 - **In-process**: pure computation or in-memory state. Test through the interface directly; no adapter.
@@ -97,11 +103,11 @@ Tag each finding with a **dependency category**, which sets the test approach at
 - **Remote-owned**: a service the project owns across a network boundary. Put a port at the seam; test with an in-memory adapter, and the real one with a contract test.
 - **True external**: a third party the project does not control. Put a port at the seam; mock only at that adapter.
 
-Before filing a finding, grep for the seam it proposes: one that already exists is no finding. Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
+Before filing a finding, grep for the seam it proposes: one that already exists is no finding. Mark one **top recommendation** and say why it goes first. One-line fixes with no design choice are *simple*: batch them per the small-finding rule above when they meet it, otherwise file them like the rest, labelled in the body. With `--designs`, run the competing-design step now for structural ones.
 
 ### Step 4 — File
 
-File one issue per finding. Never file a finding you cannot state acceptance for.
+File one issue per finding, except a batch of small findings, which is one issue (Step 3). Never file a finding you cannot state acceptance for.
 
 **Check each finding first.** Code moves while a review runs, so a premise may already be fixed.
 
@@ -120,7 +126,7 @@ rota tracker call -- issue list --label refactor --state all --limit 200 --json 
 - Closed match: skip unless the friction demonstrably came back; then file a new issue citing it (`Related: #<n>`).
 - Closed as "won't do": rejected, do not re-file.
 
-**Create.** Build one JSON record per finding, one finding at a time: its title, summary (`desc`) and full body come from that same finding, never from a title list and a body list kept apart. Write the array to a scratch file and file it in one call:
+**Create.** Build one JSON record per issue: one per finding, or one per batch of small findings (Step 3). A batch record's title names the area, its body lists each item (path, line range, kind, estimate), and its tier is the highest item tier. Build one record at a time: its title, summary (`desc`) and full body come from that same finding or batch, never from a title list and a body list kept apart. Write the array to a scratch file and file it in one call:
 
 ```bash
 rota item create --json --batch-file <scratch.json>
@@ -143,12 +149,13 @@ Body sections:
 - **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
 - **Benefits**: locality, leverage, test improvement.
 - **Strength**: Strong / Worth exploring / Speculative, and whether it is the top recommendation.
+- **Net lines, tier and if skipped**: the estimate as `~-N` or `~+N`, the impact tier and the `If skipped:` line.
 - **Dependencies**: the category (in-process, local-substitutable, remote-owned, true external) and the test approach it implies.
 - **Conflicts**: the recorded decision it contradicts, if any, and why it is worth reopening.
 - **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside". With a Behaviour to keep section, add "every behaviour listed under Behaviour to keep still runs, or the PR names its removal and justifies it".
 - **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
-Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, dropped findings with the reason, the top recommendation. End it with one line, `Not checked: <areas the review did not read>` (`Not checked: nothing` only when every file in scope was read in full). Zero filed is valid.
+Report: table of filed issues (number, title, tier, strength, net lines) with the summed net line estimate, skipped duplicates with the matched issue, dropped findings with the reason, the top recommendation. End it with one line, `Not checked: <areas the review did not read>` (`Not checked: nothing` only when every file in scope was read in full). Zero filed is valid.
 
 A hosted round architecture-review worker ends with `ROTA-DONE <slot> issues:#a,#b` for filed issues or `ROTA-DONE <slot> issues:none` for no findings. The summary above that line ends with the same `Not checked:` line; the `ROTA-DONE` line stays last and unchanged. Printing that final line reports completion; `round report` is solo-only. Solo reporting with no findings uses `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed).
 
@@ -162,6 +169,7 @@ Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix`
 
 ## References
 
+- [`less-code.md`](less-code.md): the less-code finding kinds, net line estimate, impact tier and batching of small findings.
 - [`options.md`](options.md): umbrella projects, `--map` mode, `--interactive` filing, recording rejections.
 - [`fix-path.md`](fix-path.md): `--fix` configuration, clean-tree guard and the fix steps.
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md): competing-interface choreography for `--designs`.
