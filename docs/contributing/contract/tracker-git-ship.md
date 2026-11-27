@@ -230,6 +230,7 @@ exit: 2 when <pr> is not all digits, at an umbrella root without --repo, a confi
 old: hv-pr-merge <pr> [--items <ID,ID>] [--repo <repo>]
 shim: `sha` and `closed` come from `merged <pr> as <sha7>` and the `closed <ID>` lines. Old exit 1 is split by message (non-digit PR becomes 2, unknown PR or item becomes 3, tracker failure becomes 5); old exit 5 (unproven) becomes 4; otherwise the old backend rc mapping applies.
 note: unproven items still move to `changes-requested` on exit 4; the failure `data` lists them in `unproven` and `changesRequested` with `changed: true` (conventions).
+note: `merged: false` is reported only when the forge refused the merge request or left the PR unmerged (GitLab scheduled auto-merge). When the request was accepted and the confirmation then failed (reading the PR back, or the GitLab fast-forward ancestry check), the verb fails with the tracker exit code of that failure (usually 5), carries no `merged` or `changed` data, closes no item, and `error.message` starts `merge of PR <n> [at <sha>] requested but not confirmed`. Check the PR on the forge before merging again; nothing retries it.
 note: an unproven item was old exit 5 and is now 4, the table's "proof is missing".
 note: in umbrella issue mode the verb acts on scope S (`--repo`, else the sub-repo the working directory is in; the umbrella root without `--repo` is exit 2), and an `--items` reference that belongs to another sub-repo is exit 2 (`usage`); the shim maps the old message to 5.
 

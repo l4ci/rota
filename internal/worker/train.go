@@ -561,7 +561,7 @@ func (t *trainRun) plan(_ struct{}) (out trainPlan, result landing.TrainResult, 
 		pre.CIChanged = func() ([]string, error) {
 			var changed []string
 			for _, m := range res.Members {
-				f, err := e.ciDiffFiles(ctx, root, baseRef, headRef(m))
+				f, err := git.DiffFiles(ctx, e.Git, root, baseRef+"..."+headRef(m))
 				if err != nil {
 					return nil, err
 				}
@@ -1490,9 +1490,8 @@ func diagnosticOnly(res *landing.TrainResult) []string {
 	return out
 }
 
-// trainFoot is what one member changes against the base: the paths (read as the
-// overlap check reads them, `git diff --name-only base...head`) and the number
-// of changed lines.
+// trainFoot is what one member changes against the base: the paths (git.DiffFiles,
+// the gate's reader, so both names of a rename) and the number of changed lines.
 type trainFoot struct {
 	paths []string
 	lines int
@@ -1502,7 +1501,7 @@ func (e Env) trainFootprints(root, baseRef string, ms []landing.TrainMember, hea
 	foots := make([]trainFoot, len(ms))
 	for i, m := range ms {
 		span := baseRef + "..." + headRef(m)
-		paths, err := git.ChangedPaths(e.Ctx, e.Git, root, span)
+		paths, err := git.DiffFiles(e.Ctx, e.Git, root, span)
 		if err != nil {
 			return nil, err
 		}

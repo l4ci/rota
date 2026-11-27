@@ -1427,6 +1427,23 @@ func TestAssignRefusesWhenEveryFreeSlotHasNoLogin(t *testing.T) {
 	}
 }
 
+// With account placement on, the slot's old account does not decide: the
+// preview names the slot assign takes (#4320).
+func TestFreeSlotNamesTheSlotAssignTakesUnderPlacement(t *testing.T) {
+	f := limitedFixture(t, map[string]int{"a": 10, "b": 20})
+	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	name, ok, _ := f.env.FreeSlot(bg, f.root, worker.LoadRegistryTolerant(f.root), f.set)
+	res, err := f.assign("12", "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || res.Agent != "ben" || name != res.Agent {
+		t.Errorf("FreeSlot = %q %v, assign took %q; want ben from both", name, ok, res.Agent)
+	}
+}
+
 func TestStatusMarksSlotWhoseAccountHasNoLogin(t *testing.T) {
 	f := noLoginFixture(t)
 	rep, err := f.env.Status(bg, f.root)
@@ -1764,7 +1781,7 @@ func TestAssignSkipsSlotWithUnresolvedCoreDelivery(t *testing.T) {
 			f := newAssignFixture(t)
 			saveCoreDelivery(t, f.root, "ben", state)
 			reg := worker.LoadRegistryTolerant(f.root)
-			name, ok, warns := f.env.FreeSlot(bg, reg, f.set)
+			name, ok, warns := f.env.FreeSlot(bg, f.root, reg, f.set)
 			if !ok || name == "ben" {
 				t.Errorf("FreeSlot = %q, %v; must skip ben", name, ok)
 			}
@@ -1831,7 +1848,7 @@ func TestAssignDoesNotSkipSlotWhoseDeliveryWasConsumed(t *testing.T) {
 	if _, err := worker.UpdateSlot(f.root, "ben", func(s *worker.Slot) { s.SetEvent(worker.EventDone, "", "2026-02-01T00:00:00Z") }); err != nil {
 		t.Fatal(err)
 	}
-	name, ok, warns := f.env.FreeSlot(bg, worker.LoadRegistryTolerant(f.root), f.set)
+	name, ok, warns := f.env.FreeSlot(bg, f.root, worker.LoadRegistryTolerant(f.root), f.set)
 	if !ok || name != "ben" || len(warns) != 0 {
 		t.Errorf("FreeSlot = %q %v %v; want ben with no warning", name, ok, warns)
 	}

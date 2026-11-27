@@ -673,6 +673,23 @@ func TestShipPRMergeRefused(t *testing.T) {
 	}
 }
 
+// A request the forge accepted but could not confirm is no refusal: the verb
+// says so and claims nothing about whether the merge landed.
+func TestShipPRMergeUnconfirmed(t *testing.T) {
+	f := a8Fixture()
+	f.mergeErr = &tracker.UnconfirmedError{PR: 12, SHA: "aaaa1111",
+		Err: &tracker.Error{Kind: tracker.KindFailed, Code: 1, Message: "git fetch origin failed"}}
+	code, data, msg := a8RunIn(t, f, "ship", "pr-merge", "12")
+	if code != 5 || data["merged"] != nil || data["changed"] != nil {
+		t.Fatalf("exit %d data %v", code, data)
+	}
+	for _, want := range []string{"not confirmed", "aaaa1111", "git fetch origin failed"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message %q lacks %q", msg, want)
+		}
+	}
+}
+
 func TestShipPRMergeBackend(t *testing.T) {
 	code, data, _ := a8Run(t, a8FileProject(t), "ship", "pr-merge", "1")
 	if code != 4 || data["blockedBy"] != "backend" || data["changed"] != false {
