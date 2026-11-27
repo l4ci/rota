@@ -833,35 +833,22 @@ func (r *Report) unavailable(src, why string) {
 	r.Warnings = append(r.Warnings, fmt.Sprintf("%s unavailable: %s", src, why))
 }
 
-// matchAgent finds the agent a row owns: by recorded tab, else by the herdr
-// agent name derived from slot and handle (it survives `rota layout` moving the
-// pane to another tab, which closes the recorded one), else by working in the
-// row's worktree. -1 when none.
-func matchAgent(agents []host.Agent, slot, tab, wt string) int {
-	if tab != "" {
-		// The name first: panes folded into one tab share it, and the first
-		// agent in the snapshot there is not necessarily this slot's.
-		name := host.AgentName(slot, tab)
-		for i, a := range agents {
-			if a.Name == name {
-				return i
-			}
-		}
-		for i, a := range agents {
-			if a.Tab == tab {
-				return i
-			}
-		}
+// matchAgent finds the agent a row owns: the one the host ties to its slot and
+// recorded tab, else one working in the row's worktree. -1 when none. movedTo
+// is the host's answer for a moved pane (see host.Capabilities.MatchAgent).
+func (e Env) matchAgent(agents []host.Agent, slot, tab, wt string) (int, string) {
+	if i, movedTo := e.caps().MatchAgent(agents, slot, tab); i >= 0 {
+		return i, movedTo
 	}
 	if wt == "" {
-		return -1
+		return -1, ""
 	}
 	for i, a := range agents {
 		if worker.PathContains(wt, a.Cwd) {
-			return i
+			return i, ""
 		}
 	}
-	return -1
+	return -1, ""
 }
 
 // worktrees lists the checkouts directly under <root>/.worktrees/.

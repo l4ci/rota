@@ -40,18 +40,18 @@ func TestKindOf(t *testing.T) {
 func TestCapabilities(t *testing.T) {
 	type sides struct {
 		Resubmitter, Explainer, Labeler, TurnReader, Watcher, PaneSweeper, Layouter,
-		TabOpener, SessionStarter, TabLister, PaneHost, OutputWatcher, Operator, Snapshotter bool
+		TabOpener, SessionStarter, TabLister, PaneHost, OutputWatcher, Operator, Snapshotter, AgentRecognizer bool
 	}
 	of := func(c Capabilities) sides {
 		return sides{c.Resubmitter != nil, c.Explainer != nil, c.Labeler != nil, c.TurnReader != nil,
 			c.Watcher != nil, c.PaneSweeper != nil, c.Layouter != nil, c.TabOpener != nil,
 			c.SessionStarter != nil, c.TabLister != nil, c.PaneHost != nil, c.OutputWatcher != nil,
-			c.Operator != nil, c.Snapshotter != nil}
+			c.Operator != nil, c.Snapshotter != nil, c.AgentRecognizer != nil}
 	}
 	want := map[Kind]sides{
 		Herdr: {Resubmitter: true, Explainer: true, Labeler: true, TurnReader: true, Watcher: true,
 			PaneSweeper: true, Layouter: true, TabOpener: true, SessionStarter: true, TabLister: true,
-			PaneHost: true, OutputWatcher: true, Snapshotter: true},
+			PaneHost: true, OutputWatcher: true, Snapshotter: true, AgentRecognizer: true},
 		Tmux: {TabOpener: true, PaneHost: true, Operator: true, Snapshotter: true},
 	}
 	for kind, w := range want {

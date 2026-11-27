@@ -51,7 +51,7 @@ func (e Env) hostFindings(ctx context.Context, root string, rows []*Row, views m
 		if r.Tab == "" && (r.Branch == "" || worker.IsOwnPark(r.Branch, r.Name)) {
 			wt = ""
 		}
-		if i := matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
+		if i, cur := e.matchAgent(agents, r.Name, r.Tab, wt); i >= 0 {
 			claimed[i] = true
 			alive[r.Name] = true
 			if s := slotObj[r.Name]; s != nil {
@@ -72,9 +72,9 @@ func (e Env) hostFindings(ctx context.Context, root string, rows []*Row, views m
 			}
 			if r.Tab == "" {
 				r.Tab = agents[i].Tab
-			} else if cur := agents[i].Handle(); cur != "" && cur != r.Tab && agents[i].Name == host.AgentName(r.Name, r.Tab) && r.Registered {
-				// Found by the name it was started under, under a handle that
-				// is not the recorded one: the pane was moved.
+			} else if cur != "" && r.Registered {
+				// The host knows the agent under a handle that is not the
+				// recorded one: the pane was moved.
 				detail := fmt.Sprintf("recorded tab %s, pane is now in tab %s", r.Tab, agents[i].Tab)
 				if agents[i].Tab == r.Tab {
 					detail = fmt.Sprintf("recorded tab %s now holds other panes; pane %s is not alone in it", r.Tab, agents[i].Pane)

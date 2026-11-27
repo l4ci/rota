@@ -25,7 +25,7 @@ func TestContainmentFollowsSymlinks(t *testing.T) {
 
 	t.Run("matchAgent", func(t *testing.T) {
 		agents := []host.Agent{{Tab: "w1:t1", Cwd: linked}}
-		if got := matchAgent(agents, "ben", "", wt); got != 0 {
+		if got, _ := (Env{}).matchAgent(agents, "ben", "", wt); got != 0 {
 			t.Errorf("matchAgent via symlinked cwd = %d, want 0", got)
 		}
 	})

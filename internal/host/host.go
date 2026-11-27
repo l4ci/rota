@@ -297,6 +297,7 @@ type Capabilities struct {
 	SessionStarter     SessionStarter
 	TabLister          TabLister
 	TabFollower        TabFollower
+	AgentRecognizer    AgentRecognizer
 	PaneHost           PaneHost
 	OutputWatcher      OutputWatcher
 	Operator           Operator
@@ -370,6 +371,7 @@ func CapabilitiesOf(h any) Capabilities {
 	c.SessionStarter, _ = h.(SessionStarter)
 	c.TabLister, _ = h.(TabLister)
 	c.TabFollower, _ = h.(TabFollower)
+	c.AgentRecognizer, _ = h.(AgentRecognizer)
 	c.WorkspaceCloser, _ = h.(WorkspaceCloser)
 	c.LinkedLayouter, _ = h.(LinkedLayouter)
 	c.PaneHost, _ = h.(PaneHost)
