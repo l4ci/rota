@@ -44,13 +44,13 @@ func (h *waitHost) ReadPane(_ context.Context, slot, _ string, _ int) (string, e
 	return h.text[slot], nil
 }
 
-func (h *waitHost) Status(_ context.Context, slot, _ string) string {
+func (h *waitHost) Status(_ context.Context, slot, _ string) host.AgentStatus {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.status[slot]
 }
 
-func (h *waitHost) set(slot, text, native string) {
+func (h *waitHost) set(slot, text string, native host.AgentStatus) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.text[slot], h.status[slot] = text, native
@@ -99,7 +99,7 @@ func (h watcherHost) Watch(_ context.Context, t []host.WatchTarget) (host.Watch,
 func newWaitHost(name host.Kind) *waitHost {
 	f := tmuxFake()
 	f.name = name
-	f.status = map[string]string{}
+	f.status = map[string]host.AgentStatus{}
 	return &waitHost{fakeHost: f, text: map[string]string{}, events: make(chan string, 8)}
 }
 
@@ -130,8 +130,8 @@ func waitProject(t *testing.T, slots int, handles map[string]string) string {
 func TestWaitReturnsASlotThatAlreadyNeedsAttention(t *testing.T) {
 	dir := waitProject(t, 2, map[string]string{"w1": "w9:t1", "w2": "w9:t2"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working...\n", "working")
-	h.set("w2", "ROTA-BLOCKED w2: A or B?\n", "idle")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
+	h.set("w2", "ROTA-BLOCKED w2: A or B?\n", host.AgentStatus{State: "idle"})
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil {
 		t.Fatal(err)
@@ -147,12 +147,12 @@ func TestWaitReturnsASlotThatAlreadyNeedsAttention(t *testing.T) {
 func TestWaitWakesOnAnEventAndReclassifies(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		h.events <- "w1" // status changed, but the pane still moves: nothing to return
 		time.Sleep(20 * time.Millisecond)
-		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
+		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", host.AgentStatus{State: "done"})
 		h.events <- "w1"
 	}()
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
@@ -171,9 +171,9 @@ func TestWaitOnAHostWithoutEventsPollsUntilTheSlotChanges(t *testing.T) {
 	h.onCapture = func(string) { // the pane moves for two classifications, then settles on ROTA-DONE
 		n++
 		if n <= 4 {
-			h.set("w1", strings.Repeat("x", n)+"\n", "")
+			h.set("w1", strings.Repeat("x", n)+"\n", host.AgentStatus{})
 		} else {
-			h.set("w1", "ROTA-DONE w1 rota-worker/w1\n", "")
+			h.set("w1", "ROTA-DONE w1 rota-worker/w1\n", host.AgentStatus{})
 		}
 	}
 	res, err := envWith(h).Wait(bg, dir, WaitOpts{Settle: time.Second})
@@ -188,7 +188,7 @@ func TestWaitOnAHostWithoutEventsPollsUntilTheSlotChanges(t *testing.T) {
 func TestWaitTimeoutIsAnAnswerWithTheSlotStates(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
 	if err != nil {
 		t.Fatal(err)
@@ -201,7 +201,7 @@ func TestWaitTimeoutIsAnAnswerWithTheSlotStates(t *testing.T) {
 func TestWaitSkipsHandlelessSlotsUnlessNamed(t *testing.T) {
 	dir := waitProject(t, 2, map[string]string{"w2": "w9:t2"})
 	h := newWaitHost("herdr")
-	h.set("w2", "ROTA-DONE w2 x\n", "done")
+	h.set("w2", "ROTA-DONE w2 x\n", host.AgentStatus{State: "done"})
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil || res.Slot != "w2" {
 		t.Fatalf("%+v %v", res, err)
@@ -223,13 +223,13 @@ func TestWaitDoesNotWatchSlotsRecordedIdle(t *testing.T) {
 		d.Slot("w1").MarkState("idle", "")
 	})
 	h := newWaitHost("herdr")
-	h.set("w2", "ROTA-DONE w2 x\n", "done")
+	h.set("w2", "ROTA-DONE w2 x\n", host.AgentStatus{State: "done"})
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
 	if err != nil || res.Slot != "w2" || len(h.watched) != 1 {
 		t.Fatalf("%+v %v watched=%v", res, err, h.watched)
 	}
 	// Naming a slot watches it whatever its recorded state.
-	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	h.set("w1", "ROTA-DONE w1 x\n", host.AgentStatus{State: "done"})
 	if res, err = envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Slots: []string{"w1"}, Timeout: 5 * time.Second}); err != nil || res.Slot != "w1" {
 		t.Errorf("named: %+v %v", res, err)
 	}
@@ -260,7 +260,7 @@ func TestWaitHostFailuresAreUnavailable(t *testing.T) {
 func TestWaitCancelIsNotATimeout(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working\n", "working")
+	h.set("w1", "working\n", host.AgentStatus{State: "working"})
 	ctx, cancel := context.WithCancel(bg)
 	go func() { time.Sleep(20 * time.Millisecond); cancel() }()
 	res, err := envWith(watcherHost{h}).Wait(ctx, dir, WaitOpts{Timeout: 5 * time.Second})
@@ -323,7 +323,7 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 			h := newWaitHost("herdr")
-			h.set("w1", "✻ Working…\n", statuses[0])
+			h.set("w1", "✻ Working…\n", host.AgentStatus{State: statuses[0]})
 			captures, armed := 0, false
 			h.onCapture = func(string) {
 				h.mu.Lock()
@@ -345,7 +345,7 @@ func TestWaitAfterTheLastEventRechecksAPaneThatMovedOnce(t *testing.T) {
 			h.watchFn = func(int) (host.Watch, error) {
 				return doneOnNext{h, func() {
 					h.mu.Lock()
-					h.status["w1"], armed = statuses[1], true
+					h.status["w1"], armed = host.AgentStatus{State: statuses[1]}, true
 					h.mu.Unlock()
 					h.events <- "w1"
 				}}, nil
@@ -372,7 +372,7 @@ func TestWaitRecordsWhatItReturned(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	url := "https://github.com/o/r/pull/7"
-	h.set("w1", "ROTA-DONE w1 "+url+"\n", "done")
+	h.set("w1", "ROTA-DONE w1 "+url+"\n", host.AgentStatus{State: "done"})
 	if _, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil {
 		t.Fatal(err)
 	}
@@ -427,7 +427,7 @@ func waitPassThenStop(t *testing.T, h *waitHost, e Env, dir string) {
 func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	h.set("w1", "ROTA-DONE w1 x\n", host.AgentStatus{State: "done"})
 	e := envWith(watcherHost{h})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("first: %+v %v", res, err)
@@ -437,9 +437,9 @@ func TestWaitDoesNotReturnTheSameArrivalTwice(t *testing.T) {
 		t.Fatalf("second: %+v %v, want a timeout", res, err)
 	}
 	// The slot goes busy, then reports again with new evidence: it is news.
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	waitPassThenStop(t, h, e, dir)
-	h.set("w1", "ROTA-DONE w1 y\n", "done")
+	h.set("w1", "ROTA-DONE w1 y\n", host.AgentStatus{State: "done"})
 	if res, err = e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("third: %+v %v", res, err)
 	}
@@ -451,11 +451,11 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	e := envWith(watcherHost{h})
-	h.set("w1", "Do you want to proceed?\n", "idle")
+	h.set("w1", "Do you want to proceed?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateNeedsPermission {
 		t.Fatalf("first prompt: %+v %v", res, err)
 	}
-	h.set("w1", "Allow bash to run go test?\n", "idle")
+	h.set("w1", "Allow bash to run go test?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateNeedsPermission {
 		t.Fatalf("second prompt, no busy between: %+v %v", res, err)
 	}
@@ -463,14 +463,14 @@ func TestWaitReturnsPromptsAndNewQuestions(t *testing.T) {
 		t.Errorf("a permission prompt is never remembered: seen = %q", got)
 	}
 	// A blocked worker comes back once per question.
-	h.set("w1", "ROTA-BLOCKED w1: keep the old flag?\n", "idle")
+	h.set("w1", "ROTA-BLOCKED w1: keep the old flag?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateBlocked {
 		t.Fatalf("first question: %+v %v", res, err)
 	}
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
 		t.Fatalf("same question again: %+v %v, want a timeout", res, err)
 	}
-	h.set("w1", "ROTA-BLOCKED w1: which default?\n", "idle")
+	h.set("w1", "ROTA-BLOCKED w1: which default?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: time.Second}); err != nil || res.State != StateBlocked || res.Evidence != "which default?" {
 		t.Fatalf("new question, no busy between: %+v %v", res, err)
 	}
@@ -485,7 +485,7 @@ func TestWaitRememberPromptsReturnsAPromptOnce(t *testing.T) {
 	h := newWaitHost("herdr")
 	e := envWith(watcherHost{h})
 	o := WaitOpts{Timeout: 5 * time.Second, RememberPrompts: true}
-	h.set("w1", "Do you want to proceed?\n", "idle")
+	h.set("w1", "Do you want to proceed?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, o); err != nil || res.State != StateNeedsPermission {
 		t.Fatalf("first prompt: %+v %v", res, err)
 	}
@@ -494,9 +494,9 @@ func TestWaitRememberPromptsReturnsAPromptOnce(t *testing.T) {
 		t.Fatalf("same prompt again: %+v %v, want a timeout", res, err)
 	}
 	// The slot goes busy (answered), then shows the same prompt again: news.
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	waitPassThenStop(t, h, e, dir)
-	h.set("w1", "Do you want to proceed?\n", "idle")
+	h.set("w1", "Do you want to proceed?\n", host.AgentStatus{State: "idle"})
 	if res, err := e.Wait(bg, dir, o); err != nil || res.State != StateNeedsPermission {
 		t.Fatalf("same prompt after busy: %+v %v", res, err)
 	}
@@ -514,12 +514,12 @@ func TestWaitRememberPromptsOtherSlotStillWakes(t *testing.T) {
 	h := newWaitHost("herdr")
 	e := envWith(watcherHost{h})
 	o := WaitOpts{Timeout: 5 * time.Second, RememberPrompts: true}
-	h.set("w1", "Do you want to proceed?\n", "idle")
-	h.set("w2", "working...\n", "working")
+	h.set("w1", "Do you want to proceed?\n", host.AgentStatus{State: "idle"})
+	h.set("w2", "working...\n", host.AgentStatus{State: "working"})
 	if res, err := e.Wait(bg, dir, o); err != nil || res.Slot != "w1" || res.State != StateNeedsPermission {
 		t.Fatalf("w1 prompt: %+v %v", res, err)
 	}
-	h.set("w2", "ROTA-DONE w2 x\n", "done")
+	h.set("w2", "ROTA-DONE w2 x\n", host.AgentStatus{State: "done"})
 	if res, err := e.Wait(bg, dir, o); err != nil || res.Slot != "w2" || res.State != StateDone {
 		t.Fatalf("w2 change with w1 still prompting: %+v %v", res, err)
 	}
@@ -553,14 +553,14 @@ func TestDispatchAndPollClearSeen(t *testing.T) {
 	// Poll recording a different state drops it; the same state keeps it.
 	set()
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 x\n", "done")
+	h.set("w1", "ROTA-DONE w1 x\n", host.AgentStatus{State: "done"})
 	if _, err := envWith(h).Poll(bg, dir, PollOpts{}); err != nil {
 		t.Fatal(err)
 	}
 	if got := seenField(dir, "w1", "seen"); got != seenKey(StateDone, "x") {
 		t.Errorf("poll of the same state dropped seen: %q", got)
 	}
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	if _, err := envWith(h).Poll(bg, dir, PollOpts{}); err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +601,7 @@ func TestWaitIgnoresADoneSlotWhoseRecordedPRIsMerged(t *testing.T) {
 			t.Fatal(err)
 		}
 		h := newWaitHost("herdr")
-		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
+		h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", host.AgentStatus{State: "done"})
 		e := envWith(watcherHost{h})
 		e.Forge = func(string, string, tracker.Settings) (Forge, error) { return stateForge{state: state}, nil }
 		// The origin lookup answers without running git: under a real git call
@@ -646,7 +646,7 @@ func TestWaitDoesNotReadADeadlineCutLookupAsAnOpenPR(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 #225\n", "done")
+	h.set("w1", "ROTA-DONE w1 #225\n", host.AgentStatus{State: "done"})
 	e := envWith(watcherHost{h})
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return slowForge{}, nil }
 	realGit := e.Git
@@ -698,10 +698,10 @@ func TestWaitResubscribesAfterALostStream(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 			h := newWaitHost("herdr")
-			h.set("w1", "working\n", "working")
+			h.set("w1", "working\n", host.AgentStatus{State: "working"})
 			h.watchFn = func(n int) (host.Watch, error) {
 				if n == 1 {
-					return lostWatch{cause, func() { h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", "idle") }}, nil // changes while disconnected
+					return lostWatch{cause, func() { h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", host.AgentStatus{State: "idle"}) }}, nil // changes while disconnected
 				}
 				return blockWatch{}, nil
 			}
@@ -729,7 +729,7 @@ func TestWaitResubscribesAfterALostStream(t *testing.T) {
 func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working\n", "working")
+	h.set("w1", "working\n", host.AgentStatus{State: "working"})
 	h.watchFn = func(n int) (host.Watch, error) {
 		if n == 1 {
 			return lostWatch{err: host.ErrStreamLost}, nil
@@ -739,7 +739,7 @@ func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
 	captures := 0
 	h.onCapture = func(string) {
 		if captures++; captures == 8 {
-			h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", "idle")
+			h.set("w1", "ROTA-DONE w1 https://x/pr/1\n", host.AgentStatus{State: "idle"})
 		}
 	}
 	var errBuf strings.Builder
@@ -762,7 +762,7 @@ func TestWaitFallsBackToPollingAfterRepeatedLoss(t *testing.T) {
 func TestWaitIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:old"})
 	h := newWaitHost("herdr")
-	h.set("w1", "", "gone") // the killed pane
+	h.set("w1", "", host.AgentStatus{State: host.StatusGone}) // the killed pane
 	captures := 0
 	h.onCapture = func(string) {
 		captures++
@@ -773,7 +773,7 @@ func TestWaitIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 			}
 		case 3: // the next classification reads the new, live session
 			h.mu.Lock()
-			h.text["w1"], h.status["w1"] = "working...\n", "working"
+			h.text["w1"], h.status["w1"] = "working...\n", host.AgentStatus{State: "working"}
 			h.mu.Unlock()
 		}
 	}
@@ -792,7 +792,7 @@ func TestWaitIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 func TestPollIgnoresADeathReadFromAReplacedHandle(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:old"})
 	h := newWaitHost("herdr")
-	h.set("w1", "", "gone")
+	h.set("w1", "", host.AgentStatus{State: host.StatusGone})
 	var once sync.Once
 	h.onCapture = func(string) {
 		once.Do(func() {
@@ -885,7 +885,7 @@ func TestWaitDoesNotReportADoneSlotWhenTheForgeErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", "done")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/9\n", host.AgentStatus{State: "done"})
 	e := envWith(watcherHost{h})
 	e.Forge = func(string, string, tracker.Settings) (Forge, error) { return errForge{}, nil }
 	realGit := e.Git
@@ -913,7 +913,7 @@ func TestWaitDoesNotReportADoneSlotWhenTheForgeErrors(t *testing.T) {
 func TestWaitReturnsASecondDoneEventForTheSamePR(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", host.AgentStatus{State: "done"})
 	e := envWith(watcherHost{h})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("first: %+v %v", res, err)
@@ -944,14 +944,14 @@ func TestWaitDoesNotWakeOnADoneSlotThatFlickersBusyOnTheSamePR(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	const done = "ROTA-DONE w1 https://github.com/o/r/pull/7\n"
-	h.set("w1", done, "done")
+	h.set("w1", done, host.AgentStatus{State: "done"})
 	e := envWith(watcherHost{h})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("first: %+v %v", res, err)
 	}
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	waitPassThenStop(t, h, e, dir)
-	h.set("w1", done, "done")
+	h.set("w1", done, host.AgentStatus{State: "done"})
 	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
 	if err != nil || !res.TimedOut {
 		t.Fatalf("after the flicker: %+v %v, want a timeout", res, err)
@@ -963,7 +963,7 @@ func TestWaitDoesNotWakeOnADoneSlotThatFlickersBusyOnTheSamePR(t *testing.T) {
 func TestWaitReportsADoneRecordedBeforeTheWaitStarted(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", host.AgentStatus{State: "done"})
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
 		s.SetEvent(EventDone, "done", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
 	}); err != nil {
@@ -980,7 +980,7 @@ func TestWaitReportsADoneRecordedBeforeTheWaitStarted(t *testing.T) {
 func TestWaitReportsDoneOverAStaleUnsentAlarm(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", "done")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n", host.AgentStatus{State: "done"})
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
 		s.SetUnsent(true)
 		s.SetEvent(EventDone, "done", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
@@ -1008,7 +1008,7 @@ func TestWaitDoesNotWakeOnADoneEventTheFlickerCleared(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	const done = "ROTA-DONE w1 https://github.com/o/r/pull/7\n"
-	h.set("w1", done, "done")
+	h.set("w1", done, host.AgentStatus{State: "done"})
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) {
 		s.SetEvent(EventDone, "https://github.com/o/r/pull/7", time.Now().UTC().Add(time.Minute).Format("2006-01-02T15:04:05Z"))
 	}); err != nil {
@@ -1018,9 +1018,9 @@ func TestWaitDoesNotWakeOnADoneEventTheFlickerCleared(t *testing.T) {
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second}); err != nil || res.State != StateDone {
 		t.Fatalf("first: %+v %v", res, err)
 	}
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	waitPassThenStop(t, h, e, dir)
-	h.set("w1", done, "done")
+	h.set("w1", done, host.AgentStatus{State: "done"})
 	res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond})
 	if err != nil || !res.TimedOut {
 		t.Fatalf("after the flicker: %+v %v, want a timeout", res, err)
@@ -1040,7 +1040,7 @@ func TestWaitRecordsABusyReadOverAStaleBlockedState(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	e := envWith(watcherHost{h})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
 		t.Fatalf("wait: %+v %v, want a timeout", res, err)

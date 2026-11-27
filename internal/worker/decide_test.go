@@ -106,7 +106,7 @@ func TestWaitReturnsAnEventOnceUntilTheNext(t *testing.T) {
 		}
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "", "idle")
+	h.set("w1", "", host.AgentStatus{State: "idle"})
 	e := envWith(watcherHost{h})
 
 	send("A or B?")
@@ -138,7 +138,7 @@ func TestWaitDropsAnEventAPaneMovedPast(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "working...\n", "working") // answered in the pane: work resumed
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"}) // answered in the pane: work resumed
 	e := envWith(watcherHost{h})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 30 * time.Millisecond}); err != nil || !res.TimedOut {
 		t.Fatalf("busy: %+v %v", res, err)
@@ -147,7 +147,7 @@ func TestWaitDropsAnEventAPaneMovedPast(t *testing.T) {
 		t.Error("the answered event still stands")
 	}
 	// The pane now rests with no sentinel: it is idle, not blocked again.
-	h.set("w1", "", "idle")
+	h.set("w1", "", host.AgentStatus{State: "idle"})
 	res, err := e.Wait(bg, dir, WaitOpts{})
 	if err != nil || res.State != StateIdle {
 		t.Errorf("after the answer: %+v %v, want IDLE", res, err)
@@ -168,7 +168,7 @@ func TestWaitReportsABlockedEventOverAnOldDoneSentinel(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n--- ORCHESTRATOR (round 1) ---\nplease fix\n", "idle")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/7\n--- ORCHESTRATOR (round 1) ---\nplease fix\n", host.AgentStatus{State: "idle"})
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{})
 	if err != nil || res.State != StateBlocked || res.Evidence != "A or B?" {
 		t.Fatalf("%+v %v, want BLOCKED with the question", res, err)
@@ -183,7 +183,7 @@ func TestWaitReportsABlockedEventOverAnOldDoneSentinel(t *testing.T) {
 func TestWaitSeesAnEventSentWhileItWaits(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	captures := 0
 	h.onCapture = func(string) {
 		captures++
@@ -200,7 +200,7 @@ func TestWaitSeesAnEventSentWhileItWaits(t *testing.T) {
 			t.Error(err)
 		}
 		h.mu.Lock()
-		h.text["w1"], h.status["w1"] = "", "idle"
+		h.text["w1"], h.status["w1"] = "", host.AgentStatus{State: "idle"}
 		h.mu.Unlock()
 	}
 	res, err := envWith(watcherHost{h}).Wait(bg, dir, WaitOpts{Timeout: 5 * time.Second})
@@ -252,7 +252,7 @@ func TestWaitKeepsWorkerDoneOverAnIdlePane(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "", "idle")
+	h.set("w1", "", host.AgentStatus{State: "idle"})
 	e := w.env(false)
 	e.NewHost = func(host.Kind) host.Host { return watcherHost{h} }
 	res, err := e.Wait(bg, w.dir, WaitOpts{})

@@ -94,7 +94,7 @@ func TestCoreAdapterRoundReplacementNeverCompletesIssue(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range rep.Rows {
-		if r.Name == "ben" && (r.HostState == "done" || r.HostState == "gone") {
+		if r.Name == "ben" && (r.HostState == "done" || r.HostState == host.StatusGone) {
 			t.Fatalf("replacement became success/death: %+v", r)
 		}
 	}
@@ -168,7 +168,7 @@ func TestCoreAdapterRoundNativeIdleCannotBypassIssueGates(t *testing.T) {
 	f.env.HostName = host.HerdrCore
 	f.env.Snapshot = h.Capabilities().Snapshotter.Snapshot
 	f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return h } })
-	if native := h.Status(bg, "ben", handle); native != "idle" {
+	if native := h.Status(bg, "ben", handle); native.State != "idle" {
 		t.Fatalf("fixture native status=%q", native)
 	}
 	polled, err := f.ws.Poll(bg, f.root, worker.PollOpts{Slot: "ben", Lines: 60})

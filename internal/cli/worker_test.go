@@ -246,7 +246,7 @@ func (h *cliHost) Send(_ context.Context, slot, handle, file string) error {
 func (h *cliHost) ReadPane(context.Context, string, string, int) (string, error) {
 	return "static\n", nil
 }
-func (h *cliHost) Status(context.Context, string, string) string { return "" }
+func (h *cliHost) Status(context.Context, string, string) host.AgentStatus { return host.AgentStatus{} }
 func (h *cliHost) Kill(context.Context, string, string) error {
 	h.calls = append(h.calls, "kill")
 	return nil

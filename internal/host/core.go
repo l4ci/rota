@@ -501,22 +501,25 @@ func (h *coreHost) readPane(ctx context.Context, s string, lines int) (string, e
 	e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": max(0, lines)}, &r)
 	return r.Text, e
 }
-func (h *coreHost) Status(ctx context.Context, slot, s string) string {
+func (h *coreHost) Status(ctx context.Context, slot, s string) AgentStatus {
 	if s == "" {
-		return ""
+		return AgentStatus{}
 	}
 	v, c, t, e := h.terminal(ctx, s)
+	if coreMissing(e) {
+		return AgentStatus{State: StatusGone}
+	}
 	if e != nil {
-		return UnverifiablePrefix + e.Error()
+		return AgentStatus{State: StatusUnverifiable, Reason: e.Error()}
 	}
 	defer c.Close()
 	if h.checkProgram(v, t) != nil {
-		return UnverifiablePrefix + "worker program was lost or replaced by a shell; recover/reassign"
+		return AgentStatus{State: StatusUnverifiable, Reason: "worker program was lost or replaced by a shell; recover/reassign"}
 	}
 	if t.Status != nil && t.Reported {
-		return t.Status.State
+		return AgentStatus{State: t.Status.State}
 	}
-	return ""
+	return AgentStatus{}
 }
 func (h *coreHost) Explain(ctx context.Context, slot, s string) string {
 	v, c, t, e := h.terminal(ctx, s)
@@ -913,12 +916,12 @@ func (h *coreHost) Snapshot(ctx context.Context) ([]Agent, error) {
 		if !ok || t.State != "live" {
 			continue
 		}
-		status := ""
+		status := AgentStatus{}
 		if t.Status != nil {
-			status = t.Status.State
+			status.State = t.Status.State
 		}
 		if h.checkProgram(v, t) != nil {
-			status = UnverifiablePrefix + "worker program was lost or replaced by a shell; recover/reassign"
+			status = AgentStatus{State: StatusUnverifiable, Reason: "worker program was lost or replaced by a shell; recover/reassign"}
 		}
 		out = append(out, Agent{Tab: coreEncode(v), Name: v.Slot, Cwd: v.Cwd, Status: status})
 	}

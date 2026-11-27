@@ -13,7 +13,7 @@ const closedRelay = "<rota-relay round=\"66\" from=\"orchestrator\">\nbrief text
 // AC-1 (#4093): a review worker's issues line after a closed relay, with no
 // reply marker, is the worker's own done.
 func TestClassifyIssuesDoneAfterClosedRelay(t *testing.T) {
-	st, ev := ClassifyFor("claude", closedRelay+"filler\nROTA-DONE s1 issues:#12,#13\n", false, 60, "")
+	st, ev := ClassifyFor("claude", closedRelay+"filler\nROTA-DONE s1 issues:#12,#13\n", false, 60, host.AgentStatus{})
 	if st != StateDone || ev != "issues:#12,#13" {
 		t.Fatalf("got %s %q", st, ev)
 	}
@@ -24,7 +24,7 @@ func TestClassifyDoneSoftWrapped(t *testing.T) {
 	const done = "ROTA-DONE s1 https://github.com/o/r/pull/4093"
 	const width = 40
 	text := strings.Repeat("─", width) + "\n" + done[:width] + "\n" + done[width:] + "\n❯\n"
-	st, ev := ClassifyFor("claude", text, false, 60, "")
+	st, ev := ClassifyFor("claude", text, false, 60, host.AgentStatus{})
 	if st != StateDone || ev != "https://github.com/o/r/pull/4093" {
 		t.Fatalf("got %s %q", st, ev)
 	}
@@ -44,7 +44,7 @@ func TestClassifyDoneNeverJoinsUnrelatedNextLine(t *testing.T) {
 		"sentinel after done line": {strings.Repeat("─", len(url)) + "\n" + url + "\nROTA-DONE\n", "https://github.com/o/r/pull/1"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			st, ev := ClassifyFor("claude", tc.text, false, 60, "")
+			st, ev := ClassifyFor("claude", tc.text, false, 60, host.AgentStatus{})
 			if st != StateDone || ev != tc.want {
 				t.Fatalf("got %s %q, want %q", st, ev, tc.want)
 			}
@@ -62,7 +62,7 @@ func TestNoSentinelEvidenceNamesTheReason(t *testing.T) {
 		"prefix":         {"I will print ROTA-DONE s1 x when finished\n", "not accepted"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, ev := ClassifyFor("claude", tc.text, false, 60, "")
+			_, ev := ClassifyFor("claude", tc.text, false, 60, host.AgentStatus{})
 			if !strings.Contains(ev, tc.want) {
 				t.Fatalf("evidence %q lacks %q", ev, tc.want)
 			}
@@ -116,7 +116,7 @@ func TestPollWidensWindowForDoneBeyondIt(t *testing.T) {
 func widenOnce(h *wideHost, memo *widenMemo, text string, passes int) (st string) {
 	t := pollTarget{name: "w1", handle: "w9:t1", kind: "claude"}
 	for i := 0; i < passes; i++ {
-		st, _ = widenForSentinel(memo, bg, h, t, StateIdle, noSentinelBase, text, 60, "")
+		st, _ = widenForSentinel(memo, bg, h, t, StateIdle, noSentinelBase, text, 60, host.AgentStatus{})
 	}
 	return st
 }

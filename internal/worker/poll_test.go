@@ -19,7 +19,7 @@ import (
 func pollRegistry(t *testing.T, kind host.Kind) (string, *fakeHost) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
-	f := &fakeHost{name: kind, inSession: true, panes: map[string][]string{}, status: map[string]string{}}
+	f := &fakeHost{name: kind, inSession: true, panes: map[string][]string{}, status: map[string]host.AgentStatus{}}
 	return dir, f
 }
 
@@ -138,7 +138,7 @@ func TestPollNamedSlotAndSettle(t *testing.T) {
 
 func TestPollNotifiesOnTheTransitionOnly(t *testing.T) {
 	dir, f := pollRegistry(t, "herdr")
-	f.status["w1"] = "blocked"
+	f.status["w1"] = host.AgentStatus{State: "blocked"}
 	f.panes["w1"] = []string{"dialog\n", "dialog\n", "dialog\n", "dialog\n"}
 	f.panes["w2"] = []string{"x\n", "x\n", "x\n", "x\n"}
 	e := envWith(f)
@@ -285,7 +285,7 @@ func TestPromoteIdleSkipsATransferredSlotUntilItReportsDone(t *testing.T) {
 // explain leaves today's evidence and the poll still succeeds.
 func TestPollUnknownCarriesExplainExcerpt(t *testing.T) {
 	dir, f := pollRegistry(t, "herdr")
-	f.status["w1"], f.status["w2"] = "unknown", "unknown"
+	f.status["w1"], f.status["w2"] = host.AgentStatus{State: "unknown"}, host.AgentStatus{State: "unknown"}
 	f.explain = map[string]string{"w1": "no recognised agent process / foreground is vim"}
 	f.panes["w1"] = []string{"x\n", "x\n"}
 	f.panes["w2"] = []string{"x\n", "x\n"}

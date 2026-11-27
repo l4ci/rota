@@ -171,7 +171,7 @@ func (f *moveFx) agents(slots ...string) {
 	f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
 		out := []host.Agent{}
 		for _, s := range slots {
-			out = append(out, host.Agent{Tab: "w1:" + s, Name: s, Cwd: f.wt(s), Status: "working"})
+			out = append(out, host.Agent{Tab: "w1:" + s, Name: s, Cwd: f.wt(s), Status: host.AgentStatus{State: "working"}})
 		}
 		return out, nil
 	}
@@ -1564,7 +1564,7 @@ func TestReconcileDoneEventIsNotStalled(t *testing.T) {
 func TestReconcileDoneSlotAwaitingReviewIsNotStalled(t *testing.T) {
 	f := newMoveFx(t)
 	f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
-		return []host.Agent{{Tab: "w1:ben", Name: "ben", Cwd: f.wt("ben"), Status: "done"}}, nil
+		return []host.Agent{{Tab: "w1:ben", Name: "ben", Cwd: f.wt("ben"), Status: host.AgentStatus{State: "done"}}}, nil
 	}
 	rawSlot(f.root, "ben", func(s *jsonx.Object) {
 		s.Set("handle", "w1:ben")

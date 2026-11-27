@@ -422,7 +422,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 		return h
 	}
 	name, wt, tab := s.Name(), s.Worktree(), s.Handle()
-	var native string
+	var native host.AgentStatus
 	if e.Snapshot != nil {
 		if agents, err := e.Snapshot(ctx); err == nil {
 			h.Known = true
@@ -463,7 +463,7 @@ func (e Env) caps() host.Capabilities { return host.CapabilitiesForKind(e.HostNa
 // liveness is the one liveness verdict for a slot: status, reclaim and the
 // watch digest all read it. answered: the host listed its agents; listed: one
 // of them is the slot's.
-func (e Env) liveness(s *worker.Slot, answered, listed bool, native string) worker.Liveness {
+func (e Env) liveness(s *worker.Slot, answered, listed bool, native host.AgentStatus) worker.Liveness {
 	return worker.JudgeLiveness(worker.LivenessEvidence{
 		Caps: e.caps(), State: s.State(), Reason: s.Reason(), Handle: s.Handle(),
 		Answered: answered, Listed: listed, Native: native,

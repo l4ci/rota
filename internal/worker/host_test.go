@@ -29,7 +29,7 @@ type fakeHost struct {
 	spawnTab    string // the tab a failing Spawn leaves open
 	killErr     error
 	sendErr     error
-	status      map[string]string
+	status      map[string]host.AgentStatus
 	statusPolls int
 	statusSeq   map[string][]string // statuses returned in order, per slot, before status
 	explain     map[string]string   // per slot; "" is a failing explain
@@ -85,11 +85,11 @@ func (f *fakeHost) ReadPane(_ context.Context, slot, handle string, _ int) (stri
 	f.panes[slot] = q[1:]
 	return q[0], nil
 }
-func (f *fakeHost) Status(_ context.Context, slot, handle string) string {
+func (f *fakeHost) Status(_ context.Context, slot, handle string) host.AgentStatus {
 	f.statusPolls++
 	if q := f.statusSeq[slot]; len(q) > 0 {
 		f.statusSeq[slot] = q[1:]
-		return q[0]
+		return host.AgentStatus{State: q[0]}
 	}
 	return f.status[slot]
 }

@@ -376,7 +376,7 @@ func TestReconcileSkipsExternal(t *testing.T) {
 	}
 	e.Round.ItemTimeoutMinutes, e.Round.StallMinutes = 1, 1
 	e.Snapshot = func(context.Context) ([]host.Agent, error) {
-		return []host.Agent{{Tab: "w9:t9", Name: "ext-1", Cwd: filepath.Join(root, ".worktrees", "ext-1"), Status: "idle"}}, nil
+		return []host.Agent{{Tab: "w9:t9", Name: "ext-1", Cwd: filepath.Join(root, ".worktrees", "ext-1"), Status: host.AgentStatus{State: "idle"}}}, nil
 	}
 	rep, err := e.Status(bg, root)
 	if err != nil {
@@ -689,10 +689,10 @@ func TestAgentsSharingATabAreMatchedByNameInEitherOrder(t *testing.T) {
 			all, err := snap(ctx)
 			// kit, finn and nia all sit in kit's recorded tab w1:t3, beside the orchestrator.
 			shared := []host.Agent{
-				{Tab: "w1:t3", Pane: "w1:p1", TabPanes: 4, Name: "orchestrator-pane", Cwd: root, Status: "working"},
-				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: host.AgentName("kit", "w1:t3"), Cwd: filepath.Join(root, ".worktrees", "kit"), Status: "working"},
-				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: host.AgentName("finn", "w1:t4"), Cwd: filepath.Join(root, ".worktrees", "finn"), Status: "done"},
-				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: host.AgentName("nia", "w1:t5"), Cwd: filepath.Join(root, ".worktrees", "nia"), Status: "idle"},
+				{Tab: "w1:t3", Pane: "w1:p1", TabPanes: 4, Name: "orchestrator-pane", Cwd: root, Status: host.AgentStatus{State: "working"}},
+				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: host.AgentName("kit", "w1:t3"), Cwd: filepath.Join(root, ".worktrees", "kit"), Status: host.AgentStatus{State: "working"}},
+				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: host.AgentName("finn", "w1:t4"), Cwd: filepath.Join(root, ".worktrees", "finn"), Status: host.AgentStatus{State: "done"}},
+				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: host.AgentName("nia", "w1:t5"), Cwd: filepath.Join(root, ".worktrees", "nia"), Status: host.AgentStatus{State: "idle"}},
 			}
 			if reversed {
 				slices.Reverse(shared)

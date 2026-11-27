@@ -453,8 +453,6 @@ type view struct {
 	prErr    bool        // reading the slot's PR state failed
 }
 
-var ()
-
 type worktree struct{ path, name, branch string }
 
 // roundCfgErr is RoundErr as a usage error, so a bad round.* key is the user's
@@ -596,7 +594,7 @@ func (e Env) Status(ctx context.Context, root string) (*Report, error) {
 			done := false
 			if e.ReadPane != nil {
 				pane, _ := e.ReadPane(ctx, r.Name, r.Tab, 60)
-				st, _ := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState)
+				st, _ := worker.ClassifyFor(r.Kind, pane, false, 60, host.AgentStatus{State: r.HostState})
 				done = st == worker.StateDone
 			}
 			if !done {

@@ -30,7 +30,7 @@ func TestStatusCodexTerminalWait(t *testing.T) {
 				s.Set("handle", "w1:t1")
 				s.Set("kind", c.kind)
 			}))
-			e := env([]host.Agent{{Tab: "w1:t1", Status: c.native}}, nil)
+			e := env([]host.Agent{{Tab: "w1:t1", Status: host.AgentStatus{State: c.native}}}, nil)
 			if c.capture {
 				var pane []byte
 				if c.fixture != "" {

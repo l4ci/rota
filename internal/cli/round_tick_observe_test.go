@@ -36,7 +36,7 @@ func TestRoundTickObserveReconcileDoesNotRepair(t *testing.T) {
 				e := build(ctx, root, opts)
 				e.HostName = host.Herdr
 				e.Snapshot = func(context.Context) ([]host.Agent, error) {
-					return []host.Agent{{Name: host.AgentName("ben", "w1:t1"), Tab: "w2:t2", Status: "working"}}, nil
+					return []host.Agent{{Name: host.AgentName("ben", "w1:t1"), Tab: "w2:t2", Status: host.AgentStatus{State: "working"}}}, nil
 				}
 				e.FollowTab = func(context.Context, string, string, string) error {
 					repairs++

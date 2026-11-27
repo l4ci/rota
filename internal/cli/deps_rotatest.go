@@ -5,6 +5,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -74,7 +75,7 @@ func invocationDeps() *Deps {
 			if lines <= 0 {
 				lines = 60
 			}
-			state, evidence := worker.ClassifyFor(kind, string(b), false, lines, status)
+			state, evidence := worker.ClassifyFor(kind, string(b), false, lines, host.AgentStatus{State: status})
 			return worker.PollResult{Slots: []worker.PollRow{{Name: slot, State: state, Evidence: evidence}}}, nil
 		}
 	}

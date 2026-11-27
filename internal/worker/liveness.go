@@ -1,10 +1,6 @@
 package worker
 
-import (
-	"strings"
-
-	"github.com/l4ci/rota/internal/host"
-)
+import "github.com/l4ci/rota/internal/host"
 
 // The liveness verdicts, which are also the registry and status-row names for
 // the same states. Unverifiable is the host unable to say: not proof of death.
@@ -23,7 +19,7 @@ type LivenessEvidence struct {
 	Handle        string
 	// Native is the host's own status for the slot's pane, when it gave one:
 	// its `gone` is proof of exit, an unverifiable one carries its reason.
-	Native string
+	Native host.AgentStatus
 	// Answered: the host listed its live agents. Listed: one is the slot's.
 	Answered, Listed bool
 }
@@ -61,12 +57,12 @@ func JudgeLiveness(in LivenessEvidence) Liveness {
 // nativeLiveness reads a host's native agent status as liveness evidence: the
 // host's own `gone` is proof of exit, an unverifiable status carries its
 // reason, and every other status says nothing (ok false).
-func nativeLiveness(native string) (v Liveness, ok bool) {
-	if native == "gone" {
+func nativeLiveness(native host.AgentStatus) (v Liveness, ok bool) {
+	if native.State == host.StatusGone {
 		return Liveness{State: LivenessDead}, true
 	}
-	if reason, cut := strings.CutPrefix(native, host.UnverifiablePrefix); cut {
-		return Liveness{State: LivenessUnverifiable, Reason: reason}, true
+	if native.State == host.StatusUnverifiable {
+		return Liveness{State: LivenessUnverifiable, Reason: native.Reason}, true
 	}
 	return Liveness{}, false
 }

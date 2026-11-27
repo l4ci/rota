@@ -100,12 +100,12 @@ func fixture(t *testing.T) (string, Env, *fakeRemote) {
 		labelled: []int{56, 57, 60, 99},
 	}
 	agents := []host.Agent{
-		{Tab: "w1:t3", Name: "kit", Cwd: filepath.Join(root, ".worktrees", "kit"), Status: "working"},
-		{Tab: "w1:t4", Name: "finn", Cwd: filepath.Join(root, ".worktrees", "finn"), Status: "done"},
-		{Tab: "w1:t5", Name: "nia", Cwd: filepath.Join(root, ".worktrees", "nia"), Status: "idle"},
-		{Tab: "w2:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "idle"},
-		{Tab: "w3:t1", Name: "ghost", Cwd: filepath.Join(root, ".worktrees", "ghost"), Status: "working"},
-		{Tab: "w4:t1", Name: "orchestrator", Cwd: root, Status: "working"},
+		{Tab: "w1:t3", Name: "kit", Cwd: filepath.Join(root, ".worktrees", "kit"), Status: host.AgentStatus{State: "working"}},
+		{Tab: "w1:t4", Name: "finn", Cwd: filepath.Join(root, ".worktrees", "finn"), Status: host.AgentStatus{State: "done"}},
+		{Tab: "w1:t5", Name: "nia", Cwd: filepath.Join(root, ".worktrees", "nia"), Status: host.AgentStatus{State: "idle"}},
+		{Tab: "w2:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: host.AgentStatus{State: "idle"}},
+		{Tab: "w3:t1", Name: "ghost", Cwd: filepath.Join(root, ".worktrees", "ghost"), Status: host.AgentStatus{State: "working"}},
+		{Tab: "w4:t1", Name: "orchestrator", Cwd: root, Status: host.AgentStatus{State: "working"}},
 	}
 	return root, env(agents, forge.asForge()), forge
 }
@@ -340,8 +340,8 @@ func TestParkedSlotAgentsAreAllUnclaimed(t *testing.T) {
 	writeRegistry(t, root, slot(root, "ben", "park/ben", nil))
 	wt := filepath.Join(root, ".worktrees", "ben")
 	e := env([]host.Agent{
-		{Tab: "w1:t5", Name: "rota-ben-t5", Cwd: wt, Status: "idle"},
-		{Tab: "w1:t6", Name: "rota-ben-t6", Cwd: wt, Status: "idle"},
+		{Tab: "w1:t5", Name: "rota-ben-t5", Cwd: wt, Status: host.AgentStatus{State: "idle"}},
+		{Tab: "w1:t6", Name: "rota-ben-t6", Cwd: wt, Status: host.AgentStatus{State: "idle"}},
 	}, (&fakeRemote{}).asForge())
 	rep, err := e.Status(bg, root)
 	if err != nil {

@@ -87,16 +87,16 @@ func TestWaitRefreshesPendingRelayBetweenPasses(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	relayRaceSlot(t, dir, 1)
 	h := newWaitHost("herdr")
-	h.set("w1", relayEcho(1), "working")
+	h.set("w1", relayEcho(1), host.AgentStatus{State: "working"})
 	pass := 0
 	relayCaptures := 0
 	h.onCapture = func(string) {
 		if pass == 1 {
 			relayCaptures++
 			if relayCaptures == 1 {
-				h.set("w1", relayEcho(2), "working")
+				h.set("w1", relayEcho(2), host.AgentStatus{State: "working"})
 			} else {
-				h.set("w1", strings.Repeat("● work\n", 80), "working")
+				h.set("w1", strings.Repeat("● work\n", 80), host.AgentStatus{State: "working"})
 			}
 		}
 	}
@@ -111,7 +111,7 @@ func TestWaitRefreshesPendingRelayBetweenPasses(t *testing.T) {
 					t.Fatal(err)
 				}
 			} else {
-				h.set("w1", "ROTA-DONE w1\n", "idle")
+				h.set("w1", "ROTA-DONE w1\n", host.AgentStatus{State: "idle"})
 			}
 			h.events <- "w1"
 		}}, nil

@@ -2,6 +2,7 @@ package worker
 
 import (
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/stamp"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ func TestClassifyBriefQuotingDoneTemplateIsNotDone(t *testing.T) {
 	}
 	for name, pane := range panes {
 		for _, kind := range []string{"claude", "codex", "opencode"} {
-			if st, ev := ClassifyFor(kind, pane, false, 60, ""); st == StateDone {
+			if st, ev := ClassifyFor(kind, pane, false, 60, host.AgentStatus{}); st == StateDone {
 				t.Errorf("%s/%s: brief template read as done: %q", name, kind, ev)
 			}
 		}
@@ -38,13 +39,13 @@ func TestClassifyClaudeRunningCommandIsNotIdle(t *testing.T) {
 		"esc to interrupt": "● Bash(until gh pr view; do sleep 30; done)\n  ⎿  Running…\n\n✻ Waiting… (3m 12s · esc to interrupt)\n",
 		"running only":     "● Monitor(watch ci)\n  ⎿  Running…\n",
 	} {
-		if st, ev := ClassifyFor("claude", pane, false, 60, ""); st != StateBusy {
+		if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{}); st != StateBusy {
 			t.Errorf("%s: %s %q, want busy", name, st, ev)
 		}
 	}
 	// An echoed brief that mentions the phrase is not a running turn.
 	echo := "❯ --- ORCHESTRATOR (round 27) ---\n  Press esc to interrupt a Running… command\n"
-	if st, _ := ClassifyFor("claude", echo, false, 60, ""); st == StateBusy {
+	if st, _ := ClassifyFor("claude", echo, false, 60, host.AgentStatus{}); st == StateBusy {
 		t.Errorf("echoed brief read as busy")
 	}
 }
@@ -92,11 +93,11 @@ func TestWaitRelayRaceOldDoneIsBusyThenNewDoneWakesOnce(t *testing.T) {
 	const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
 	brief := "❯ --- ORCHESTRATOR (round 27) ---\n  You are w1.\n\n● working\n"
 	relayRaceSlot(t, dir, 1)
-	h.set("w1", brief+done, "idle")
+	h.set("w1", brief+done, host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
 		t.Fatalf("old done before the relay echo woke the watch: %+v", res)
 	}
-	h.set("w1", brief+done+"\n"+relayEcho(1)+done, "idle")
+	h.set("w1", brief+done+"\n"+relayEcho(1)+done, host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
 		t.Fatalf("new done after the relay: %+v", res)
 	}
@@ -113,11 +114,11 @@ func TestWaitSecondRelayNotRenderedIsBusy(t *testing.T) {
 	const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
 	pane := "❯ --- ORCHESTRATOR (round 27) ---\n  You are w1.\n\n" + done + "\n" + relayEcho(1) + done
 	relayRaceSlot(t, dir, 2)
-	h.set("w1", pane, "idle")
+	h.set("w1", pane, host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
 		t.Fatalf("the first relay's done woke the watch for the second: %+v", res)
 	}
-	h.set("w1", pane+"\n"+relayEcho(2)+done, "idle")
+	h.set("w1", pane+"\n"+relayEcho(2)+done, host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
 		t.Fatalf("done after the second relay: %+v", res)
 	}
@@ -129,7 +130,7 @@ func TestWaitDoneAfterVisibleRelayCountsWithoutTheOldDone(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
 	relayRaceSlot(t, dir, 1)
-	h.set("w1", relayEcho(1)+strings.Repeat("● work\n", 20)+"ROTA-DONE w1 https://github.com/o/r/pull/994\n", "idle")
+	h.set("w1", relayEcho(1)+strings.Repeat("● work\n", 20)+"ROTA-DONE w1 https://github.com/o/r/pull/994\n", host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
 		t.Fatalf("done after the visible relay echo: %+v", res)
 	}
@@ -149,11 +150,11 @@ func TestRowKeyOfADoneCountsRelays(t *testing.T) {
 // Evidence written in angle brackets is real; the template's is not.
 func TestClassifyAngleBracketedURLIsEvidence(t *testing.T) {
 	pane := "● ROTA-DONE nia <https://github.com/o/r/pull/9>\n"
-	if st, ev := ClassifyFor("claude", pane, false, 60, ""); st != StateDone || ev != "<https://github.com/o/r/pull/9>" {
+	if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{}); st != StateDone || ev != "<https://github.com/o/r/pull/9>" {
 		t.Errorf("%s %q", st, ev)
 	}
 	blocked := "● ROTA-BLOCKED nia: <one question>\n"
-	if st, _ := ClassifyFor("claude", blocked, false, 60, ""); st == StateBlocked {
+	if st, _ := ClassifyFor("claude", blocked, false, 60, host.AgentStatus{}); st == StateBlocked {
 		t.Error("the template's blocked line read as blocked")
 	}
 }
@@ -162,11 +163,11 @@ func TestClassifyAngleBracketedURLIsEvidence(t *testing.T) {
 // turn in flight, on harnesses that gutter their echo as well.
 func TestClassifyOpenCodeBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
 	pane := "┃ --- ORCHESTRATOR (round 27) ---\n┃ the footer says esc interrupt while a turn runs\n"
-	if st, ev := ClassifyFor("opencode", pane, false, 60, ""); st == StateBusy {
+	if st, ev := ClassifyFor("opencode", pane, false, 60, host.AgentStatus{}); st == StateBusy {
 		t.Errorf("echoed relay read as busy: %q", ev)
 	}
 	live := pane + "\nesc interrupt\n"
-	if st, _ := ClassifyFor("opencode", live, false, 60, ""); st != StateBusy {
+	if st, _ := ClassifyFor("opencode", live, false, 60, host.AgentStatus{}); st != StateBusy {
 		t.Errorf("a running opencode turn read as %s", st)
 	}
 }
@@ -180,7 +181,7 @@ func TestWaitDoneAfterScrolledOutRelayEchoWakesOnce(t *testing.T) {
 		const done = "ROTA-DONE w1 https://github.com/o/r/pull/994\n"
 		relayRaceSlot(t, dir, 1)
 		// First capture: the echo is in, the worker is at work.
-		h.set("w1", relayEcho(1)+"● working\n", "working")
+		h.set("w1", relayEcho(1)+"● working\n", host.AgentStatus{State: "working"})
 		if res := waitOnce(t, dir, h, 300*time.Millisecond); !res.TimedOut {
 			t.Fatalf("a working slot woke the watch: %+v", res)
 		}
@@ -193,7 +194,7 @@ func TestWaitDoneAfterScrolledOutRelayEchoWakesOnce(t *testing.T) {
 			}
 		}
 		// Later: 80 lines of work pushed the echo out; only the done shows.
-		h.set("w1", strings.Repeat("● work\n", 80)+done, "idle")
+		h.set("w1", strings.Repeat("● work\n", 80)+done, host.AgentStatus{State: "idle"})
 		res := waitOnce(t, dir, h, 5*time.Second)
 		if res.Slot != "w1" || res.State != StateDone {
 			t.Fatalf("event=%v: done after a scrolled-out echo: %+v", withEvent, res)
@@ -216,7 +217,7 @@ func TestWaitDoneEventPassesTheRelayGate(t *testing.T) {
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetEvent(EventDone, "", stamp.Format(time.Now().Add(time.Second))) }); err != nil {
 		t.Fatal(err)
 	}
-	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/994\n", "idle")
+	h.set("w1", "ROTA-DONE w1 https://github.com/o/r/pull/994\n", host.AgentStatus{State: "idle"})
 	if res := waitOnce(t, dir, h, 5*time.Second); res.Slot != "w1" || res.State != StateDone {
 		t.Fatalf("done event after the relay: %+v", res)
 	}
@@ -258,10 +259,10 @@ func TestNoteRelayEchoStallOffUsesFallbackWindow(t *testing.T) {
 
 func TestClassifyCodexBusyPhraseInEchoedRelayIsNotBusy(t *testing.T) {
 	pane := "❯ --- ORCHESTRATOR (round 27) ---\n  the footer says (esc to interrupt) while a turn runs\n"
-	if st, ev := ClassifyFor("codex", pane, false, 60, ""); st == StateBusy {
+	if st, ev := ClassifyFor("codex", pane, false, 60, host.AgentStatus{}); st == StateBusy {
 		t.Errorf("echoed relay read as busy: %q", ev)
 	}
-	if st, _ := ClassifyFor("claude", "✻ Working… (12s · esc to interrupt · ctrl+t to hide)\n", false, 60, ""); st != StateBusy {
+	if st, _ := ClassifyFor("claude", "✻ Working… (12s · esc to interrupt · ctrl+t to hide)\n", false, 60, host.AgentStatus{}); st != StateBusy {
 		t.Errorf("a claude status line with trailing hints read as %s", st)
 	}
 }
@@ -274,7 +275,7 @@ func TestClassifyClaudeBackgroundTasksAreBusy(t *testing.T) {
 	}
 	var first string
 	for _, n := range []string{"1 shell", "1 shell, 2 monitors", "3 monitors"} {
-		st, ev := ClassifyFor("claude", foot(n), false, 60, "")
+		st, ev := ClassifyFor("claude", foot(n), false, 60, host.AgentStatus{})
 		if st != StateBusy {
 			t.Errorf("%q: %s %q, want busy", n, st, ev)
 		}
@@ -286,7 +287,7 @@ func TestClassifyClaudeBackgroundTasksAreBusy(t *testing.T) {
 	}
 	// No background tasks, no sentinel: idle as before.
 	idle := "● done thinking\n\n  ⏵⏵ bypass permissions on (shift+tab to cycle)\n"
-	if st, _ := ClassifyFor("claude", idle, false, 60, ""); st != StateIdle {
+	if st, _ := ClassifyFor("claude", idle, false, 60, host.AgentStatus{}); st != StateIdle {
 		t.Errorf("footer without tasks: %s, want idle", st)
 	}
 }
@@ -303,13 +304,13 @@ func TestClassifyBackgroundFooterKeepsStalledStates(t *testing.T) {
 		"api error":  {"● x\n  ⎿  API Error: 500 internal\n" + foot, "", StateDead},
 		"permission": {"Do you want to proceed?\n ❯ 1. Yes\n   2. No\n" + foot, "", StateNeedsPermission},
 	} {
-		base, _ := ClassifyFor("claude", strings.Replace(c.pane, foot, "\n", 1), false, 60, c.native)
-		if st, ev := ClassifyFor("claude", c.pane, false, 60, c.native); st != base || st != c.want {
+		base, _ := ClassifyFor("claude", strings.Replace(c.pane, foot, "\n", 1), false, 60, host.AgentStatus{State: c.native})
+		if st, ev := ClassifyFor("claude", c.pane, false, 60, host.AgentStatus{State: c.native}); st != base || st != c.want {
 			t.Errorf("%s: %s %q, want %s (without footer %s)", name, st, ev, c.want, base)
 		}
 	}
 	zero := "● x\n\n  ⏵⏵ bypass permissions on · 0 shells\n"
-	if st, _ := ClassifyFor("claude", zero, false, 60, ""); st != StateIdle {
+	if st, _ := ClassifyFor("claude", zero, false, 60, host.AgentStatus{}); st != StateIdle {
 		t.Errorf("0 shells read as %s, want idle", st)
 	}
 }

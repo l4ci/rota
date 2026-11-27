@@ -344,15 +344,6 @@ func (h *herdr) dropOpened(ctx context.Context, w openedWorkspace) {
 	}
 }
 
-// Unverifiable is the prefix of a Status that is no answer: the host could not
-// say whether the agent lives. The reason follows it.
-const (
-	UnverifiablePrefix    = "unverifiable:"
-	ReasonHostUnreachable = "host-unreachable"
-	ReasonStaleHandle     = "stale-handle"
-	ReasonPaneUnreadable  = "pane-unreadable"
-)
-
 // Notify raises a herdr notification. herdr answers with why it did or did not
 // show it; anything but `shown` (and `disabled`, the user's own choice) means a
 // blocked or needs-permission alert never reached a human, so it is reported

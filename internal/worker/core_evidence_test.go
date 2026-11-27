@@ -345,7 +345,7 @@ func TestWaitRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "", "idle")
+	h.set("w1", "", host.AgentStatus{State: "idle"})
 	e := w.env(false)
 	e.NewHost = func(host.Kind) host.Host { return watcherHost{h} }
 	res, err := e.Wait(bg, w.dir, WaitOpts{Timeout: 5 * time.Second})
@@ -355,7 +355,7 @@ func TestWaitRealDoneAfterPromotedDoneClearsCoreDelivery(t *testing.T) {
 	if !hasCoreDelivery(w.dir) {
 		t.Fatal("a promoted done cleared the delivery")
 	}
-	h.set("w1", "ROTA-DONE w1 "+ghURL+"\n", "done")
+	h.set("w1", "ROTA-DONE w1 "+ghURL+"\n", host.AgentStatus{State: "done"})
 	res, err = e.Wait(bg, w.dir, WaitOpts{Timeout: 50 * time.Millisecond})
 	if err != nil || !res.TimedOut {
 		t.Fatalf("%+v %v: the same DONE came back as news", res, err)

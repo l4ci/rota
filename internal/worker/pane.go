@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/harness"
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/usagelimit"
@@ -251,24 +252,24 @@ func firstMatch(res []*regexp.Regexp, s string) string {
 }
 
 // Classify decides one slot's state from its pane text using the default
-// harness's vocabulary. native is herdr's agent_status
-// (or `gone`), empty under tmux, which has none. moved says the pane changed
+// harness's vocabulary. native is the host's state and failure evidence,
+// zero under hosts without native status. moved says the pane changed
 // between the two captures.
-func Classify(text string, moved bool, lines int, native string) (state, evidence string) {
+func Classify(text string, moved bool, lines int, native host.AgentStatus) (state, evidence string) {
 	return ClassifyFor("", text, moved, lines, native)
 }
 
 // ClassifyFor is Classify for a slot of the given kind: its harness's own pane
 // wording (PaneVocab) is read on top of the shared rules, on that kind's panes
 // only.
-func ClassifyFor(kind, text string, moved bool, lines int, native string) (state, evidence string) {
+func ClassifyFor(kind, text string, moved bool, lines int, native host.AgentStatus) (state, evidence string) {
 	p, _ := harness.LookupPane(kind)
 	return ClassifyPane(p, text, moved, lines, native)
 }
 
 // ClassifyPane is ClassifyFor for the Pane that wrote the text; nil reads with
 // no harness vocabulary.
-func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native string) (state, evidence string) {
+func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native host.AgentStatus) (state, evidence string) {
 	rules := harness.RulesOf(p)
 	all := pystr.Splitlines(text)
 	full := all
@@ -330,14 +331,14 @@ func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native str
 	if usagelimit.AnyMatch(rules.Busy, own) {
 		return StateBusy, "pane shows: " + firstMatch(rules.Busy, own)
 	}
-	if native == "working" {
+	if native.State == host.StatusWorking {
 		return StateBusy, "herdr: agent working"
 	}
 	if moved {
 		return StateBusy, "pane changed between captures"
 	}
 	waiting := usagelimit.AnyMatch(rules.Waiting, own)
-	if native == "blocked" && !waiting {
+	if native.State == host.StatusBlocked && !waiting {
 		return StateNeedsPermission, "herdr: agent blocked on a dialog — answer it in the slot's tab, or widen round.commands.claude"
 	}
 	if nativeLive.State == LivenessDead {
@@ -360,7 +361,7 @@ func ClassifyPane(p harness.Pane, text string, moved bool, lines int, native str
 	if waiting {
 		return StateBusy, "pane shows an internal tool wait"
 	}
-	if native == "unknown" {
+	if native.State == host.StatusUnknown {
 		return StateUnknown, "herdr cannot classify the agent — inspect the tab; not proof it finished"
 	}
 	// The footer outlives a dialog or a crash, so it only turns the final idle

@@ -554,7 +554,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 // waited). "unknown" is the host's "cannot classify" state: it only counts as
 // booting after a real booting state was seen (see awaitInput).
 func bootingStatus(s string) bool {
-	return s == "working" || s == "starting"
+	return s == host.StatusWorking || s == host.StatusStarting
 }
 
 // awaitInput holds a fresh session's brief until the host stops reporting it
@@ -566,11 +566,11 @@ func bootingStatus(s string) bool {
 func (e Env) awaitInput(ctx context.Context, t *dispatchTarget, slot string) error {
 	sawBooting := false
 	for i := 0; ; i++ {
-		st := t.h.Status(ctx, slot, t.handle)
+		st := t.h.Status(ctx, slot, t.handle).State
 		switch {
 		case bootingStatus(st):
 			sawBooting = true
-		case st == "unknown" && sawBooting && !host.PaneBooted(readText(ctx, t.h, slot, t.handle, 40)):
+		case st == host.StatusUnknown && sawBooting && !host.PaneBooted(readText(ctx, t.h, slot, t.handle, 40)):
 			// A flicker between booting states: keep waiting.
 		default:
 			return nil

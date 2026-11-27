@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"strings"
 	"testing"
@@ -11,21 +12,21 @@ import (
 func TestClassifyRelayElement(t *testing.T) {
 	relay := harness.WrapRelay(5, 2, "[ORCHESTRATOR RELAY — forwarded.]\n\nPush is allowed now.\nROTA-BLOCKED ben: git push to origin is denied\n")
 	// A blocked line the relay quotes is the orchestrator's, not the worker's.
-	if st, _ := Classify("● working\n"+relay, false, 60, "idle"); st == StateBlocked {
+	if st, _ := Classify("● working\n"+relay, false, 60, host.AgentStatus{State: "idle"}); st == StateBlocked {
 		t.Errorf("relay-quoted sentinel counted as the worker's: %s", st)
 	}
 	// A ROTA-DONE above the relay's opening tag predates it.
 	pane := "● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n\n" + relay
-	if st, ev := Classify(pane, false, 60, "idle"); st != StateIdle || ev != staleDoneEvidence {
+	if st, ev := Classify(pane, false, 60, host.AgentStatus{State: "idle"}); st != StateIdle || ev != staleDoneEvidence {
 		t.Errorf("done before the relay: %s %q", st, ev)
 	}
 	// The worker's own sentinel after the closing tag is fresh.
-	if st, ev := Classify(pane+"● fixed\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n", false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/871" {
+	if st, ev := Classify(pane+"● fixed\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n", false, 60, host.AgentStatus{State: "idle"}); st != StateDone || ev != "https://github.com/l4ci/rota/pull/871" {
 		t.Errorf("done after the relay: %s %q", st, ev)
 	}
 	// A bare sentinel straight under the closing tag, with no reply marker, is
 	// the worker's: the closing tag, not a marker, ends the span.
-	if st, ev := Classify(relay+"ROTA-DONE ben https://github.com/l4ci/rota/pull/872\n", false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/872" {
+	if st, ev := Classify(relay+"ROTA-DONE ben https://github.com/l4ci/rota/pull/872\n", false, 60, host.AgentStatus{State: "idle"}); st != StateDone || ev != "https://github.com/l4ci/rota/pull/872" {
 		t.Errorf("done straight under the closing tag: %s %q", st, ev)
 	}
 }
@@ -91,7 +92,7 @@ func TestSignBriefEscapesQuotedTagsAndTheClassifierSpanHolds(t *testing.T) {
 			t.Fatalf("%s: opens=%d closes=%d markers=%d:\n%s", name, opens, closes, markers, sent)
 		}
 		for _, pane := range []string{sent, "❯ " + strings.ReplaceAll(sent, "\n", "\n  "), "┃ " + strings.ReplaceAll(sent, "\n", "\n┃ ")} {
-			if st, ev := Classify("● working\n"+pane, false, 60, "idle"); st == StateDone || st == StateBlocked {
+			if st, ev := Classify("● working\n"+pane, false, 60, host.AgentStatus{State: "idle"}); st == StateDone || st == StateBlocked {
 				t.Errorf("%s: a quoted sentinel read as the worker's: %s %q", name, st, ev)
 			}
 			if got := usagelimit.StripRelays("claude", "● working\n"+pane+"\nAPI Error: 529 Overloaded\n"); strings.Contains(got, "ROTA-") || !strings.Contains(got, "API Error") {
@@ -123,7 +124,7 @@ func TestTagSpanIgnoresAQuotedSignatureLine(t *testing.T) {
 		if strings.Contains(got, "ROTA-DONE") || !strings.Contains(got, "API Error") || strings.Contains(got, "ROTA-SIG") {
 			t.Errorf("%s: the span did not run to the real closing line and its trailer: %q", name, got)
 		}
-		if st, ev := ClassifyFor(tc.kind, pane, false, 60, ""); st == StateDone {
+		if st, ev := ClassifyFor(tc.kind, pane, false, 60, host.AgentStatus{}); st == StateDone {
 			t.Errorf("%s: a done quoted in the body read as the worker's: %q", name, ev)
 		}
 	}
