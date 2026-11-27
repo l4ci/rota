@@ -883,17 +883,34 @@ func (g *GitHub) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, erro
 	return d.MergeCommit.Oid, nil
 }
 
-// PRFiles reads `gh pr diff --name-only`, which lists every file; the
-// `files` field of `gh pr view` stops at 100.
+// prFilesCap is where GitHub's PR files API stops listing, without an error.
+const prFilesCap = 3000
+
+// PRFiles reads the paginated PR files API: `gh pr diff --name-only` names a
+// renamed file by its new path only, and the `files` field of `gh pr view`
+// stops at 100. A renamed file counts under both its paths; each path is
+// returned once, in first-seen order. A list at the API's cap is an error,
+// since the merge-approval gate must not judge part of a PR.
 func (g *GitHub) PRFiles(ctx context.Context, pr int) ([]string, error) {
-	out, err := g.run(ctx, []string{"pr", "diff", strconv.Itoa(pr), "--name-only"}, "")
-	if err != nil {
+	var d []struct {
+		New string `json:"filename"`
+		Old string `json:"previous_filename"`
+	}
+	path := fmt.Sprintf("repos/{owner}/{repo}/pulls/%d/files?per_page=100", pr)
+	if err := g.pages(ctx, path, &d); err != nil {
 		return nil, err
 	}
+	if len(d) >= prFilesCap {
+		return nil, failed("PR %d lists %d files, the most GitHub's API returns: the list may be incomplete", pr, len(d))
+	}
 	var files []string
-	for _, l := range strings.Split(out, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			files = append(files, l)
+	seen := make(map[string]bool)
+	for _, f := range d {
+		for _, path := range []string{f.New, f.Old} {
+			if path != "" && !seen[path] {
+				seen[path] = true
+				files = append(files, path)
+			}
 		}
 	}
 	return files, nil
