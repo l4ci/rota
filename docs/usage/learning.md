@@ -222,6 +222,8 @@ See [configuration](configuration.md) for the full `learn.verify` setting.
 
 Each run, `/rota-learn` rewrites the managed `rota-knowledge` block in the project instructions file (`AGENTS.md` when present, else `CLAUDE.md`) to match the topic headings in `KNOWLEDGE.md`.
 
+If a knowledge or decisions source cannot be read, `rota block` reports the source path and leaves the instructions file unchanged. A missing source still produces an empty topic list.
+
 ## Knowledge vs decisions
 
 If you find yourself wanting to write *"we will never X"* or *"X is forbidden in

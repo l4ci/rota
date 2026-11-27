@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/l4ci/rota/internal/fsio"
@@ -42,10 +43,13 @@ func UmbrellaOnlyBlock(key string) bool { return blockKinds[key].umbrellaOnly }
 // first, then the sub-repo's new ones, and targets the sub-repo's own
 // instructions file. A missing source file just yields no topics.
 func (s Store) BlockInputs(key, scope string) (topics []string, target string, err error) {
-	topicsOf := func(path string) []string {
+	topicsOf := func(path string) ([]string, error) {
 		raw, err := fsio.ReadText(path)
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
 		if err != nil {
-			return nil
+			return nil, fsio.Unreadable(err)
 		}
 		text := raw
 		topics := section.Topics(text)
@@ -56,15 +60,17 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 		for _, t := range topics {
 			out = append(out, t.Name)
 		}
-		return out
+		return out, nil
 	}
 	switch key {
 	case "decisions":
-		return topicsOf(rotatree.Decisions(s.Root)), section.InstructionsFile(s.Root), nil
+		topics, err := topicsOf(rotatree.Decisions(s.Root))
+		return topics, section.InstructionsFile(s.Root), err
 	case "knowledge":
 		up, _ := s.KnowledgePath(Umbrella)
 		if scope == "" || scope == Umbrella {
-			return topicsOf(up), section.InstructionsFile(s.Root), nil
+			topics, err := topicsOf(up)
+			return topics, section.InstructionsFile(s.Root), err
 		}
 		repoPath, ok := s.Repos[scope]
 		if !ok {
@@ -76,7 +82,11 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 		}
 		seen := map[string]bool{}
 		for _, p := range []string{up, sp} {
-			for _, name := range topicsOf(p) {
+			names, err := topicsOf(p)
+			if err != nil {
+				return nil, "", err
+			}
+			for _, name := range names {
 				if !seen[name] {
 					seen[name] = true
 					topics = append(topics, name)

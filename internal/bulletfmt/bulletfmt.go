@@ -154,6 +154,7 @@ func HasSpanTitle(spans []Span, title string) bool {
 var (
 	ErrNotFound   = errors.New("not found")
 	ErrMultiMatch = errors.New("matches several bullets")
+	ErrExists     = errors.New("already exists")
 )
 
 // ResolveTitle is the one title lookup both knowledge stores apply: it returns
@@ -182,6 +183,25 @@ func ResolveTitle(titles []string, want string) (int, error) {
 		named[i] = "'" + titles[h] + "'"
 	}
 	return -1, fmt.Errorf("%w: %d bullets titled '%s': %s", ErrMultiMatch, len(hits), typed, strings.Join(named, ", "))
+}
+
+// CheckFree is the one rule that keeps a title unique in a topic for the
+// writes that retitle or move a bullet: it refuses with ErrExists when a bullet
+// of lines other than lines[self] is titled title, ignoring case. A self of -1
+// skips none. An empty title is always free.
+func CheckFree(lines []string, self int, title string) error {
+	if title == "" {
+		return nil
+	}
+	for i, l := range lines {
+		if i == self || !strings.HasPrefix(l, "- ") {
+			continue
+		}
+		if t, ok := Title(l); ok && strings.ToLower(t) == strings.ToLower(title) {
+			return fmt.Errorf("%w: a bullet titled '%s' is already there", ErrExists, t)
+		}
+	}
+	return nil
 }
 
 // continues reports whether a line continues the bullet above it: it is

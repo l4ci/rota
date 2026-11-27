@@ -142,7 +142,10 @@ func (e Env) architectureFacts(ctx context.Context, root string, be backlog.Back
 	}
 	active, _ := Members(reg, set)
 	a.Idle = CountIdle(reg, active)
-	a.Areas = reviewAreas(root, set)
+	a.Areas, err = reviewAreas(root, set)
+	if err != nil {
+		return a, false, err
+	}
 
 	a.Count, a.Unavailable = e.closedSinceReview(ctx, root, be, &a.Since, persist)
 	if at, err := stamp.Parse(a.Since); err == nil && set.ArchitectureIdleMinHours > 0 {
@@ -292,18 +295,22 @@ func numOf(v any) int {
 
 // reviewAreas is round.architectureAreas, else the names of the subsystem
 // map, else the whole repo as one area.
-func reviewAreas(root string, set roundcfg.Settings) []string {
+func reviewAreas(root string, set roundcfg.Settings) ([]string, error) {
 	if len(set.ArchitectureAreas) > 0 {
-		return set.ArchitectureAreas
+		return set.ArchitectureAreas, nil
+	}
+	subs, err := mapqa.Stats(git.Repo{Dir: root}, root)
+	if err != nil {
+		return nil, err
 	}
 	var out []string
-	for _, s := range mapqa.Stats(git.Repo{Dir: root}, root) {
+	for _, s := range subs {
 		out = append(out, s.Name)
 	}
 	if len(out) == 0 {
 		out = []string{WholeRepo}
 	}
-	return out
+	return out, nil
 }
 
 // MintedReviews are the review items this round minted, from the registry.

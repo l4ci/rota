@@ -36,6 +36,7 @@ var (
 	ErrPush       = errors.New("push failed")
 	ErrPolicy     = errors.New("invalid policy")
 	ErrContent    = bulletfmt.ErrInvalid
+	ErrExists     = bulletfmt.ErrExists
 	ErrUsage      = errors.New("invalid request")
 	ErrIdentity   = errors.New("git has no author identity")
 )

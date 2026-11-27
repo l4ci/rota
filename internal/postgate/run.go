@@ -91,10 +91,6 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 	if err != nil {
 		return Result{Train: TrainRun{Err: fmt.Errorf("postgate: load train targets: %w", err)}}
 	}
-	issues := make(map[string]string, len(targets))
-	for target, gt := range targets {
-		issues[target] = gt.Issue
-	}
 	r, err := e.Runner.Train(ctx, root, o)
 	if r.Verdict == landing.GateCancelled {
 		// The cancel stopped the train, not its bookkeeping: the reports of the
@@ -105,6 +101,7 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 	if o.Plan {
 		return Result{Train: run}
 	}
+	issues := trainIssues(targets, r)
 	// A verification failure may name the culprit without a populated gate
 	// result. Resolve it once: reports and the bounce notice both read it.
 	if r.Culprit != "" {
@@ -122,6 +119,30 @@ func (e Env) Run(ctx context.Context, root string, req Request) Result {
 		run.Book = Train(book, root, issues, targets, r)
 	}
 	return Result{Train: run}
+}
+
+// trainIssues resolves post-execution item identity once for reports, cleanup
+// and notifications. Execution results take precedence; the retained registry
+// snapshot covers failures before resolution and targets removed by landing.
+func trainIssues(targets map[string]GateTarget, r landing.TrainResult) map[string]string {
+	issues := make(map[string]string, len(targets))
+	for target, gt := range targets {
+		issues[target] = gt.Issue
+	}
+	for _, m := range r.Members {
+		if issue := m.Issue(); issue != "" {
+			issues[m.Target] = issue
+		}
+	}
+	for _, c := range r.Culprits {
+		if c.Gate.Issue != "" {
+			issues[c.Target] = c.Gate.Issue
+		}
+	}
+	if r.Culprit != "" && r.CulpritGate.Issue != "" {
+		issues[r.Culprit] = r.CulpritGate.Issue
+	}
+	return issues
 }
 
 func (e Env) report(ctx context.Context, root string, r landing.GateResult) []string {
@@ -148,7 +169,9 @@ func trainReports(issues map[string]string, r landing.TrainResult) []landing.Gat
 	seen := map[string]bool{}
 	for _, c := range r.Culprits {
 		if !seen[c.Target] {
-			out = append(out, c.Gate)
+			g := c.Gate
+			g.Issue = issues[c.Target]
+			out = append(out, g)
 			seen[c.Target] = true
 		}
 	}

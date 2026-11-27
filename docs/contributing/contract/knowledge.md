@@ -83,7 +83,7 @@ note: `--external` measures the external base instead: topics (each split topic'
 rota knowledge topics [--external]
 repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
 data: {"topics": [{"name": string, "bullets": number}]}
-exit: 2 on an argument. A missing file gives `{"topics": []}`.
+exit: 2 on an argument. A missing file gives `{"topics": []}`. With `--external`, 5 when an index or topic file exists but cannot be read.
 old: none (new)
 note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
@@ -110,8 +110,8 @@ note: `--append TEXT` becomes `--mode append` plus `--body-file`, per rule 3, as
 ### rota knowledge replace
 rota knowledge replace --topic <T> --old <text> --new <text> [--external]
 repo: scoped (scope S); edits S's KNOWLEDGE.md only, with no umbrella/sub-repo fallback search
-data: {"topic": string, "changed": bool}; on exit 4 `{"blockedBy": "ambiguous", "changed": false}`
-exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and deletes the text); 3 when the topic is not found or `<old>` is in no bullet of it; 4 when `<old>` is in more than one bullet of it (hint: use a longer fragment), when `<new>` spans several lines or holds `-->`, or when it would remove the bullet's `- ` marker
+data: {"topic": string, "changed": bool}; on exit 4 `{"blockedBy": "ambiguous"|"exists", "changed": false}` (local store)
+exit: 2 when `--topic`, `--old` or `--new` is missing (`--new ""` is allowed and deletes the text); 3 when the topic is not found or `<old>` is in no bullet of it; 4 when `<old>` is in more than one bullet of it (hint: use a longer fragment), when `<new>` spans several lines or holds `-->`, or when it would remove the bullet's `- ` marker, or when it would give the bullet a title another bullet of the topic holds, ignoring case (`blockedBy: exists` locally; nothing is written; a case change in place is allowed)
 old: none (new in T4)
 note: `--old` is a case-sensitive exact substring. A bullet is its `- ` line plus its indented continuation lines (the one local bullet unit shared by `replace`, `rm`, `rename-topic --title` and path recall), so a wrapped bullet matches as a whole and prose after a blank line or unindented text is never matched or edited. Before, the span ran to the next sibling bullet and swallowed that prose. Every occurrence inside the one matched bullet is replaced. `changed` is false when `--old` equals `--new`. When the edit changes the bullet's bold title, the tier entry is re-keyed to the new title (hits and tier kept). The Glossary topic has no tier entries, so nothing is re-keyed there.
 note: `amend` only appends and `rename-topic` only renames or moves; this is the verb that corrects a stale bullet. Unlike `amend`, ambiguity is exit 4 (the file is intact and the caller can retry with a longer fragment), not 2. The ticket asked for exit 4 on zero matches too; zero matches stays exit 3, as for `amend` and `rename-topic`, because the bullet could not be resolved (unratified).
@@ -128,7 +128,7 @@ note: removes the one bullet with that bold title (matched case-insensitively, a
 rota knowledge rename-topic --from <X> --to <Y> [--title <T>]
 repo: scoped (scope S). The old helper applied `--repo` to the tier sidecar only and always edited the umbrella `.rota/KNOWLEDGE.md`. The contract requires both the heading edit and the sidecar re-key to use S.
 data: {"from": string, "to": string, "title"?: string, "mode": "topic"|"bullet", "changed": bool}
-exit: 2 when `--from` or `--to` is missing; 3 when topic X is not found, when bullet T is not found, or (bullet mode) when topic Y does not exist; 4 when (topic mode) topic Y already exists, or (bullet mode) several bullets share the title up to case (`blockedBy: ambiguous`, nothing is written)
+exit: 2 when `--from` or `--to` is missing; 3 when topic X is not found, when bullet T is not found, or (bullet mode) when topic Y does not exist; 4 when (topic mode) topic Y already exists, or (bullet mode) several bullets share the title up to case (`blockedBy: ambiguous`, nothing is written), or (bullet mode) topic Y already holds a bullet of that title, ignoring case (`blockedBy: exists`, nothing is written)
 old: hv-knowledge-rename-topic [--repo <name>] --from <X> --to <Y> [--title <T>]    (same flags)
 shim: `mode` is `bullet` iff `--title` was passed; `changed` is false only for `--from` equal to `--to` (the old helper printed nothing).
 note: the shim cannot honor the contract's file scope, so `--repo <sub-repo>` runs sidecar-only until the port, and smoke must not assert sub-repo file edits for this verb before then.
@@ -326,11 +326,12 @@ note: format is unchanged: TSV `term<TAB>def<TAB>aliases<TAB>nots`, with `#` com
 rota block <key> [--body-file <path|->]
 repo: scoped (scope S) for key `knowledge` only. Key `decisions` is umbrella-only, so `--repo` with `decisions` or with `--body-file` exits 2. Sub-repo scope writes `<sub-repo>/AGENTS.md` or `CLAUDE.md`.
 data: {"key": string, "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: 2 when the key is unknown in generated mode (without `--body-file` only `knowledge` and `decisions` are valid) or a registered `--repo` is passed where it is not allowed; an unregistered `--repo` is 3 (rule 9)
+exit: 2 when the key is unknown in generated mode (without `--body-file` only `knowledge` and `decisions` are valid) or a registered `--repo` is passed where it is not allowed; an unregistered `--repo` is 3 (rule 9); 5 when the knowledge or decisions source exists but cannot be read (the message names the path)
 old: hv-managed-block <key> [--body-stdin] [--repo <name>]    (`--body-file -` becomes `--body-stdin` with the shim's stdin; `--body-file <p>` becomes `--body-stdin < <p>`)
 shim: the stdout status word becomes `status`; `changed` is `status != "unchanged"`.
 note: the key must be the first positional. With `--body-file`, any key is accepted and the body is wrapped in `<!-- rota-<key>-start -->` … `<!-- rota-<key>-end -->`. The managed file is `AGENTS.md` if it exists, else `CLAUDE.md` (created if absent). Legacy `<!-- hv:knowledge:start -->` markers migrate in place. The unknown-key exit moves from 1 to 2.
 note: `--repo` with `--body-file`, silently ignored by the old helper, is now exit 2, because ignoring it writes to the wrong place. The key `skills` is reserved for `rota block skills` below and takes no body flag.
+note: generated knowledge and decisions blocks treat only a missing source as empty. Other source read errors fail with the path before writing the instructions file, including either source of a sub-repo knowledge block.
 
 ### rota block skills
 rota block skills
@@ -363,20 +364,22 @@ note: returns each `.rota/map/<name>.md` body without frontmatter, in argument o
 rota map index
 repo: none
 data: {"key": "map", "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: implied only
+exit: 5 when the map directory or a map file exists but cannot be read (the message names the path)
 old: hv-map-index    (stdout status word)
 shim: same transform as `rota block`.
 note: the generated block text names `rota map query <name>` (it names `.hv/bin/hv-map-query` today).
+note: an unreadable map directory or file fails with its path and leaves the instructions file unchanged; a missing directory still gives the empty index. `backlog stale --kind map` also propagates these read errors.
 
 ### rota map stats
 rota map stats [--cap]
 repo: none
 data: {"subsystems": [{"name": string, "bytes": number, "touched": string, "entryPoints": number, "brokenRefs": number, "commitsBehind"?: number}], "count": number, "cap"?: number, "overCap"?: bool}
-exit: implied only. `--cap` and the staleness warning are advisory and never fail.
+exit: implied only. `--cap` and the staleness warning are advisory and never fail; 5 when the map directory or a map file exists but cannot be read (the message names the path)
 old: hv-map-stats    (and, with `--cap`, also hv-map-cap-check)
 shim: the old JSON keys `entry_points` and `broken_refs` are renamed to `entryPoints` and `brokenRefs`, and `count` is `len(subsystems)`. With `--cap` the shim also runs hv-map-cap-check; a stderr `note: project map has N subsystems (cap C)…` sets `overCap: true` and becomes a `warnings` entry. `cap` is config `map.softcap_subsystems`, default 20.
 note: `touched` is `YYYY-MM-DD` from frontmatter `touched:`, else the git mtime, else `""`. A missing `.rota/map/` gives `subsystems: []`. In text mode `--cap` prints only the nudge, or nothing below the cap.
 note: `--cap` only adds `cap`, `overCap` and the warning, so the verb keeps one output shape where the old pair had two.
+note: directory and file read errors fail with the path, including with `--cap`, rather than returning an incomplete subsystem list.
 note: `commitsBehind` is the count of commits HEAD is past the file's frontmatter `last_mapped_commit` (`git rev-list --count <sha>..HEAD`). It is omitted for a file without the field, with a value that is not a hash, or with a commit not in this history. When it is above config `map.staleCommits` (default 50; 0 disables), the verb prints `note: map <name> is <n> commits behind HEAD (map.staleCommits <limit>); re-run /rota-refactor --map` on stdout, repeats it on stderr and adds it to `warnings`. The text line of a subsystem with the field ends `, <n> commits behind`.
 
 ### rota qa query
@@ -392,10 +395,11 @@ note: same shape and rules as `rota map query`, over `.rota/qa/<target>.md`. The
 rota qa index
 repo: none
 data: {"key": "qa", "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: implied only
+exit: 5 when the QA directory or a QA file exists but cannot be read (the message names the path)
 old: hv-qa-index    (stdout status word)
 shim: same transform as `rota block`.
 note: the generated block text names `rota qa query <target>` (it names `.hv/bin/hv-qa-query` today).
+note: directory and file read errors fail with the path before writing the instructions file; a missing directory still gives the empty index.
 
 ### rota migrate external-knowledge
 rota migrate external-knowledge [--apply]
