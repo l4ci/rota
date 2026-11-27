@@ -80,6 +80,8 @@ Where `rota hook install` has run, a session that is not an orchestrator gets a 
 - `auto`: the Stop hook also blocks, at most 2 times, asking the session to run `/rota-pause` at the next task boundary.
 - `off`: nothing.
 
+A session on a detached HEAD gets neither: `/rota-pause` files its note by branch, so there is nowhere to write it. Check out a branch and the guard applies again.
+
 Only a fresh statusline reading counts (younger than 120 seconds), and only in Claude Code: Codex and OpenCode have no reading.
 
 ```bash

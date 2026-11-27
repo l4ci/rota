@@ -29,10 +29,12 @@ type SessionDecision struct {
 }
 
 // ApplySession loads a readable session, applies its hook rule and persists
-// only the fields its rule merges onto the fresh state. An invalid, missing or
-// unreadable session fails open (ok is false); a write failure does not suppress a decision.
+// only the fields its rule merges onto the fresh state. An empty HandoffPath
+// means the session has nowhere to file a note, so no rule asks for one: all
+// actions pass and leave the state untouched. That case, like an invalid,
+// missing or unreadable session, fails open (ok is false); a write failure does not suppress a decision.
 func ApplySession(in SessionIn) (d SessionDecision, ok bool) {
-	if in.Action == StopHandoff && in.HandoffPath == "" {
+	if in.HandoffPath == "" {
 		return d, false
 	}
 	path, err := StatePath(in.CommonDir, in.SessionID)
