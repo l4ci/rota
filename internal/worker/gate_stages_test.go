@@ -180,6 +180,46 @@ type adoptForge struct {
 
 func (f adoptForge) OpenPRs(context.Context) ([]tracker.PR, error) { return f.prs, nil }
 
+func TestGateAdoptPRRequiresSameRepository(t *testing.T) {
+	const branch = "kit/5-first"
+	fork := tracker.PR{Branch: branch, URL: "https://github.com/o/r/pull/99"}
+	owned := tracker.PR{Branch: branch, URL: ghURL, SameRepository: true}
+	for _, c := range []struct {
+		name string
+		prs  []tracker.PR
+		want string
+	}{
+		{name: "fork only", prs: []tracker.PR{fork}},
+		{name: "fork before owned", prs: []tracker.PR{fork, owned}, want: ghURL},
+		{name: "owned only", prs: []tracker.PR{owned}, want: ghURL},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := gittest.NewRepo(t, "main")
+			gittest.Run(t, dir, "remote", "add", "origin", dir)
+			if err := Update(dir, func(d *Doc) {
+				s := NewSlot("kit", branch, "/w/kit", "main", "h")
+				s.SetTask("#5")
+				d.AppendSlot(s)
+			}); err != nil {
+				t.Fatal(err)
+			}
+			run := gateRun{e: Env{Config: diskConfig, Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
+			target := GateTarget{Name: "kit", Task: "#5", Branch: branch}
+			forged := gateForgeResult{forge: adoptForge{prs: c.prs}}
+			out, result, done, err := run.stepAdoptPR(landing.GateResult{}, target, forged)
+			if err != nil || done {
+				t.Fatalf("adopt: done=%v err=%v result=%+v", done, err, result)
+			}
+			if out.PR != c.want || result.PR != c.want {
+				t.Errorf("target PR = %q, result PR = %q, want %q", out.PR, result.PR, c.want)
+			}
+			if got := LoadRegistryTolerant(dir).Slot("kit").PR(); got != c.want {
+				t.Errorf("recorded PR = %q, want %q", got, c.want)
+			}
+		})
+	}
+}
+
 func TestGateAdoptPRWriteSkipsMovedOnSlot(t *testing.T) {
 	for _, c := range []struct {
 		name, slotTask, slotBranch, wantPR string
@@ -200,7 +240,7 @@ func TestGateAdoptPRWriteSkipsMovedOnSlot(t *testing.T) {
 			}
 			run := gateRun{e: Env{Config: diskConfig, Git: git.Exec}, ctx: bg, root: dir, o: GateOpts{Slot: "kit", Base: "main"}}
 			target := GateTarget{Name: "kit", Task: "#5", Branch: "kit/5-first"}
-			forged := gateForgeResult{forge: adoptForge{prs: []tracker.PR{{Branch: "kit/5-first", URL: ghURL}}}}
+			forged := gateForgeResult{forge: adoptForge{prs: []tracker.PR{{Branch: "kit/5-first", URL: ghURL, SameRepository: true}}}}
 			if _, _, _, err := run.stepAdoptPR(landing.GateResult{}, target, forged); err != nil {
 				t.Fatal(err)
 			}
