@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/extknowledge"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/knowledge"
+	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/stamp"
 )
 
@@ -52,11 +53,11 @@ func knStore(c *Ctx) (knowledge.Store, string, error) {
 	if _, err := c.RepoPath(); err != nil { // exit 3 outside umbrella mode or for an unknown name
 		return knowledge.Store{}, "", err
 	}
-	root, repos, err := c.Repos()
+	root, paths, err := c.Repos()
 	if err != nil {
 		return knowledge.Store{}, "", err
 	}
-	st := knowledge.Store{Root: root, Repos: repos, Now: c.deps().Now, Today: c.deps().Today, Config: c.deps().Config}
+	st := knowledge.Store{Root: root, Repos: paths, Now: c.deps().Now, Today: c.deps().Today, Config: c.deps().Config}
 	if c.Repo != "" {
 		return st, c.Repo, nil
 	}
@@ -64,7 +65,7 @@ func knStore(c *Ctx) (knowledge.Store, string, error) {
 	if err != nil {
 		return st, "", err
 	}
-	return st, st.DefaultScope(cwd), nil
+	return st, knowledge.DefaultScope(c.deps().Git, cwd, repos.Load(root)), nil
 }
 
 // knErr maps knowledge sentinels to the exit codes of the verb contract.
