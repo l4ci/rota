@@ -92,7 +92,7 @@ Assign each finding a strength:
 
 Give each finding an **impact tier** beside its strength: **must**, **should** or **nice**, plus one `If skipped:` line (tiers in [`less-code.md`](less-code.md)). Order the findings by tier, then strength. The cap stays 8 to 12 across both lenses.
 
-When two fixes solve the same problem, take the one with the smaller net diff. Add a layer only when it removes more than it adds. Batch small findings (net change of 20 lines or fewer, no design choice) per package directory into one issue of at most 10 items.
+When two fixes solve the same problem, take the one with the smaller net diff. Add a layer only when it removes more than it adds. Batch small findings (net change of 20 lines or fewer, no design choice) per package directory into one issue of at most 10 items. List each item with its path, line range, kind and estimate. The issue takes the highest tier of its items.
 
 Tag each finding with a **dependency category**, which sets the test approach at its seam:
 
@@ -105,7 +105,7 @@ Before filing a finding, grep for the seam it proposes: one that already exists 
 
 ### Step 4 — File
 
-File one issue per finding. Never file a finding you cannot state acceptance for.
+File one issue per finding, except a batch of small findings, which is one issue (Step 3). Never file a finding you cannot state acceptance for.
 
 **Check each finding first.** Code moves while a review runs, so a premise may already be fixed.
 
