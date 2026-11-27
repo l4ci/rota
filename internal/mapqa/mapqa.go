@@ -24,6 +24,15 @@ import (
 	"github.com/l4ci/rota/internal/strutil"
 )
 
+// fileName is the identity of a map or QA file: its base name without ".md".
+// A map file's `subsystem:` frontmatter does not name it.
+func fileName(path string) string { return strings.TrimSuffix(filepath.Base(path), ".md") }
+
+// validName reports whether name can name a file directly under its directory.
+func validName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, `/\`)
+}
+
 // Query returns the body (without frontmatter) of each named file under dir
 // ("map" or "qa", below .rota/), in argument order, separated by a blank line.
 // Names with no file are returned in missing; an empty body prints nothing.
@@ -31,7 +40,7 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 	var b strings.Builder
 	first := true
 	for _, name := range names {
-		if name == "" || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
+		if !validName(name) {
 			missing = append(missing, name)
 			continue
 		}
@@ -65,7 +74,7 @@ type Entry struct {
 	Path string
 }
 
-// Entries lists the map files under root that declare a `subsystem:`, sorted by it.
+// Entries lists the map files under root that Query can name, sorted by name.
 func Entries(root string) []Entry {
 	files := fsio.GlobDir(rotatree.File(root, rotatree.MapDir), "*.md")
 	sort.Strings(files)
@@ -76,7 +85,7 @@ func Entries(root string) []Entry {
 			continue
 		}
 		fm, _, body := frontmatter.Parse(raw)
-		if name := frontmatter.Str(fm, "subsystem"); name != "" {
+		if name := fileName(f); validName(name) {
 			out = append(out, Entry{name, fm, body, f})
 		}
 	}
@@ -136,8 +145,7 @@ func QAIndexBlock(root string) string {
 				continue
 			}
 			fm, _, _ := frontmatter.Parse(raw)
-			name := strings.TrimSuffix(filepath.Base(f), ".md")
-			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", name, strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
+			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", fileName(f), strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
 		}
 		bullets = strings.Join(lines, "\n")
 	}
