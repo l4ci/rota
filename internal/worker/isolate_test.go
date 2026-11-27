@@ -36,9 +36,15 @@ printf '%s\n' "$store"
 	if got := strings.TrimSpace(result.Stdout); got != "/caller/data/pnpm/store/v11" {
 		t.Fatalf("isolated pnpm store = %q, want caller store /caller/data/pnpm/store/v11", got)
 	}
+	for _, kv := range out {
+		key, _, _ := strings.Cut(kv, "=")
+		if key == "npm_config_store_dir" || key == "NPM_CONFIG_STORE_DIR" {
+			t.Errorf("added npm environment config %q; pnpm discovery must use its own variable", kv)
+		}
+	}
 }
 
-func TestIsolatedEnvironKeepsLegacyPnpmStore(t *testing.T) {
+func TestIsolatedEnvironKeepsCallerLegacyPnpmStore(t *testing.T) {
 	bin := t.TempDir()
 	stub := `#!/bin/sh
 store=${npm_config_store_dir:-$HOME/.local/share/pnpm/store}
@@ -49,7 +55,7 @@ printf '%s\n' "$store"
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin)
-	out, err := IsolatedEnviron([]string{"PATH=" + bin, "HOME=/caller/home"}, t.TempDir())
+	out, err := IsolatedEnviron([]string{"PATH=" + bin, "HOME=/caller/home", "npm_config_store_dir=/caller/legacy/store"}, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,8 +63,8 @@ printf '%s\n' "$store"
 	if err != nil || result.ExitCode != 0 {
 		t.Fatalf("isolated legacy pnpm store path: %+v, %v", result, err)
 	}
-	if got := strings.TrimSpace(result.Stdout); got != "/caller/home/.local/share/pnpm/store/v3" {
-		t.Fatalf("isolated legacy pnpm store = %q, want caller store /caller/home/.local/share/pnpm/store/v3", got)
+	if got := strings.TrimSpace(result.Stdout); got != "/caller/legacy/store/v3" {
+		t.Fatalf("isolated legacy pnpm store = %q, want caller store /caller/legacy/store/v3", got)
 	}
 }
 

@@ -69,8 +69,7 @@ func pnpmStore(environ []string) []string {
 	if store == "" {
 		return nil
 	}
-	// pnpm 11+ reads pnpm_config_*, while older releases read npm_config_*.
-	return []string{"pnpm_config_store_dir=" + store, "npm_config_store_dir=" + store}
+	return []string{"pnpm_config_store_dir=" + store}
 }
 
 // goCaches is KEY=value for each Go cache variable: environ's own value when
