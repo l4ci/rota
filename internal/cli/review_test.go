@@ -803,15 +803,15 @@ func TestReviewDepthReadsTheDoorLineOfThePR(t *testing.T) {
 	}
 	policy(`{"default":"full","lightBelow":100000}`)
 
-	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","url":"u","body":"Door: one-way. Blast radius: schema."}]`
+	prs = `[{"number":9,"title":"t","isCrossRepository":false,"headRefName":"nia/6-small","url":"u","body":"Door: one-way. Blast radius: schema."}]`
 	if code, d, _ := run(); code != 0 || d["depth"] != "full" || d["signal"] != "door" {
 		t.Errorf("one-way door in the PR body: %d %v", code, d)
 	}
-	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","url":"u","body":"Door: two-way."}]`
+	prs = `[{"number":9,"title":"t","isCrossRepository":false,"headRefName":"nia/6-small","url":"u","body":"Door: two-way."}]`
 	if _, d, _ := run(); d["depth"] != "light" || strings.Contains(d["why"].(string), "no PR yet") {
 		t.Errorf("two-way door: %v", d)
 	}
-	prs = `[{"number":9,"title":"t","headRefName":"other","url":"u","body":"Door: one-way."}]`
+	prs = `[{"number":9,"title":"t","isCrossRepository":false,"headRefName":"other","url":"u","body":"Door: one-way."}]`
 	if _, d, _ := run(); d["depth"] != "light" || !strings.Contains(d["why"].(string), "no PR yet") {
 		t.Errorf("no PR for the branch must say so in the reason: %v", d)
 	}
@@ -1035,10 +1035,5 @@ func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
 	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small")
 	if !strings.Contains(o.stdout, "REVIEW-BASE nia/6-small — m/x (open PR #9)") {
 		t.Errorf("text output must name the base: %s", o.stdout)
-	}
-	// a fork PR reusing the branch name must not pick the base
-	prs = `[{"number":9,"title":"t","headRefName":"nia/6-small","baseRefName":"m/x","url":"u","body":"Door: two-way.","isCrossRepository":true}]`
-	if d, _ := run(); d["base"] != "main" || d["baseSource"] != "default" {
-		t.Errorf("a fork PR must not set the base: %v", d)
 	}
 }

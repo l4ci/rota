@@ -137,7 +137,7 @@ func supportKeys(m roundwatch.Snapshot) roundwatch.Snapshot {
 func TestWatchWakesOnSupportPRHead(t *testing.T) {
 	f := &swForge{heads: map[int]string{9: "aaa111"}, writers: map[string]bool{"ann": true}}
 	f.issue(7, swLabel)
-	f.prs = []tracker.PR{{Number: 9, Branch: "mac-ben/7-export", Body: "Closes #7", URL: "https://github.com/o/r/pull/9"}}
+	f.prs = []tracker.PR{{Number: 9, SameRepository: true, Branch: "mac-ben/7-export", Body: "Closes #7", URL: "https://github.com/o/r/pull/9"}}
 	pass := swWatch(t, f, roundcfg.RoleMain, "")
 	first := supportKeys(pass())
 	if first[roundwatch.SupportKey("7", "pr-head")] != "aaa111" || first[roundwatch.SupportKey("7", "pr-opened")] != "#9" {
@@ -159,7 +159,7 @@ func TestWatchWakesOnSupportPRHead(t *testing.T) {
 func TestWatchWakesOnSupportPRHeadWithoutLabel(t *testing.T) {
 	f := &swForge{heads: map[int]string{9: "aaa111"}, writers: map[string]bool{"ann": true}}
 	f.issue(7, "type:bug")
-	f.prs = []tracker.PR{{Number: 9, Branch: "mac-ben/7-export", Body: "Closes #7"}, {Number: 10, Branch: "ben/8-other", Body: "Closes #8"}}
+	f.prs = []tracker.PR{{Number: 9, SameRepository: true, Branch: "mac-ben/7-export", Body: "Closes #7"}, {Number: 10, SameRepository: true, Branch: "ben/8-other", Body: "Closes #8"}}
 	pass := swWatch(t, f, roundcfg.RoleMain, "")
 	first := supportKeys(pass())
 	if first[roundwatch.SupportKey("7", "pr-head")] != "aaa111" || first[roundwatch.SupportKey("7", "pr-opened")] != "#9" || len(first) != 2 {
@@ -191,7 +191,7 @@ func TestWatchWakesOnSupportBranchWithoutPR(t *testing.T) {
 	if first[key] != "ccc333" || len(first) != 2 {
 		t.Fatalf("first pass = %v", first)
 	}
-	f.prs = []tracker.PR{{Number: 9, Branch: "mac-ben/7-export", Body: "Closes #7"}}
+	f.prs = []tracker.PR{{Number: 9, SameRepository: true, Branch: "mac-ben/7-export", Body: "Closes #7"}}
 	f.heads[9] = "ccc333"
 	second := supportKeys(pass())
 	if _, ok := second[key]; ok || second[roundwatch.SupportKey("7", "pr-opened")] != "#9" {

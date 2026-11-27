@@ -219,7 +219,7 @@ func TestAdoptWithoutPRRecordsTheBranchsOpenPR(t *testing.T) {
 	root, e, be := adoptFixture(t)
 	fr := &fakeRemote{prs: []tracker.PR{
 		{Number: 3, Branch: "someone/else", URL: "https://x/pull/3"},
-		{Number: 7, Branch: "codex/12-thing", URL: "https://x/pull/7"},
+		{Number: 7, SameRepository: true, Branch: "codex/12-thing", URL: "https://x/pull/7"},
 	}}
 	e.Forge = fr.asForge()
 	res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})

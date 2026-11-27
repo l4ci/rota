@@ -432,6 +432,9 @@ func (w *tickWorld) FollowUp() roundtick.FollowUpSources {
 		List: func(ctx context.Context, fg round.ReviewForge) ([]round.FollowUp, []string, error) {
 			return w.renv.FollowUps(ctx, w.root, fg)
 		},
+		Receives: func(ctx context.Context, slot string, reserve bool) error {
+			return w.renv.Receives(ctx, w.root, w.board, w.TolerantRegistry(), slot, reserve)
+		},
 		Start: func(ctx context.Context, f round.FollowUp, slot string, reserve bool) ([]string, error) {
 			res, err := w.renv.Continue(ctx, w.root, w.board, round.ContinueOpts{FollowUp: f, To: slot, Reserve: reserve, MaxBounces: w.set.MaxBounces})
 			return res.Warnings, err

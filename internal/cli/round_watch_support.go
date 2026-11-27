@@ -87,11 +87,11 @@ func supportSnapshot(ctx context.Context, env round.Env, root string) roundwatch
 		return out
 	}
 	hasPR := map[string]bool{}
-	for _, pr := range prs {
-		if !strings.HasPrefix(pr.Branch, env.Round.Support+"-") {
+	for branch, pr := range tracker.BranchPRs(prs) {
+		if !strings.HasPrefix(branch, env.Round.Support+"-") {
 			continue
 		}
-		hasPR[pr.Branch] = true
+		hasPR[branch] = true
 		id := supportPRID(env, pr)
 		out[roundwatch.SupportKey(id, roundwatch.SupportPROpened)] = "#" + strconv.Itoa(pr.Number)
 		if v, err := env.Forge.PRView(ctx, pr.Number); err == nil && v.HeadSHA != "" {

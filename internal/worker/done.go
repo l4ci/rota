@@ -257,10 +257,8 @@ func donePRView(env Env, root string, sl *Slot) (donePR, bool) {
 	}
 	prs, known := env.openPRs(env.Ctx, root)
 	if known {
-		for _, p := range prs {
-			if p.Branch == sl.Branch() {
-				return donePR{URL: p.URL, Title: p.Title, Branch: p.Branch, Body: p.Body}, true
-			}
+		if p, ok := tracker.BranchPR(prs, sl.Branch()); ok {
+			return donePR{URL: p.URL, Title: p.Title, Branch: p.Branch, Body: p.Body}, true
 		}
 	}
 	return donePR{}, false

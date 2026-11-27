@@ -118,7 +118,7 @@ func TestAssignOntoDoneSlotWithoutPRAdoptsTheBranchPR(t *testing.T) {
 	f := newMoveFx(t)
 	branch := f.slot("ben").Branch()
 	f.finish(t, "ben", "")
-	f.forge.prs = []tracker.PR{{Number: 7, Branch: branch, URL: pr7}}
+	f.forge.prs = []tracker.PR{{Number: 7, SameRepository: true, Branch: branch, URL: pr7}}
 
 	if _, err := f.assign("13", "ben"); err != nil {
 		t.Fatalf("assign: %v", err)
