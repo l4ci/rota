@@ -180,8 +180,9 @@ type itsaplanMember struct {
 	Username string `json:"username"`
 }
 
-// itsaplanMeta is GET /projects/:key, read once per process: the names that
-// every write needs as numeric ids (columns, labels, custom fields).
+// itsaplanMeta is GET /projects/:key, read once per adapter: the names that
+// every write needs as numeric ids (columns, labels, custom fields). Only the
+// labels are reread, when a name or id is not among them (refreshLabels).
 type itsaplanMeta struct {
 	Columns      []itsaplanColumn           `json:"columns"`
 	Labels       []itsaplanLabel            `json:"labels"`
@@ -229,14 +230,24 @@ func (m *itsaplanMeta) memberName(userID string) string {
 	return userID
 }
 
-// projectMeta reads the project once per adapter. A 404 is a project the key
-// cannot see, which is a setup problem and so KindUnavailable.
+// projectMeta reads the project once per adapter.
 func (t *Itsaplan) projectMeta(ctx context.Context) (*itsaplanMeta, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.meta != nil {
 		return t.meta, nil
 	}
+	m, err := t.readProject(ctx)
+	if err != nil {
+		return nil, err
+	}
+	t.meta = m
+	return t.meta, nil
+}
+
+// readProject is GET /projects/:key. A 404 is a project the key cannot see,
+// which is a setup problem and so KindUnavailable.
+func (t *Itsaplan) readProject(ctx context.Context) (*itsaplanMeta, error) {
 	var m itsaplanMeta
 	if err := t.rest.Do(ctx, http.MethodGet, t.projectPath(""), nil, &m); err != nil {
 		if IsKind(err, KindNotFound) {
@@ -244,8 +255,34 @@ func (t *Itsaplan) projectMeta(ctx context.Context) (*itsaplanMeta, error) {
 		}
 		return nil, err
 	}
-	t.meta = &m
-	return t.meta, nil
+	return &m, nil
+}
+
+// refreshLabels rereads the project's labels, since another writer may have
+// made one. projectMeta must have succeeded first.
+func (t *Itsaplan) refreshLabels(ctx context.Context) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	m, err := t.readProject(ctx)
+	if err != nil {
+		return err
+	}
+	t.meta.Labels = m.Labels
+	return nil
+}
+
+// refreshUnknownLabels rereads the labels once when any of issues carries a
+// label id that is not among them.
+func (t *Itsaplan) refreshUnknownLabels(ctx context.Context, m *itsaplanMeta, issues ...itsaplanIssue) error {
+	t.mu.Lock()
+	unknown := slices.ContainsFunc(issues, func(d itsaplanIssue) bool {
+		return slices.ContainsFunc(d.LabelIDs, func(id int) bool { return m.labelName(id) == "" })
+	})
+	t.mu.Unlock()
+	if !unknown {
+		return nil
+	}
+	return t.refreshLabels(ctx)
 }
 
 func (t *Itsaplan) projectPath(rest string) string {
@@ -296,11 +333,13 @@ func (t *Itsaplan) norm(m *itsaplanMeta, d itsaplanIssue) Issue {
 	}
 	key := strutil.FirstNonEmpty(d.Identifier, t.project+"-"+strconv.Itoa(d.SequenceNumber))
 	is := Issue{Key: IssueKey(key), Title: d.Title, Body: body, Labels: []string{}, State: "open", Assignees: []string{}}
+	t.mu.Lock()
 	for _, id := range d.LabelIDs {
 		if n := m.labelName(id); n != "" {
 			is.Labels = append(is.Labels, n)
 		}
 	}
+	t.mu.Unlock()
 	if d.AssigneeUserID != nil && *d.AssigneeUserID != "" {
 		is.Assignees = append(is.Assignees, m.memberName(*d.AssigneeUserID))
 	}
@@ -364,6 +403,9 @@ func (t *Itsaplan) Get(ctx context.Context, key IssueKey, withComments bool) (Is
 	}
 	d, err := t.issue(ctx, key)
 	if err != nil {
+		return Issue{}, err
+	}
+	if err := t.refreshUnknownLabels(ctx, m, d); err != nil {
 		return Issue{}, err
 	}
 	is := t.norm(m, d)
@@ -449,6 +491,9 @@ func (t *Itsaplan) List(ctx context.Context, f ListFilter) ([]Issue, error) {
 			return nil, err
 		}
 		got = append(got, archived...)
+	}
+	if err := t.refreshUnknownLabels(ctx, m, got...); err != nil {
+		return nil, err
 	}
 	wantLabels := uniq(f.Labels)
 	out := make([]Issue, 0, len(got))
