@@ -475,8 +475,9 @@ func releaseCheckLine(c *Ctx, be backlog.IssueBackend, id string) (any, string) 
 	for _, b := range bodies {
 		feats = append(feats, ms.Child{Type: "F", Body: b})
 	}
-	uncovered := len(ms.Uncovered(body, feats))
-	data := jsonx.Obj("faults", faults, "uncovered", uncovered, "ok", faults+uncovered == 0)
+	ids := ms.Uncovered(body, feats)
+	uncovered := len(ids)
+	data := jsonx.Obj("faults", faults, "uncovered", uncovered, "uncoveredIds", jsonx.Strings(ids), "ok", faults+uncovered == 0)
 	if faults+uncovered == 0 {
 		return data, "check: clean"
 	}

@@ -799,7 +799,7 @@ func TestReleaseMilestoneCheck(t *testing.T) {
 	want := map[string]any{"clear": false,
 		"blocked":   []any{map[string]any{"number": float64(1), "title": "One", "label": "needs-review"}, map[string]any{"number": float64(2), "title": "Two", "label": "needs-review"}, map[string]any{"number": float64(5), "title": "Wip", "label": "in-progress"}},
 		"stillOpen": []any{map[string]any{"number": float64(6), "title": "Plain"}},
-		"check":     map[string]any{"faults": float64(0), "uncovered": float64(0), "ok": true}}
+		"check":     map[string]any{"faults": float64(0), "uncovered": float64(0), "uncoveredIds": []any{}, "ok": true}}
 	if code != 1 || !reflect.DeepEqual(data, want) || !strings.Contains(msg, "M01 is blocked by 3 open issue(s)") {
 		t.Fatalf("blocked: exit %d data %v (%s)", code, data, msg)
 	}
@@ -834,7 +834,7 @@ func TestReleaseMilestoneCheckLine(t *testing.T) {
 	}
 	root, deps := a8Project(t, f)
 	code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
-	want := map[string]any{"faults": float64(1), "uncovered": float64(1), "ok": false}
+	want := map[string]any{"faults": float64(1), "uncovered": float64(1), "uncoveredIds": []any{"AC-2"}, "ok": false}
 	if code != 0 || !reflect.DeepEqual(data["check"], want) {
 		t.Fatalf("exit %d data %v (%s)", code, data, msg)
 	}
@@ -869,7 +869,8 @@ func TestReleaseMilestoneCheckUncovered(t *testing.T) {
 		f.Fake.Issues[7].Labels, f.Fake.Issues[7].Body, f.Fake.Issues[7].StateReason = []string{"type:feature"}, serves(c.dropped), "not_planned"
 		root, deps := a8Project(t, f)
 		code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
-		want := map[string]any{"faults": float64(0), "uncovered": c.uncovered, "ok": c.uncovered == 0}
+		ids := []any{"AC-1", "AC-2", "AC-3"}[3-int(c.uncovered):]
+		want := map[string]any{"faults": float64(0), "uncovered": c.uncovered, "uncoveredIds": ids, "ok": c.uncovered == 0}
 		if code != 0 || !reflect.DeepEqual(data["check"], want) {
 			t.Errorf("%s: exit %d check %v (%s)", c.name, code, data["check"], msg)
 		}
