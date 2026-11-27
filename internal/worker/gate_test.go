@@ -1268,13 +1268,41 @@ func TestGateAlreadyMergedPRTarget(t *testing.T) {
 // A fast-forward refused by a dirty file the merge touches is not divergence:
 // the verdict names the file, and says the merged tree was not verified.
 func TestGateMergedRemotelyCause(t *testing.T) {
+	incomingFile := func(w *world, name string) {
+		w.t.Helper()
+		for _, dir := range []string{w.worker, w.dir} {
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, name)), 0o755); err != nil {
+				w.t.Fatal(err)
+			}
+			content := "local content\n"
+			if dir == w.worker {
+				content = "incoming content\n"
+			}
+			if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+				w.t.Fatal(err)
+			}
+		}
+		gittest.Run(w.t, w.worker, "add", "--", name)
+		gittest.Run(w.t, w.worker, "commit", "-qm", "incoming path")
+		gittest.Run(w.t, w.worker, "push", "-q", "origin", "w1")
+		w.forge("sha", gittest.Run(w.t, w.worker, "rev-parse", "HEAD"))
+	}
 	for _, c := range []struct {
 		name  string
 		setup func(w *world)
 		want  string
 	}{
-		{"dirty file the merge touches", func(w *world) {
+		{"untracked root file the merge touches", func(w *world) {
 			os.WriteFile(filepath.Join(w.dir, "work.txt"), []byte("local edit\n"), 0o644)
+		}, "local changes would be overwritten: work.txt"},
+		{"untracked file in a new directory", func(w *world) {
+			incomingFile(w, "n/x")
+		}, "local changes would be overwritten: n/x"},
+		{"untracked non-ASCII path with spaces", func(w *world) {
+			incomingFile(w, "café space.txt")
+		}, "local changes would be overwritten: café space.txt"},
+		{"staged rename onto incoming file", func(w *world) {
+			gittest.Run(w.t, w.dir, "mv", "seed.txt", "work.txt")
 		}, "local changes would be overwritten: work.txt"},
 		{"local-only commit", func(w *world) {
 			os.WriteFile(filepath.Join(w.dir, "local.txt"), []byte("local only\n"), 0o644)

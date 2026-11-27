@@ -1,8 +1,11 @@
 // Package pidlive is the one owner of process introspection: whether a pid is
 // still running (signal 0 succeeds and it is not a zombie), and its parent,
 // start time, command name, working directory and descendants. Host, roundlease,
-// doctor and worker read the process table only through a Source, so a test
+// doctor and worker read the process table through a Source, so a test
 // replaces it with a recorded table instead of the real ps and /proc.
+//
+// ReadPathUses supplies the paths each process uses for cleanup, including
+// working directories, open files and environment directories where readable.
 //
 // It also owns the pid-owned marker file (Marker): write as owner, read what
 // is live, remove only if still the caller's.
