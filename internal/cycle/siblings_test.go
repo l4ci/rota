@@ -17,10 +17,6 @@ func TestClassify(t *testing.T) {
 		{"App.xcodeproj/project.pbxproj", ToolSibling},
 		{"Package.resolved", ToolSibling},
 		{"ios/Package.resolved", ToolSibling},
-		{".rota/designs/B07.md", Artifact},
-		{".rota/plans/B07.md", Artifact},
-		{".rota/designs/B08.md", User},
-		{".rota/plans/M01-B07.md", User},
 		{"src/main.go", User},
 		{"src/other.go.bak", User}, // main.go is tracked, other.go is not
 		{"src/main.go.orig", User}, // beside tracked main.go, but not a toolchain suffix

@@ -23,8 +23,6 @@ func TestReady(t *testing.T) {
 		{"lowercase heading", map[string]string{".rota/bugs/B01.md": "## my acceptance\n"}, "B01", []string{}, nil},
 		{"checkbox", map[string]string{".rota/bugs/B01.md": "  * [X] done\n"}, "B01", []string{}, nil},
 		{"word without heading", map[string]string{".rota/bugs/B01.md": "acceptance\n"}, "B01", both, nil},
-		{"design note", map[string]string{".rota/designs/B02.md": "d"}, "B02", []string{}, nil},
-		{"plan note", map[string]string{".rota/plans/M01-B02.md": "p"}, "B02", []string{}, nil},
 		{"plan of another item", map[string]string{".rota/plans/M01-B20.md": "p"}, "B02", both, nil},
 		{"unknown", nil, "B99", nil, ErrNotFound},
 	}
@@ -36,6 +34,24 @@ func TestReady(t *testing.T) {
 				t.Fatalf("got %v, %v; want %v, %v", got, err, c.want, c.err)
 			}
 		})
+	}
+}
+
+func TestFileNotePresenceAgrees(t *testing.T) {
+	for _, file := range []string{".rota/designs/B02.md", ".rota/plans/M01-B02.md"} {
+		for _, text := range []string{"", " \n\t\r\n", "do the work\n"} {
+			t.Run(file+"/"+text, func(t *testing.T) {
+				f, _ := proj(t, rotaFiles(map[string]string{file: text}))
+				want := text == "do the work\n"
+				if has, err := HasNote(f, "B02"); err != nil || has != want {
+					t.Errorf("HasNote = %v, %v; want %v", has, err, want)
+				}
+				reasons, err := f.Ready("B02")
+				if err != nil || (len(reasons) == 0) != want {
+					t.Errorf("Ready = %v, %v; want ready %v", reasons, err, want)
+				}
+			})
+		}
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/l4ci/rota/internal/rotatree"
+	"github.com/l4ci/rota/internal/artifact"
 )
 
 // Kind classifies a dirty path for the clean-tree sweep.
@@ -25,14 +25,12 @@ var siblingExts = map[string]bool{".uid": true, ".import": true, ".meta": true}
 
 // Classify says what a dirty path is. tracked reports whether a path is under
 // version control; itemIDs are the target items, matched exactly against
-// .rota/designs/<ID>.md and .rota/plans/<ID>.md.
+// .rota/designs/<ID>.md and .rota/plans/<milestone>-<ID>.md.
 func Classify(p string, tracked func(string) bool, itemIDs []string) Kind {
 	p = path.Clean(strings.ReplaceAll(p, "\\", "/"))
 	base := path.Base(p)
-	for _, id := range itemIDs {
-		if p == rotatree.Rel(rotatree.DesignsDir, id+".md") || p == rotatree.Rel(rotatree.PlansDir, id+".md") {
-			return Artifact
-		}
+	if artifact.ItemFileOwner(p, itemIDs) != "" {
+		return Artifact
 	}
 	switch {
 	case base == ".DS_Store", base == "Package.resolved":

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/pystr"
@@ -98,12 +99,9 @@ type noteFiler interface{ hasNote(ref string) bool }
 var _ noteFiler = (*File)(nil)
 
 func (f *File) hasNote(ref string) bool {
-	if _, err := os.Stat(f.rota("designs", ref+".md")); err == nil {
-		return true
-	}
-	entries, _ := os.ReadDir(f.rota("plans"))
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), "-"+ref+".md") {
+	for _, rel := range artifact.ItemFiles(f.Root, ref) {
+		text, err := os.ReadFile(filepath.Join(f.Root, filepath.FromSlash(rel)))
+		if err == nil && noteText(string(text)) {
 			return true
 		}
 	}
@@ -112,7 +110,8 @@ func (f *File) hasNote(ref string) bool {
 
 // Ready lists what the item lacks to be startable (FileBackend.ready_reasons):
 // acceptance criteria in the detail file, or a design (.rota/designs/<ID>.md) or
-// plan (.rota/plans/*-<ID>.md) note. An empty list means ready.
+// plan (.rota/plans/<milestone>-<ID>.md) note with nonblank text. An empty
+// list means ready.
 func (f *File) Ready(ref string) ([]string, error) {
 	if _, _, ok := FindOrigin(f.Corpus(), ref); !ok {
 		return nil, errf(ErrNotFound, "[%s] not found in BACKLOG.md or ARCHIVE.md", ref)

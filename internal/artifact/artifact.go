@@ -1,5 +1,5 @@
 // Package artifact holds what the document verbs (milestone, plan, design,
-// spike, proof, debug counter) share: the keyed-doc stores (FileDocs for
+// spike, proof, debug counter) share: item-file ownership, the keyed-doc stores (FileDocs for
 // .rota/<dir>/<key>.md, NoteDocs for issue notes), the Notes seam to the
 // issue backend, ListDocs, SplitCSV and Repos. Errors are
 // exitcode.Errors; internal/cli maps them to the exit table.
