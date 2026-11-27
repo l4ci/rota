@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landing"
 	"slices"
 	"strings"
@@ -69,7 +70,7 @@ func interactionBody(it landing.Integration, r landing.TrainResult) string {
 	fmt.Fprintf(&b, "## Problem\n\n%s\n\n", strings.TrimSpace(strings.SplitN(r.Err, "\n", 2)[0]))
 	for _, m := range it.Members {
 		if m.Pending {
-			fmt.Fprintf(&b, "%s does not merge onto %s: conflict in %s.\n\n", m.Target, it.Branch, strings.Join(m.Conflicts, ", "))
+			fmt.Fprintf(&b, "%s does not merge onto %s: conflict in %s.\n\n", m.Target, it.Branch, land.ConflictList(m.Conflicts))
 		}
 	}
 	if f := r.Original; f != nil {

@@ -197,10 +197,10 @@ func TestMergeBranchWordsFailuresThroughLand(t *testing.T) {
 	if !errors.As(err, &ref) || ref.By != blockedby.Conflict {
 		t.Fatalf("conflict: %v", err)
 	}
-	if want, _ := land.Classify(&land.ConflictError{Out: "CONFLICT (content): Merge conflict in x"}).Refusal(mergeWords("feat")); ref.Msg != want {
+	if want, _ := land.Classify(&land.ConflictError{Paths: []string{"x.go"}}).Refusal(mergeWords("feat")); ref.Msg != want {
 		t.Errorf("conflict msg %q, want %q", ref.Msg, want)
 	}
-	if !strings.Contains(ref.Msg, "feat") || !strings.Contains(ref.Msg, "x") || !contains(cg.calls, "merge --abort") {
+	if !strings.Contains(ref.Msg, "feat") || !strings.Contains(ref.Msg, "x.go") || !contains(cg.calls, "merge --abort") {
 		t.Errorf("conflict msg %q, calls %v", ref.Msg, cg.calls)
 	}
 
@@ -231,6 +231,9 @@ type conflictGit struct{ *fakeGit }
 
 func (c *conflictGit) Run(args ...string) (r git.Result, err error) {
 	r, err = c.fakeGit.Run(args...)
+	if strings.HasPrefix(strings.Join(args, " "), "diff --name-only -z --diff-filter=U") {
+		return git.Result{Stdout: "x.go\x00"}, nil
+	}
 	if strings.HasPrefix(strings.Join(args, " "), "merge --no-ff") {
 		r.Stdout = "CONFLICT (content): Merge conflict in x\nAutomatic merge failed"
 	}
