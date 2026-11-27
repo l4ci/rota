@@ -175,8 +175,13 @@ func TestObserveRunsThePassWithoutMutating(t *testing.T) {
 	for _, p := range r.Proposed {
 		got = append(got, p.Action.Action)
 	}
-	if !reflect.DeepEqual(got, []string{"reconcile", "gate", "mint", "assign"}) {
-		t.Fatalf("proposed %v, want the world's repair then the landing", got)
+	if !reflect.DeepEqual(got, []string{"reconcile", "assign", "gate", "mint"}) {
+		t.Fatalf("proposed %v, want repair, assign-ahead, landing, then mint", got)
+	}
+	// The head read discovers the closed-PR fill bypass before assign-ahead,
+	// so the proposal fills ben and lands its queued PR, not its new branch.
+	if r.Proposed[1].Action.Target != "#2" || r.Proposed[2].Action.Target != "#11" {
+		t.Fatalf("assign-ahead and gate targets: %+v", r.Proposed)
 	}
 	if len(gated) != 0 || w.assigns != 0 || w.audits != 0 || w.landings != 0 || mints != 0 || len(r.Did) != 0 {
 		t.Logf("landing writes %d, mint writes %d", w.landings, mints)
