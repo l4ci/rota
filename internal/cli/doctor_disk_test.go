@@ -12,15 +12,150 @@ import (
 
 	"github.com/l4ci/rota/internal/doctor"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/proc"
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func fixedDisk(free, total uint64) func(string) *doctor.Disk {
 	return func(dir string) *doctor.Disk {
 		return &doctor.Disk{Path: dir, Free: free, Total: total}
+	}
+}
+
+func TestDoctorLeftoverHintsWithoutRunnableReap(t *testing.T) {
+	for _, state := range []string{"no-project", "not-a-git-repo", "invalid-registry", "invalid-round-config"} {
+		t.Run(state, func(t *testing.T) {
+			root, sys := t.TempDir(), t.TempDir()
+			if state != "no-project" {
+				if err := os.Mkdir(filepath.Join(root, ".rota"), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if state == "invalid-registry" {
+				os.WriteFile(filepath.Join(root, ".rota", "workers.json"), []byte("broken"), 0o600)
+			}
+			if state == "invalid-round-config" {
+				os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(`{"round":{"roster":42}}`), 0o600)
+			}
+			old := filepath.Join(sys, "rota-smoke.old")
+			if err := os.Mkdir(old, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			ageTree(t, old, time.Now().Add(-3*time.Hour))
+			d := testDeps()
+			d.TempDir = func() string { return sys }
+			d.ProcessUses = func() ([]reap.ProcUse, error) { return nil, nil }
+			d.Git = func(context.Context, string, ...string) (git.Result, error) {
+				if state == "no-project" || state == "not-a-git-repo" {
+					return git.Result{ExitCode: 128, Stderr: "fatal: not a git repository"}, nil
+				}
+				return git.Result{Stdout: "worktree " + root + "\n"}, nil
+			}
+			d.ReapEnv = func(context.Context, string) (round.Env, reap.HostOps) {
+				return round.Env{Git: d.Git, Base: "main", Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig})}, nil
+			}
+			project := root
+			if state == "no-project" {
+				project = ""
+			}
+			in, _ := d.doctorReapInput(context.Background(), project)
+			got := strings.Join(doctorLeftovers(context.Background(), d.Git, project, sys, in, d.ProcessUses), "\n")
+			if !strings.Contains(got, "1 leaked temp dirs") || strings.Contains(got, "`rota reap") {
+				t.Fatalf("unrunnable reap hint or lost count: %s", got)
+			}
+		})
+	}
+}
+
+func TestDoctorPrunableHintRemovesOnlyCountedCheckouts(t *testing.T) {
+	root, d := reapProject(t, nil, true)
+	sys := t.TempDir()
+	d.TempDir = func() string { return sys }
+	paths := []struct{ path, branch string }{
+		{filepath.Join(root, ".worktrees", "gone"), "kit/4-gone"},
+		{filepath.Join(root, ".worktrees", "parked"), "park/ben"},
+		{filepath.Join(t.TempDir(), "outside"), "kit/5-outside"},
+	}
+	for _, p := range paths {
+		gittest.Run(t, root, "worktree", "add", "-q", "-b", p.branch, p.path, "HEAD")
+		if err := os.RemoveAll(p.path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	in, warn := d.doctorReapInput(context.Background(), root)
+	if in == nil || len(warn) != 0 {
+		t.Fatalf("input: %v, warnings: %v", in, warn)
+	}
+	hint := strings.Join(doctorLeftovers(context.Background(), d.Git, root, "", in, nil), "\n")
+	preview := "rota reap --kind worktree --prunable"
+	apply := preview + " --apply"
+	if !strings.HasPrefix(hint, "1 stale scratch worktrees") || !strings.Contains(hint, "`"+apply+"`") {
+		t.Fatalf("hint must target only the counted worktree: %s", hint)
+	}
+	for _, command := range []string{preview, apply} {
+		code, out, stderr := rotaInWith(t, d, root, append([]string{"--json"}, strings.Fields(command)[1:]...)...)
+		if code != 0 {
+			t.Fatalf("hint command %q: %d %s %s", command, code, out, stderr)
+		}
+		got := data(t, out)
+		if ids := candIDs(got); !reflect.DeepEqual(ids, []string{"worktree:gone"}) {
+			t.Fatalf("hint candidates: %v", ids)
+		}
+		if command == apply && !reflect.DeepEqual(got["reaped"], []any{"worktree:gone"}) {
+			t.Fatalf("reaped: %v", got["reaped"])
+		}
+	}
+	listed := gittest.Run(t, root, "worktree", "list", "--porcelain")
+	for _, path := range []string{filepath.Join(root, ".worktrees", "old"), paths[1].path, paths[2].path} {
+		if !strings.Contains(listed, "worktree "+path+"\n") {
+			t.Errorf("uncounted checkout removed: %s", path)
+		}
+	}
+	for _, kind := range []string{"", "tmp", "worktree,tmp"} {
+		args := []string{"reap", "--prunable"}
+		if kind != "" {
+			args = append(args, "--kind", kind)
+		}
+		code, _, stderr := rotaInWith(t, d, root, args...)
+		if code != 2 || !strings.Contains(stderr, "requires --kind worktree") {
+			t.Errorf("kind %q: %d %s", kind, code, stderr)
+		}
+	}
+}
+
+func TestDoctorSysTmpHintRunsInProject(t *testing.T) {
+	root, d := reapProject(t, nil, true)
+	sys := t.TempDir()
+	d.TempDir = func() string { return sys }
+	d.ProcessUses = func() ([]reap.ProcUse, error) { return nil, nil }
+	old := filepath.Join(sys, "rota-smoke.old")
+	if err := os.Mkdir(old, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ageTree(t, old, time.Now().Add(-3*time.Hour))
+	in, warn := d.doctorReapInput(context.Background(), root)
+	if in == nil || len(warn) != 0 {
+		t.Fatalf("input: %v, warnings: %v", in, warn)
+	}
+	hint := strings.Join(doctorLeftovers(context.Background(), d.Git, root, sys, in, d.ProcessUses), "\n")
+	for _, command := range []string{"rota reap --kind systmp", "rota reap --kind systmp --apply"} {
+		if !strings.Contains(hint, "`"+command+"`") {
+			t.Fatalf("missing runnable command %q: %s", command, hint)
+		}
+		code, out, stderr := rotaInWith(t, d, root, append([]string{"--json"}, strings.Fields(command)[1:]...)...)
+		if code != 0 {
+			t.Fatalf("hint command %q: %d %s %s", command, code, out, stderr)
+		}
+		if ids := candIDs(data(t, out)); !reflect.DeepEqual(ids, []string{"systmp:rota-smoke.old"}) {
+			t.Fatalf("hint candidates: %v", ids)
+		}
+	}
+	if _, err := os.Stat(old); !os.IsNotExist(err) {
+		t.Fatalf("hint failed to remove counted directory: %v", err)
 	}
 }
 
@@ -104,7 +239,7 @@ func TestDoctorDiskUsesInjectedDirectories(t *testing.T) {
 			} else if in.CacheDisk == nil || in.CacheDisk.Path != cachePath {
 				t.Fatalf("cache disk = %+v, want %s", in.CacheDisk, cachePath)
 			}
-			want := "3 leaked temp dirs under " + temp + " (6.0 KiB) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`"
+			want := "3 leaked temp dirs under " + temp + " (6.0 KiB); inspect these directories manually (cleanup is unavailable here)"
 			got := in.ScanLeftovers()
 			if len(got) != 1 || got[0] != want {
 				t.Fatalf("leftovers = %q, want %q", got, want)
@@ -247,30 +382,6 @@ func TestDoctorAndReapAgreeOnAnUnownedTempRoot(t *testing.T) {
 	}
 	if len(res.Candidates) != 0 {
 		t.Errorf("reap listed %v from an unowned root", res.Candidates)
-	}
-}
-
-// A prunable checkout outside .worktrees/ is not reap's to list, so doctor
-// must not count it either; the one inside is counted and listed by both.
-func TestDoctorAndReapAgreeOnPrunableCheckoutsOutsideWorktrees(t *testing.T) {
-	root := t.TempDir()
-	porcelain := "worktree " + root + "\n\n" +
-		"worktree " + filepath.Join(root, ".worktrees", "gone") + "\nbranch refs/heads/kit/1-a\nprunable gitdir file points to non-existent location\n\n" +
-		"worktree " + filepath.Join(t.TempDir(), "elsewhere") + "\nbranch refs/heads/kit/2-b\nprunable gitdir file points to non-existent location\n"
-	run := func(context.Context, string, ...string) (git.Result, error) {
-		return git.Result{Stdout: porcelain}, nil
-	}
-	counted := 0
-	rin := reapInput(root, "", porcelain)
-	if got := doctorLeftovers(context.Background(), run, root, t.TempDir(), &rin, nil); len(got) == 1 && strings.HasPrefix(got[0], "1 stale scratch worktrees") {
-		counted = 1
-	}
-	res, err := reap.Find(context.Background(), reapInput(root, "", porcelain), []string{reap.KindWorktree})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if counted != 1 || len(res.Candidates) != 1 {
-		t.Errorf("doctor counted %d, reap listed %d (%v); want 1 and 1", counted, len(res.Candidates), res.Candidates)
 	}
 }
 

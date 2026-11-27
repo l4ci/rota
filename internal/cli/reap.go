@@ -37,6 +37,7 @@ func reapCommand() *Command {
 
 func reapVerb(fs *flag.FlagSet) RunFunc {
 	kind := fs.String("kind", "", "only these kinds, comma-separated: "+strings.Join(reap.Kinds, ", "))
+	prunable := fs.Bool("prunable", false, "only worktrees Git marks prunable; requires --kind worktree")
 	apply := fs.Bool("apply", false, "delete the candidates that hold no work, in the system temp dir too unless --kind excludes systmp (default: preview)")
 	return func(c *Ctx, args []string) (Result, error) {
 		if err := noArgs(args); err != nil {
@@ -45,6 +46,9 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		kinds, err := parseReapKinds(*kind)
 		if err != nil {
 			return Result{}, err
+		}
+		if *prunable && (len(kinds) != 1 || kinds[0] != reap.KindWorktree) {
+			return Result{}, Usage("--prunable requires --kind worktree")
 		}
 		root, err := c.Root()
 		if err != nil {
@@ -67,6 +71,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		for _, w := range warns {
 			c.Warn("%s", w)
 		}
+		in.PrunableOnly = *prunable
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

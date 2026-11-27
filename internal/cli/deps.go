@@ -55,7 +55,7 @@ type Deps struct {
 	// ProcessUses lists the paths every live process of the user uses, for the
 	// tmp kind of reap; an error means the table could not be fully read. A
 	// test swaps it.
-	ProcessUses func() ([]reap.ProcUse, error)
+	ProcessUses func() ([]pidlive.ProcUse, error)
 
 	// ReviewRemoveAll is the filesystem boundary for disposable review cleanup.
 	ReviewRemoveAll func(string) error
@@ -211,7 +211,9 @@ func defaultDeps() *Deps {
 		Signals:          newSignals(),
 	}
 	d.TrainPlan = planTrainNudge
-	d.ProcessUses = d.processUsesReader("/proc", os.Getuid())
+	d.ProcessUses = func() ([]pidlive.ProcUse, error) {
+		return pidlive.ReadPathUses(context.Background(), d.Proc, os.Getuid())
+	}
 	d.Config = func(root string) any { return config.Load(d.projectsEnv(), root) }
 	// The defaults carry the disk loader themselves, so a direct caller of the
 	// hook never sees a nil Config.
@@ -637,15 +639,4 @@ func failData(err error) Result {
 		return Result{Data: e.Data}
 	}
 	return Result{}
-}
-
-// processUsesReader picks the process-table reader at wiring time: the /proc
-// reader where procRoot exists (Linux), else lsof (macOS, no /proc). Fail
-// closed either way: the lsof path errors when lsof is missing, fails or lists
-// nothing. d.Proc is read at call time, so a test swapping it counts.
-func (d *Deps) processUsesReader(procRoot string, uid int) func() ([]reap.ProcUse, error) {
-	if _, err := os.Stat(procRoot); err == nil {
-		return func() ([]reap.ProcUse, error) { return reap.ReadProcUses(procRoot, uid) }
-	}
-	return func() ([]reap.ProcUse, error) { return reap.ReadLsofUses(context.Background(), d.Proc, uid) }
 }

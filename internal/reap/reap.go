@@ -91,9 +91,11 @@ type LeaseOps interface {
 
 // Input is everything Find and Apply need from the outside.
 type Input struct {
-	Root string // project root
-	Base string // the branch work merges into
-	Git  git.Runner
+	// PrunableOnly narrows worktree discovery to Git's prunable entries.
+	PrunableOnly bool
+	Root         string // project root
+	Base         string // the branch work merges into
+	Git          git.Runner
 	// Report is the round's status (internal/round), the source of the live
 	// set: its rows say which checkouts have a slot or a matched agent, and
 	// its Unavailable list says whether the host could be read, and its Agents
@@ -123,7 +125,7 @@ type Input struct {
 	// SystemTemp is the OS temp dir; its leaked rota-smoke./rota-gate-/
 	// rota-review- children are the systmp candidates. Empty finds none.
 	SystemTemp string
-	// ProcessUses lists the paths each live process uses (ReadProcUses). Nil
+	// ProcessUses lists the paths each live process uses (pidlive.ReadPathUses). Nil
 	// or an error holds every tmp candidate: nothing can prove no process uses
 	// it. It is read afresh before each tmp removal.
 	ProcessUses func() ([]ProcUse, error)
@@ -439,7 +441,7 @@ func findWorktrees(ctx context.Context, s *state) ([]Candidate, error) {
 	var out []Candidate
 	for i := range s.checkouts {
 		c := &s.checkouts[i]
-		if !ScratchCheckout(s.root, c.path) || s.live.Worktree(c) {
+		if (s.in.PrunableOnly && !c.isPrunable) || !ScratchCheckout(s.root, c.path) || s.live.Worktree(c) {
 			continue
 		}
 		name := filepath.Base(c.path)
@@ -592,6 +594,9 @@ func removeWorktree(ctx context.Context, s *state, c Candidate) error {
 	co := s.checkoutAt(c.Path)
 	if co == nil || filepath.Dir(co.path) != s.wtDir() {
 		return fmt.Errorf("%s is not a .worktrees/ checkout", c.Path)
+	}
+	if s.in.PrunableOnly && !co.isPrunable {
+		return fmt.Errorf("%s is no longer prunable; left alone", c.Name)
 	}
 	if s.live.Worktree(co) {
 		return fmt.Errorf("%s has a live owner or is protected; left alone", c.Name)
