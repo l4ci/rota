@@ -67,7 +67,7 @@ func (runner gateRun) stepPremerge(result landing.GateResult, target GateTarget,
 	}
 	if g.ci != nil {
 		run.CIChanged = func() ([]string, error) {
-			return g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
+			return git.DiffFiles(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
 		}
 	}
 	if g.o.Approval != nil {
