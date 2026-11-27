@@ -277,6 +277,49 @@ func TestFileStoreRoundTrip(t *testing.T) {
 	}
 }
 
+func TestFileStoreAddRefusesExistingMilestone(t *testing.T) {
+	for _, tc := range []struct {
+		name, counter string
+	}{
+		{"missing counter", ""},
+		{"missing milestones key", `{"bugs":3}`},
+		{"lagging milestones value", `{"milestones":0}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := project(t)
+			var st Store = FileStore{Root: root}
+			id, err := st.Add("Original", "Keep this milestone.", nil, KindDelivery)
+			if err != nil || id != "M01" {
+				t.Fatalf("first add = %q %v", id, err)
+			}
+			detail := filepath.Join(root, ".rota/milestones/M01.md")
+			overview := filepath.Join(root, ".rota/MILESTONES.md")
+			original := read(t, detail)
+			index := read(t, overview)
+			counter := filepath.Join(root, ".rota/counters.json")
+			if tc.counter == "" {
+				err = os.Remove(counter)
+			} else {
+				err = os.WriteFile(counter, []byte(tc.counter), 0o644)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			id, err = st.Add("Replacement", "Must not overwrite.", nil, KindDecision)
+			if exitOf(err) != exitcode.ExitRefused || !strings.Contains(err.Error(), ".rota/milestones/M01.md already exists") {
+				t.Errorf("second add = %q %v, want collision refusal", id, err)
+			}
+			if got := read(t, detail); got != original {
+				t.Error("existing milestone changed")
+			}
+			if got := read(t, overview); got != index {
+				t.Error("overview changed after refused creation")
+			}
+		})
+	}
+}
+
 // TestIDGrammarUnicodeDigits pins the one grammar every package consumes:
 // digits are \p{Nd}, so Arabic-Indic digits count like ASCII ones.
 func TestIDGrammarUnicodeDigits(t *testing.T) {
