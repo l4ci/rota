@@ -157,9 +157,9 @@ func integrationPlan(reg Registry, o TrainOpts, withPR, targets int) (*landing.I
 // branch's tip, else the base. A pushed tip must descend from the tip rota
 // recorded, or commits reviewed by the since-range rule could be rewritten.
 func (t *trainRun) integrationStart(p *trainPlanning) (string, bool, error) {
-	e, it, res := t.e, p.integration, &p.res
+	it, res := p.integration, &p.res
 	ref := p.rem() + "/" + it.Branch
-	tip, code := e.git(t.root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
+	tip, code := t.git(t.root, "rev-parse", "--verify", "--quiet", ref+"^{commit}")
 	if code != 0 {
 		if it.Assembled != "" {
 			done, err := trainBrokeResult(res, fmt.Sprintf("%s is recorded but gone from %s; delete its record or name a new integration", it.Branch, p.rem()))
@@ -170,7 +170,7 @@ func (t *trainRun) integrationStart(p *trainPlanning) (string, bool, error) {
 	if it.Assembled == "" {
 		return "", true, fail(exitcode.ExitRefused, fmt.Sprintf("%s exists on %s but rota has no record of it; name a new integration", it.Branch, p.rem()))
 	}
-	descends, err := e.isAncestor(t.root, it.Assembled, tip)
+	descends, err := t.isAncestor(t.root, it.Assembled, tip)
 	if err != nil {
 		return "", true, fail(exitcode.ExitUnavailable, fmt.Sprintf("could not compare %s with the tip rota assembled (%s): %v", it.Branch, strutil.ShortSHA(it.Assembled), err))
 	}
@@ -188,7 +188,7 @@ func (t *trainRun) skipIntegrated(p *trainPlanning, start string) {
 	var heads []string
 	for i, m := range res.Members {
 		// An unreadable pin counts as not integrated: the member merges again.
-		if held, err := t.e.isAncestor(t.root, p.heads[i], start); err == nil && held {
+		if held, err := t.isAncestor(t.root, p.heads[i], start); err == nil && held {
 			res.Notes = append(res.Notes, fmt.Sprintf("INTEGRATED %s — %s is already merged into %s", m.Target, strutil.ShortSHA(p.heads[i]), p.integration.Branch))
 			continue
 		}
@@ -223,7 +223,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 	p.intTip = tip
 	// A plain push: one that is not a fast-forward is refused by the remote,
 	// so a fix pushed to the branch since this run started is never lost.
-	if out, code := e.runGit(ctx, t.root, "push", "-q", p.rem(), tip+":refs/heads/"+it.Branch); code != 0 {
+	if out, code := t.git(t.root, "push", "-q", p.rem(), tip+":refs/heads/"+it.Branch); code != 0 {
 		res.Verdict = landing.GateBaseMoved
 		res.Err = fmt.Sprintf("BASE-MOVED train — pushing %s to %s/%s failed: %s; nothing landed", strutil.ShortSHA(tip), p.rem(), it.Branch, strings.TrimSpace(out))
 		res.Hint = "re-run the train: it starts from the branch's new tip"
@@ -246,7 +246,7 @@ func (t *trainRun) assembleIntegration(p *trainPlanning) (bool, error) {
 		if !m.Pending {
 			continue
 		}
-		if held, err := e.isAncestor(t.root, m.Head, tip); err == nil && held {
+		if held, err := t.isAncestor(t.root, m.Head, tip); err == nil && held {
 			it.Members[j].Pending, it.Members[j].Conflicts = false, nil
 		}
 	}

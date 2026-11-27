@@ -64,8 +64,8 @@ func (e Env) runGitErr(ctx context.Context, dir string, args ...string) (string,
 // field has a production default; tests replace them, and NewHost above all:
 // this round runs inside herdr and tmux, so no test may reach the real ones.
 type Env struct {
-	// Ctx bounds every git call and is cancelled on SIGINT/SIGTERM by the
-	// CLI. Nil means context.Background().
+	// Ctx supplies the implicit helpers and default tracker factories. Gate
+	// and train git work use their invocation context. Nil means Background.
 	Ctx context.Context
 	Git git.Runner
 	// NewHost returns the host for a kind; nil means host.New with the real runners.

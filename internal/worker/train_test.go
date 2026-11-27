@@ -754,7 +754,6 @@ func TestTrainCancelledLeavesNoScratchTree(t *testing.T) {
 	real := env.WithDefaults().Git
 	ctx, cancel := context.WithCancel(bg)
 	defer cancel()
-	env.Ctx = ctx // production wires the signal context here; the old cleanup ran on it
 	env.Git = func(c context.Context, dir string, args ...string) (git.Result, error) {
 		if strings.Contains(dir, "rota-train-") && len(args) > 0 && args[0] == "merge" {
 			cancel()

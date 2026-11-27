@@ -3,11 +3,9 @@ package worker
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"testing"
 
-	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/landing"
 )
@@ -44,7 +42,7 @@ func staleNote(res landing.GateResult) string {
 	return ""
 }
 
-func TestGateAndTrainShareRenameFootprint(t *testing.T) {
+func TestGateNotesBothRenamePaths(t *testing.T) {
 	w := newWorld(t, ghURL)
 	seedBoth(t, w, "old.txt")
 	gittest.Run(t, w.worker, "mv", "old.txt", "new.txt")
@@ -63,42 +61,34 @@ func TestGateAndTrainShareRenameFootprint(t *testing.T) {
 	if note := staleNote(res); !strings.Contains(note, "new.txt") || !strings.Contains(note, "old.txt") {
 		t.Errorf("gate footprint lacks a name of the rename: %q", note)
 	}
-
-	e := w.env(false)
-	e.Ctx, e.Git = bg, git.Exec
-	foots, err := e.trainFootprints(w.dir, "origin/main", []landing.TrainMember{{Target: "w1"}},
-		func(landing.TrainMember) string { return "origin/w1" })
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := slices.Clone(foots[0].paths)
-	slices.Sort(got)
-	if want := []string{"new.txt", "old.txt", "work.txt"}; !slices.Equal(got, want) {
-		t.Errorf("train footprint %q, want %q", got, want)
-	}
 }
 
 func TestTrainPlanChecksRenameAgainstEdit(t *testing.T) {
-	w := trainWorld(t, "false")
-	trainWrite(t, w, "old.txt", strings.TrimSuffix(footBody, "\n"))
-	for _, b := range []string{"b1", "b2"} {
-		gittest.Run(t, w.dir, "branch", b, "main")
-	}
-	gittest.Run(t, w.dir, "checkout", "-q", "b1")
-	gittest.Run(t, w.dir, "mv", "old.txt", "new.txt")
-	trainWrite(t, w, "new.txt", "one"+strings.TrimSuffix(footBody[1:], "\n"))
-	gittest.Run(t, w.dir, "checkout", "-q", "b2")
-	trainWrite(t, w, "old.txt", "two"+strings.TrimSuffix(footBody[1:], "\n"))
-	gittest.Run(t, w.dir, "checkout", "-q", "main")
-	os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
-		[]byte(`{"slots":[{"name":"b1","branch":"b1"},{"name":"b2","branch":"b2"}]}`), 0o644)
+	// Preview must compare both the old and new name of a rename.
+	for _, file := range []string{"old.txt", "new.txt"} {
+		t.Run(file, func(t *testing.T) {
+			w := trainWorld(t, "false")
+			trainWrite(t, w, "old.txt", strings.TrimSuffix(footBody, "\n"))
+			for _, b := range []string{"b1", "b2"} {
+				gittest.Run(t, w.dir, "branch", b, "main")
+			}
+			gittest.Run(t, w.dir, "checkout", "-q", "b1")
+			gittest.Run(t, w.dir, "mv", "old.txt", "new.txt")
+			trainWrite(t, w, "new.txt", "one"+strings.TrimSuffix(footBody[1:], "\n"))
+			gittest.Run(t, w.dir, "checkout", "-q", "b2")
+			trainWrite(t, w, file, "two"+strings.TrimSuffix(footBody[1:], "\n"))
+			gittest.Run(t, w.dir, "checkout", "-q", "main")
+			os.WriteFile(filepath.Join(w.dir, ".rota", "workers.json"),
+				[]byte(`{"slots":[{"name":"b1","branch":"b1"},{"name":"b2","branch":"b2"}]}`), 0o644)
 
-	res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Plan: true})
-	if err != nil || res.Plan == nil {
-		t.Fatalf("%+v %v", res, err)
-	}
-	if c := res.Plan.Conflicts; len(c) != 1 || strings.Join(c[0].Paths, ",") != "old.txt" {
-		t.Fatalf("conflicts: %+v, landable %v", c, res.Plan.Landable)
+			res, err := w.train(TrainOpts{Targets: []string{"b1", "b2"}, Plan: true})
+			if err != nil || res.Plan == nil {
+				t.Fatalf("%+v %v", res, err)
+			}
+			if c := res.Plan.Conflicts; len(c) != 1 || strings.Join(c[0].Paths, ",") != file {
+				t.Fatalf("conflicts: %+v, landable %v", c, res.Plan.Landable)
+			}
+		})
 	}
 }
 
