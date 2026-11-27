@@ -112,13 +112,22 @@ func TestGateSharedPathsGlobMatchesNonASCII(t *testing.T) {
 	os.WriteFile(filepath.Join(w.worker, file), []byte(footBody[:len(footBody)-2]+"Z\n"), 0o644)
 	gittest.Run(t, w.worker, "commit", "-q", "-am", "edit the bottom")
 	gittest.Run(t, w.worker, "push", "-q", "origin", "main")
-	w.setConfig(`{"test":{"full":["true"]},"round":{"sharedPaths":["ü*.txt"]}}`)
 
-	res, err := w.gate(false, GateOpts{CheckOnly: true})
-	if err != nil || res.Verdict != landing.GateFresh {
-		t.Fatalf("%+v %v", res, err)
-	}
-	if note := staleNote(res); note != "" {
-		t.Errorf("a sharedPaths glob must exempt the non-ASCII path: %q", note)
+	// Without the glob the note names the path byte for byte; with it, nothing.
+	for _, c := range []struct {
+		cfg  string
+		want bool
+	}{
+		{`{"test":{"full":["true"]}}`, true},
+		{`{"test":{"full":["true"]},"round":{"sharedPaths":["ü*.txt"]}}`, false},
+	} {
+		w.setConfig(c.cfg)
+		res, err := w.gate(false, GateOpts{CheckOnly: true})
+		if err != nil || res.Verdict != landing.GateFresh {
+			t.Fatalf("%+v %v", res, err)
+		}
+		if note := staleNote(res); strings.Contains(note, "both sides changed "+file) != c.want {
+			t.Errorf("config %s: note %q, want the shared path named: %v", c.cfg, note, c.want)
+		}
 	}
 }
