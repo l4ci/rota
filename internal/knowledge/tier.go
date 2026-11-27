@@ -448,8 +448,10 @@ func Update(path string, fn func(*Sidecar) (write bool, err error)) error {
 	})
 }
 
-// TierGet returns the entry for (topic, title) in scope's sidecar. Glossary
-// terms are never tracked.
+// TierGet returns the entry for (topic, title) in scope's sidecar. The title
+// is read as Hit reads it (storedTitle), so the entry carries the bullet's
+// stored title and a title naming no bullet is refused. Glossary terms are
+// never tracked.
 func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 	if !tiered(topic) {
 		return Entry{}, false, nil
@@ -458,37 +460,60 @@ func (s Store) TierGet(scope, topic, title string) (Entry, bool, error) {
 	if err != nil {
 		return Entry{}, false, err
 	}
+	title, err = s.storedTitle(scope, topic, title)
+	if err != nil {
+		return Entry{}, false, err
+	}
 	return sc.Get(topic, title)
 }
 
-// TierSet puts (topic, title) on tier and returns the previous tier ("" for an
-// untracked entry) and whether anything changed. Glossary is a no-op.
-func (s Store) TierSet(scope, topic, title, tier string) (previous string, changed bool, err error) {
+// TierSetResult reports TierSet.
+type TierSetResult struct {
+	Title    string // the bullet's stored title
+	Previous string // "" for an untracked entry
+	Changed  bool
+}
+
+// TierSet puts the bullet titled title on tier. The title is read as Hit reads
+// it (storedTitle): one naming no bullet is refused and writes nothing.
+// Glossary is a no-op.
+func (s Store) TierSet(scope, topic, title, tier string) (TierSetResult, error) {
+	res := TierSetResult{Title: title}
 	if !tiered(topic) {
-		return "", false, nil
+		return res, nil
 	}
 	p, err := s.TierPath(scope)
 	if err != nil {
-		return "", false, err
+		return res, err
 	}
-	if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {
-		return "", false, err
+	km, err := s.KnowledgePath(scope)
+	if err != nil {
+		return res, err
 	}
-	// Buffered hits predate this write: fold them first so the set is not
-	// replayed over by hits that were already counted (a demotion would
-	// otherwise promote again on read).
-	if _, err := s.FoldHits(scope); err != nil {
-		return "", false, err
-	}
-	err = Update(p, func(sc *Sidecar) (bool, error) {
-		previous, err = sc.Set(topic, title, tier, s.today())
-		if err != nil {
-			return false, err
+	// The KNOWLEDGE.md lock keeps the bullet in place until its record is written.
+	err = lockFiles([]string{km}, func() error {
+		if res.Title, err = s.storedTitle(scope, topic, title); err != nil {
+			return err
 		}
-		changed = previous != tier
-		return true, nil
+		if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, res.Title) }); err != nil {
+			return err
+		}
+		// Buffered hits predate this write: fold them first so the set is not
+		// replayed over by hits that were already counted (a demotion would
+		// otherwise promote again on read).
+		if _, err := s.FoldHits(scope); err != nil {
+			return err
+		}
+		return Update(p, func(sc *Sidecar) (bool, error) {
+			previous, err := sc.Set(topic, res.Title, tier, s.today())
+			if err != nil {
+				return false, err
+			}
+			res.Previous, res.Changed = previous, previous != tier
+			return true, nil
+		})
 	})
-	return previous, changed, err
+	return res, err
 }
 
 // TierList lists scope's tracked entries, optionally for one tier.

@@ -418,6 +418,10 @@ Every candidate has one of four scope sources, shown as `scopeSource` in `rota r
 
 `candidates`, `assign`, `transfer` and `adopt` compare inferred entries like declared ones, but a clash that involves an inferred entry on either side only warns, even under `round.scopeOverlap: block`. The overlap detail says `inferred scopes`, and the JSON overlap carries `inferred: true`. A shared file path still blocks as before.
 
+The slot's local changes include individual untracked files, even inside a new directory.
+If a candidate names one of those files, the overlap check refuses it. Paths with spaces or
+non-ASCII characters are matched by their actual names, including when filtering `round.sharedPaths`.
+
 The overlap check cannot see files an issue will create, paths nobody wrote down, two issues editing
 the same function, generated files every issue touches (list those in `round.sharedPaths`), renames,
 or another machine's round. Read two issues' bodies before you run them side by side.

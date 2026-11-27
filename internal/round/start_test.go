@@ -7,12 +7,14 @@ import (
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/git"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/itembody"
 	"github.com/l4ci/rota/internal/ledger"
 	"github.com/l4ci/rota/internal/overlap"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -224,25 +226,68 @@ func TestCandidatesPerScope(t *testing.T) {
 
 func TestCandidatesReadOverlapAgainstSlotChanges(t *testing.T) {
 	root := newRepo(t, map[string]string{"ben": "ben/7-pool"})
-	// ben has uncommitted work on a tracked file the issue text never names.
-	if err := os.WriteFile(filepath.Join(root, "seed.txt"), []byte("y"), 0o644); err != nil {
-		t.Fatal(err)
-	}
 	wt := filepath.Join(root, ".worktrees", "ben")
-	if err := os.WriteFile(filepath.Join(wt, "seed.txt"), []byte("changed"), 0o644); err != nil {
-		t.Fatal(err)
+	write := func(name, content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(wt, name)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(wt, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
 	}
-	milestoneDoc(t, root, "M01", "active")
+	// Each unusual name occurs in both the committed diff and dirty status.
+	for _, name := range []string{"space name.txt", "café.txt", "quote\"name.txt"} {
+		write(name, "committed")
+	}
+	gittest.Run(t, wt, "add", ".")
+	gittest.Run(t, wt, "commit", "-qm", "unusual names")
+	for _, name := range []string{"space name.txt", "café.txt", "quote\"name.txt", "seed.txt", "n/x"} {
+		write(name, "dirty")
+	}
 	be := &fakeRemote{}
-	be.add("7", "ben's issue", "M01", false, "")
-	be.add("8", "wants the seed file", "M01", false, "edits seed.txt")
+	be.add("7", "ben's issue", "", false, "")
+	be.add("8", "wants the new file", "", false, "## Files\n- n/x\n")
+	be.add("9", "wants the tracked file", "", false, "edits seed.txt")
 	writeRegistry(t, root, slot(root, "ben", "ben/7-pool", nil))
-	cs, err := (Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Config: worker.NoConfig})}).Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeMilestone})
+	e := Env{Git: git.Exec, Base: "main", Worker: wk(worker.Env{Config: worker.NoConfig})}.ReadOnly()
+	tracked := e.trackedFiles(bg, root)
+	flight := e.InFlightItems(bg, root, be, tracked, nil)
+	if len(flight) != 1 {
+		t.Fatalf("slot footprint: %+v", flight)
+	}
+	paths := flight[0].Paths
+	for _, name := range []string{"space name.txt", "café.txt", "quote\"name.txt"} {
+		raw, quoted := 0, 0
+		for _, p := range paths {
+			if p == name {
+				raw++
+			}
+			if strings.HasPrefix(p, "\"") {
+				quoted++
+			}
+		}
+		t.Logf("%s: raw=%d quoted entries=%d footprint=%q", name, raw, quoted, paths)
+		if raw != 1 || quoted != 0 {
+			t.Errorf("want one raw %q and no quoted duplicates", name)
+		}
+	}
+	if !slices.Contains(paths, "n/x") {
+		t.Errorf("untracked file missing from footprint: %q", paths)
+	}
+	filtered := e.InFlightItems(bg, root, be, tracked, []string{"space name.txt", "café.txt", "quote\"name.txt"})
+	if !reflect.DeepEqual(filtered[0].Paths, []string{"n/x", "seed.txt"}) {
+		t.Errorf("shared paths not filtered: %q", filtered[0].Paths)
+	}
+	cs, err := e.Candidates(bg, root, be, CandidateOpts{Scope: roundcfg.ScopeOpen})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cs) != 1 || cs[0].ID != "8" || cs[0].Ready() || len(cs[0].Overlaps) != 1 || cs[0].Overlaps[0].Slot != "ben" {
-		t.Fatalf("8 must collide with ben's real changes: %+v", cs)
+	if len(cs) != 2 || cs[0].ID != "8" || cs[0].Ready() || len(cs[0].Overlaps) != 1 || !slices.Contains(cs[0].Overlaps[0].Paths, "n/x") {
+		t.Fatalf("8 must collide with ben's untracked file: %+v", cs)
+	}
+	if cs[1].ID != "9" || cs[1].Ready() || len(cs[1].Overlaps) != 1 || !slices.Contains(cs[1].Overlaps[0].Paths, "seed.txt") {
+		t.Fatalf("9 must collide with ben's tracked changes: %+v", cs[1])
 	}
 }
 

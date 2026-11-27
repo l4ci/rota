@@ -71,6 +71,17 @@ func TestAssignDecisionTopicReminder(t *testing.T) {
 	}
 }
 
+func TestAssignDecisionTopicsSkipFencedHeadings(t *testing.T) {
+	f := newAssignFixture(t)
+	writeBriefDecisions(t, f.root, "# Decisions\n\n## Architecture\n\n### Keep the boundary\n\n```\n## Foo\n\nexample\n```\n")
+	if _, err := f.assign("12", "ben", nil); err != nil {
+		t.Fatal(err)
+	}
+	if want := "DECISIONS.md topics: Architecture. Before"; !strings.Contains(f.host.sent, want) {
+		t.Errorf("brief lacks %q:\n%s", want, f.host.sent)
+	}
+}
+
 func TestAssignNamedDecisionTopics(t *testing.T) {
 	f := newAssignFixture(t)
 	writeBriefDecisions(t, f.root, briefDecisionFixture)

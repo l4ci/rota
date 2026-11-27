@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -65,17 +66,6 @@ func TestMapIndexBlock(t *testing.T) {
 			t.Errorf("got %q", got)
 		}
 	})
-	t.Run("sorted by subsystem name, files without one skipped", func(t *testing.T) {
-		root := t.TempDir()
-		write(t, root, ".rota/map/a-file.md", "---\nsubsystem: zeta\nsummary: Last one\n---\n")
-		write(t, root, ".rota/map/b-file.md", "---\nsubsystem: alpha\n---\n")
-		write(t, root, ".rota/map/c-file.md", "---\nsummary: no subsystem\n---\n")
-		write(t, root, ".rota/map/d-file.md", "no frontmatter\n")
-		want := head + "- **alpha** — (no summary)\n- **zeta** — Last one"
-		if got := MapIndexBlock(root); got != want {
-			t.Errorf("got %q, want %q", got, want)
-		}
-	})
 }
 
 func TestQAIndexBlock(t *testing.T) {
@@ -124,7 +114,6 @@ func TestStats(t *testing.T) {
 	write(t, root, ".rota/map/one.md", "---\nsubsystem: one\ntouched: 2026-01-02\n---\n## Entry points\n\n"+
 		"- src/a.go:3 ok\n- src/a.go:4 past the end\n- src/nonl.go:2 last line without newline\n- src/gone.go:1 missing file\n- src/a.go:0 zero\n\n## Other\n- src/a.go:99 not counted\n")
 	write(t, root, ".rota/map/two.md", "---\nsubsystem: two\ntouched: 2026-02-03\n---\nno entry points\n")
-	write(t, root, ".rota/map/skip.md", "---\nsummary: no subsystem\n---\n")
 
 	got := Stats(git.Repo{Dir: root}, root)
 	if len(got) != 2 {
@@ -156,18 +145,32 @@ func TestStatsTouchedFallsBackToGitDate(t *testing.T) {
 	}
 }
 
-func TestEntriesSortsBySubsystemAndSkipsUnnamed(t *testing.T) {
+// The file name is a map file's one identity: a `subsystem:` field that differs
+// or is absent changes nothing, and every name the index prints can be queried.
+func TestMapFilesAreNamedByFileName(t *testing.T) {
 	root := t.TempDir()
-	write(t, root, ".rota/map/z.md", "---\nsubsystem: aaa\n---\n")
-	write(t, root, ".rota/map/b.md", "---\nsubsystem: bbb\n---\n")
-	write(t, root, ".rota/map/n.md", "---\ntitle: x\n---\n")
-	write(t, root, ".rota/map/p.md", "no frontmatter\n")
-	var got []string
-	for _, e := range Entries(root) {
-		got = append(got, e.Name)
+	write(t, root, ".rota/map/auth.md", "---\nsubsystem: authentication\nsummary: Logins\ntouched: 2026-01-02\n---\nauth body\n")
+	write(t, root, ".rota/map/auth-ui.md", "---\nsubsystem: aaa\ntouched: 2026-01-02\n---\nui body\n")
+	write(t, root, ".rota/map/bare.md", "bare body\n")
+	write(t, root, ".rota/map/.md", "no name\n")
+	want := []string{"auth", "auth-ui", "bare"}
+
+	var indexed []string
+	for _, m := range regexp.MustCompile(`(?m)^- \*\*(.+?)\*\*`).FindAllStringSubmatch(MapIndexBlock(root), -1) {
+		indexed = append(indexed, m[1])
 	}
-	if !reflect.DeepEqual(got, []string{"aaa", "bbb"}) {
-		t.Errorf("Entries = %v", got)
+	if !reflect.DeepEqual(indexed, want) {
+		t.Errorf("index names = %v, want %v", indexed, want)
+	}
+	if _, missing, err := Query(root, "map", indexed); err != nil || len(missing) != 0 {
+		t.Errorf("Query(indexed) missing = %v, err = %v", missing, err)
+	}
+	var stats []string
+	for _, s := range Stats(git.Repo{Dir: root}, root) {
+		stats = append(stats, s.Name)
+	}
+	if !reflect.DeepEqual(stats, want) {
+		t.Errorf("stats names = %v, want %v", stats, want)
 	}
 }
 

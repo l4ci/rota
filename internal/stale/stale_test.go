@@ -172,12 +172,16 @@ func TestFindMap(t *testing.T) {
 	if err != nil || got.SkippedUndated != 0 {
 		t.Fatalf("map = %+v, err = %v", got, err)
 	}
-	// Sorted by subsystem; billing and baddate have no touched date, so their git date (today) decides: fresh.
-	if !reflect.DeepEqual(names(got.Entries), []string{"aaa 2025-12-31", "auth 2026-01-01"}) {
+	// Named and sorted by file name; files with no usable touched date are dated by git (today): fresh.
+	if !reflect.DeepEqual(names(got.Entries), []string{"auth 2026-01-01", "zeta 2025-12-31"}) {
 		t.Errorf("map = %v", names(got.Entries))
 	}
 	got, _ = FindReport(git.Repo{Dir: root}, root, "map", 90, date(t, "2999-01-01"), nil)
-	if len(got.Entries) != 5 || got.Entries[0].Name != "aaa" || got.Entries[1].Name != "auth" || got.Entries[2].Name != "baddate" || got.Entries[3].Name != "billing" || got.Entries[4].Name != "cache" {
+	var all []string
+	for _, e := range got.Entries {
+		all = append(all, e.Name)
+	}
+	if !reflect.DeepEqual(all, []string{"auth", "bad", "billing", "cache", "nosub", "plain", "zeta"}) {
 		t.Errorf("map far future = %v", names(got.Entries))
 	}
 	root = t.TempDir()

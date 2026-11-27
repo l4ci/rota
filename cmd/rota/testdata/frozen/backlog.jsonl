@@ -162,11 +162,11 @@
 {"name":"stale/knowledge-missing-file","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"knowledge"},"ok":true}}]}
 {"name":"stale/knowledge-no-headings","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"knowledge"},"ok":true}}]}
 {"name":"stale/knowledge-stale","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-11-21","name":"Alpha"},{"date":"2026-11-21","name":"Beta, gamma"},{"date":"2026-11-21","name":"Delta"}],"kind":"knowledge"},"ok":true}}]}
-{"name":"stale/map-git-date-fallback","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2025-12-31","name":"aaa-first"},{"date":"2026-01-01","name":"auth"},{"date":"2026-11-21","name":"baddate"},{"date":"2026-11-21","name":"billing"},{"date":"2026-09-30","name":"cache"}],"kind":"map"},"ok":true}}]}
+{"name":"stale/map-git-date-fallback","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-01-01","name":"auth"},{"date":"2026-11-21","name":"bad-date"},{"date":"2026-11-21","name":"billing"},{"date":"2026-11-21","name":"broken"},{"date":"2026-09-30","name":"cache"},{"date":"2026-11-21","name":"nosub"},{"date":"2025-12-31","name":"zeta"}],"kind":"map"},"ok":true}}]}
 {"name":"stale/map-missing-dir","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"map"},"ok":true}}]}
 {"name":"stale/map-none-stale","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[],"kind":"map"},"ok":true}}]}
-{"name":"stale/map-touched","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2025-12-31","name":"aaa-first"},{"date":"2026-01-01","name":"auth"}],"kind":"map"},"ok":true}}]}
-{"name":"stale/map-umbrella","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2025-12-31","name":"aaa-first"},{"date":"2026-01-01","name":"auth"}],"kind":"map"},"ok":true}}]}
+{"name":"stale/map-touched","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-01-01","name":"auth"},{"date":"2025-12-31","name":"zeta"}],"kind":"map"},"ok":true}}]}
+{"name":"stale/map-umbrella","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-01-01","name":"auth"},{"date":"2025-12-31","name":"zeta"}],"kind":"map"},"ok":true}}]}
 {"name":"stale/todo-0-days","steps":[{"exit":0,"env":{"data":{"days":0,"entries":[{"date":"2026-01-01","name":"B01"},{"date":"2026-09-15","name":"B02"},{"date":"2026-01-01","name":"F01"},{"date":"2026-02-02","name":"F02"},{"date":"2026-07-04","name":"T01"}],"kind":"todo","skippedUndated":2},"ok":true}}]}
 {"name":"stale/todo-1000-days","steps":[{"exit":0,"env":{"data":{"days":1000,"entries":[],"kind":"todo","skippedUndated":2},"ok":true}}]}
 {"name":"stale/todo-90","steps":[{"exit":0,"env":{"data":{"days":90,"entries":[{"date":"2026-01-01","name":"B01"},{"date":"2026-01-01","name":"F01"},{"date":"2026-02-02","name":"F02"},{"date":"2026-07-04","name":"T01"}],"kind":"todo","skippedUndated":2},"ok":true}}]}

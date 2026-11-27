@@ -93,3 +93,75 @@ func TestAutopilotStopsOnAMidTickStop(t *testing.T) {
 		t.Fatalf("mid-tick stop: reason %q tick %+v after %d ticks", res.Reason, res.Tick, ticks)
 	}
 }
+
+// closingRun runs a watch whose first tick is quiet, so Run waits out the
+// heartbeat and the closing tick returns (r, err).
+func closingRun(t *testing.T, r roundtick.Result, tickErr error) (AutopilotResult, int) {
+	t.Helper()
+	fc := &fakeClock{now: time.Unix(0, 0)}
+	env := fc.env(func(time.Duration) (*SlotNews, error) { return nil, nil }, empty, empty)
+	calls := 0
+	res, err := RunAutopilot(context.Background(), env, Opts{Heartbeat: time.Minute, Poll: time.Minute}, AutopilotOpts{
+		Tick: func() (roundtick.Result, error) {
+			calls++
+			if calls == 1 {
+				return roundtick.Result{}, nil
+			}
+			return r, tickErr
+		},
+		Poll: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res, calls
+}
+
+// #4322: the closing tick is classified by the loop's rule.
+func TestAutopilotClassifiesTheClosingTick(t *testing.T) {
+	boom := errors.New("boom")
+	item := roundtick.Result{New: []roundtick.Item{{Kind: "slot", Target: "ben"}}}
+	for _, tc := range []struct {
+		name    string
+		tick    roundtick.Result
+		err     error
+		reason  string
+		stopErr error
+		tickErr error
+	}{
+		{name: "quiet", reason: ReasonHeartbeat},
+		{name: "mid-tick stop", tick: roundtick.Result{Stopped: roundtick.ErrStopped}, reason: ReasonStopped, stopErr: roundtick.ErrStopped},
+		{name: "stop error", err: roundtick.ErrNoLease, reason: ReasonStopped, stopErr: roundtick.ErrNoLease},
+		{name: "failed", err: boom, reason: ReasonChange, tickErr: boom},
+		{name: "new item", tick: item, reason: ReasonChange},
+	} {
+		res, calls := closingRun(t, tc.tick, tc.err)
+		if res.Reason != tc.reason || !errors.Is(res.StopErr, tc.stopErr) || !errors.Is(res.TickErr, tc.tickErr) ||
+			(res.Tick == nil) != (tc.err != nil) || res.Waited != time.Minute || calls != 2 {
+			t.Errorf("%s: res=%+v calls=%d", tc.name, res, calls)
+		}
+	}
+}
+
+// #4322: an interrupted watch runs no closing tick (a tick can merge and
+// assign) and reports the last tick it did run.
+func TestAutopilotInterruptRunsNoClosingTick(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	fc := &fakeClock{now: time.Unix(0, 0)}
+	env := fc.env(func(time.Duration) (*SlotNews, error) { cancel(); return nil, nil }, empty, empty)
+	calls := 0
+	res, err := RunAutopilot(ctx, env, Opts{Heartbeat: time.Hour, Poll: time.Minute}, AutopilotOpts{
+		Tick: func() (roundtick.Result, error) {
+			calls++
+			return roundtick.Result{Capped: "first"}, nil
+		},
+		Poll: time.Minute,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Reason != ReasonInterrupt || res.Waited != time.Minute || res.Tick == nil || res.Tick.Capped != "first" || calls != 1 {
+		t.Fatalf("res=%+v calls=%d", res, calls)
+	}
+}

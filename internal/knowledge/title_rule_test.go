@@ -58,7 +58,7 @@ func TestRenameBulletCaseVariantKeepsTierRecord(t *testing.T) {
 	if err := os.WriteFile(km, []byte("## A\n\n- **MixedCase** x\n\n## B\n\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.TierSet("", "A", "MixedCase", Deprecated); err != nil {
+	if _, err := s.TierSet("", "A", "MixedCase", Deprecated); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.RenameTopic("", "A", "B", "mixedCASE"); err != nil {
