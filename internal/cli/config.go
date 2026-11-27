@@ -538,7 +538,7 @@ func repoWhich(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		r, err := repos.Which(cwd)
+		r, err := repos.Which(c.deps().Git, cwd)
 		var masked *rotatree.MaskedError
 		switch {
 		case err == nil:

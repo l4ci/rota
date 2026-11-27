@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/golden"
 )
 
@@ -56,7 +57,13 @@ func TestOpenSelectsBackend(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, ".rota"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	withTracker := Options{NewTracker: func(context.Context, string) (Tracker, error) { return &fakeTracker{}, nil }}
+	withTracker := Options{
+		NewTracker: func(context.Context, string) (Tracker, error) { return &fakeTracker{}, nil },
+		Cwd:        root,
+		Git: func(context.Context, string, ...string) (git.Result, error) {
+			return git.Result{Stdout: "web/.git"}, nil
+		},
+	}
 	fileCfg, issuesCfg := mustDecode(t, `{}`), mustDecode(t, `{"issues": {"source": "github"}}`)
 
 	if b, err := Open(context.Background(), root, fileCfg, Options{}); err != nil || b.Name() != "file" {
@@ -87,6 +94,9 @@ func TestOpenSelectsBackend(t *testing.T) {
 		}
 		if _, ok := b.(SubRepoScoped); ok != umbrella {
 			t.Errorf("repos.json %s: umbrella = %v, want %v", content, ok, umbrella)
+		}
+		if scoped, ok := b.(SubRepoScoped); ok && scoped.SubRepo() != "web" {
+			t.Errorf("injected git should select web, got %q", scoped.SubRepo())
 		}
 	}
 }

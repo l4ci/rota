@@ -121,6 +121,7 @@ func openBacklogVia(c *Ctx, root string, fileOnly bool, hint string, via func(co
 	cwd, _ := c.deps().Getwd()
 	return backlog.Open(c.Context(), root, cfg, backlog.Options{
 		Scope:       c.Repo,
+		Git:         c.deps().Git,
 		Cwd:         cwd,
 		CountProof:  proof.CountRows,
 		LookupProof: proof.Lookup,
@@ -177,7 +178,7 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if perRepo && c.Repo == "" && repos.Umbrella(root) {
 		// Scope S: inside a sub-repo the verb acts on it; only the umbrella
 		// root itself needs --repo.
-		if cwd, err := c.deps().Getwd(); err != nil || backlog.CwdSubRepo(cwd, repos.Load(root)) == "" {
+		if cwd, err := c.deps().Getwd(); err != nil || backlog.CwdSubRepo(c.deps().Git, cwd, repos.Load(root)) == "" {
 			return nil, Usage("%s from the umbrella root needs --repo <name>", c.Path)
 		}
 	}
