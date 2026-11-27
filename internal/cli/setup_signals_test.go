@@ -312,22 +312,52 @@ func TestSetupSetSkipsProbe(t *testing.T) {
 	}
 }
 
-func TestSetupWorktreeAndTmuxSignals(t *testing.T) {
+func TestSetupWorktreeSignal(t *testing.T) {
 	dir := signalRepo(t, "git@git.example.com:acme/x.git")
 	if err := os.Mkdir(filepath.Join(dir, ".worktrees"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	_, out, _ := signalRunWith(t, dir, signalOpts{onPath: []string{"tmux"}, env: map[string]string{"TMUX": "/tmp/tmux-1/default,1,0"}}, "--list", "--json")
+	code, out, _ := signalRun(t, dir, nil, "--list", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, out)
+	}
 	if got, ev, _ := sugg(t, out, "work.isolation"); got != "worktree" || !strings.Contains(ev, ".worktrees") {
 		t.Errorf("work.isolation = %q (%s)", got, ev)
 	}
-	if got, ev, _ := sugg(t, out, "round.dispatch"); got != "tmux" || !strings.Contains(ev, "$TMUX") {
-		t.Errorf("round.dispatch = %q (%s)", got, ev)
-	}
-	// tmux on PATH without a session is no signal
-	_, out, _ = signalRunWith(t, dir, signalOpts{onPath: []string{"tmux"}}, "--list", "--json")
-	if _, _, has := sugg(t, out, "round.dispatch"); has {
-		t.Error("tmux without $TMUX suggested a dispatch")
+}
+
+// Setup intentionally differs from Resolve and ResolveLaunch: installation is
+// enough for herdr, tmux needs both installation and a session, and either Core
+// marker wins even when the endpoint is incomplete. Pin the CLI's evidence too.
+func TestSetupDispatchSuggestions(t *testing.T) {
+	const coreEvidence = "HC_TERMINAL_ID/HC_TERMINAL_SOCKET identify the associated Herdr App Core"
+	for _, tc := range []struct {
+		name, want, evidence string
+		onPath               []string
+		env                  map[string]string
+	}{
+		{name: "no host"},
+		{name: "herdr installed", onPath: []string{"herdr"}, want: "herdr", evidence: "herdr is on PATH"},
+		{name: "herdr markers without binary", env: map[string]string{"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w"}},
+		{name: "tmux installed without session", onPath: []string{"tmux"}},
+		{name: "tmux session without binary", env: map[string]string{"TMUX": "session"}},
+		{name: "tmux installed in session", onPath: []string{"tmux"}, env: map[string]string{"TMUX": "session"}, want: "tmux", evidence: "tmux is on PATH and $TMUX is set"},
+		{name: "herdr beats tmux session", onPath: []string{"herdr", "tmux"}, env: map[string]string{"TMUX": "session"}, want: "herdr", evidence: "herdr is on PATH"},
+		{name: "Core terminal marker alone", env: map[string]string{"HC_TERMINAL_ID": "t"}, want: "herdr-core", evidence: coreEvidence},
+		{name: "Core socket marker alone", env: map[string]string{"HC_TERMINAL_SOCKET": "socket"}, want: "herdr-core", evidence: coreEvidence},
+		{name: "Core beats installed hosts", onPath: []string{"herdr", "tmux", "orca"}, env: map[string]string{"HC_TERMINAL_ID": "t", "HC_TERMINAL_SOCKET": "socket", "TMUX": "session"}, want: "herdr-core", evidence: coreEvidence},
+		{name: "Orca is not suggested", onPath: []string{"orca"}, env: map[string]string{"ORCA_TERMINAL_HANDLE": "t"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			code, out, _ := signalRunWith(t, t.TempDir(), signalOpts{onPath: tc.onPath, env: tc.env}, "--list", "--json")
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, out)
+			}
+			got, evidence, has := sugg(t, out, "round.dispatch")
+			if got != tc.want || evidence != tc.evidence || has != (tc.want != "") {
+				t.Errorf("dispatch = %q (%q, present %v), want %q (%q)", got, evidence, has, tc.want, tc.evidence)
+			}
+		})
 	}
 }
 

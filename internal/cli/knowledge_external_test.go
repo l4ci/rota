@@ -10,6 +10,7 @@ import (
 	_ "github.com/l4ci/rota/internal/testiso"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -445,4 +446,93 @@ func TestKnowledgeExternalAddUnknownSubtopicHead(t *testing.T) {
 	if o.rc != ExitResolution || !strings.Contains(o.stderr, "add to") {
 		t.Fatalf("unknown head: %+v", o)
 	}
+}
+
+// extWalkFixture is extFixture with two outdated bullets in Go and a split Git
+// topic that has a stray flat file. The project runs go 1.30.
+func extWalkFixture(t *testing.T) (project, clone string) {
+	t.Helper()
+	project, clone, _ = extFixture(t, "")
+	gittest.Write(t, project, "go.mod", "module x\n\ngo 1.30\n")
+	gittest.Write(t, clone, "README.md", "# Knowledge index\n\n- [Go](topics/go.md) — testing quirks\n- [Git](topics/git/README.md) — vcs\n- [Git](topics/git.md) — vcs\n")
+	gittest.Write(t, clone, "topics/go.md", "# Go\n\n- **Table tests** — Use t.Run. <!-- 2026-01-02 source:rota seen:go@1.20 -->\n- **Vet** — Always vet. <!-- 2026-01-02 source:rota seen:go@1.21 -->\n")
+	gittest.Write(t, clone, "topics/git/README.md", "# Git\n\n- **Worktrees** — share objects. <!-- 2026-01-02 source:rota -->\n")
+	gittest.Write(t, clone, "topics/git.md", "# Git\n\n- **Stash** — shared stack. <!-- 2026-01-02 source:rota -->\n")
+	gittest.Run(t, clone, "add", ".")
+	gittest.Run(t, clone, "commit", "-q", "-m", "walk fixture")
+	gittest.Run(t, clone, "push", "-q")
+	return project, clone
+}
+
+func TestKnowledgeExternalMatchRecheckRowsFollowPrintedBullets(t *testing.T) {
+	project, _ := extWalkFixture(t)
+	o := knNew(t, project, "", "knowledge", "query", "--external", "--match", "t.run", "--json")
+	var env struct {
+		Data struct {
+			Recheck []map[string]string
+		}
+	}
+	if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || o.rc != 0 {
+		t.Fatalf("match: %v %+v", err, o)
+	}
+	want := []map[string]string{{"topic": "Go", "title": "Table tests", "tool": "go", "seen": "1.20", "project": "1.30"}}
+	if !reflect.DeepEqual(env.Data.Recheck, want) {
+		t.Fatalf("recheck = %v, want %v", env.Data.Recheck, want)
+	}
+}
+
+func TestKnowledgeExternalMissingAndStraysSameWithMatch(t *testing.T) {
+	project, _ := extWalkFixture(t)
+	for _, args := range [][]string{
+		{"knowledge", "query", "--external", "git", "nope", "", " ", "Nope "},
+		{"knowledge", "query", "--external", "--match", "zzz", "git", "nope", "", " ", "Nope "},
+	} {
+		o := knNew(t, project, "", append(args, "--json")...)
+		var env struct {
+			Data struct {
+				Missing []string
+			}
+		}
+		if err := json.Unmarshal([]byte(o.stdout), &env); err != nil || o.rc != 0 {
+			t.Fatalf("%v: %v %+v", args, err, o)
+		}
+		if !reflect.DeepEqual(env.Data.Missing, []string{"nope"}) {
+			t.Errorf("%v: missing = %q", args, env.Data.Missing)
+		}
+		o = knNew(t, project, "", args...)
+		if n := strings.Count(o.stderr, "no external topic matches"); n != 1 {
+			t.Errorf("%v: %d missing warnings: %q", args, n, o.stderr)
+		}
+		if n := strings.Count(o.stderr, "stray file topics/git.md"); n != 1 {
+			t.Errorf("%v: %d stray warnings: %q", args, n, o.stderr)
+		}
+	}
+}
+
+// An unreadable stray fails the stats walk; doctor must say so, not drop its
+// size and layout checks without a word.
+func TestDoctorReportsUnreadableExternalStray(t *testing.T) {
+	project, clone := extWalkFixture(t)
+	stray := filepath.Join(clone, "topics", "git.md")
+	if err := os.Remove(stray); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(stray, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, out, _ := rotaInWith(t, doctorDeps(t, nil), project, "doctor", "--json")
+	var env struct {
+		Data struct {
+			Checks []struct{ Name, Status, Detail string }
+		}
+	}
+	if err := json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	for _, c := range env.Data.Checks {
+		if c.Name == "external knowledge size" && c.Status == "warn" && strings.Contains(c.Detail, "topics/git.md") {
+			return
+		}
+	}
+	t.Fatalf("doctor does not report the unreadable stray: %s", out)
 }

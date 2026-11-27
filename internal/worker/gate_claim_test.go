@@ -136,6 +136,9 @@ type storedClaimIssues struct {
 
 var _ tracker.ClaimStore = (*storedClaimIssues)(nil)
 
+func (s *storedClaimIssues) ClaimState(context.Context, tracker.IssueKey) (tracker.ClaimState, error) {
+	return tracker.ClaimState{Held: s.held}, s.err
+}
 func (s *storedClaimIssues) Claims(context.Context, tracker.IssueKey) ([]string, error) {
 	return s.held, s.err
 }

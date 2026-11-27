@@ -2,11 +2,8 @@ package extknowledge
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -41,17 +38,6 @@ var (
 	versionOnlyRe  = regexp.MustCompile(`^[a-z]?[0-9][0-9a-z.+-]*$`)
 )
 
-// topicFileRef is one topic file of the base, read for a walk.
-type topicFileRef struct {
-	Topic   Topic
-	Rel     string // repo-relative, slash-separated
-	Content string
-	Stray   bool // a flat file beside a split topic: read, never written
-}
-
-// bullets lists the bullets of the file.
-func (f topicFileRef) bullets() []bullet { return f.Topic.bullets(f.Content) }
-
 // toolSlug is the slug a bare "(seen on 4.6)" takes as its tool: a subtopic
 // takes its split topic's folder name.
 func (t Topic) toolSlug() string {
@@ -64,30 +50,8 @@ func (t Topic) toolSlug() string {
 // topicFiles lists every indexed topic and subtopic whose file exists, in
 // index order, each split topic's stray flat file right after it.
 func (c Clone) topicFiles() ([]topicFileRef, error) {
-	topics, err := c.Topics()
-	if err != nil {
-		return nil, err
-	}
-	var out []topicFileRef
-	for _, t := range topics {
-		raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
-		if errors.Is(err, os.ErrNotExist) {
-			continue // indexed but not written yet
-		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, topicFileRef{Topic: t, Rel: t.File, Content: string(raw)})
-		if t.Stray == "" || t.Parent != "" {
-			continue
-		}
-		if sraw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.Stray))); err == nil {
-			st := t
-			st.File, st.Split, st.Stray = t.Stray, false, ""
-			out = append(out, topicFileRef{Topic: st, Rel: t.Stray, Content: string(sraw), Stray: true})
-		}
-	}
-	return out, nil
+	w, err := c.walk(nil, false)
+	return w.Files, err
 }
 
 // MigrateSeen moves every trailing "(seen on Godot 4.6)" body suffix into the

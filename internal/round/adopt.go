@@ -251,7 +251,7 @@ func realPath(p string) string {
 }
 
 // checkAdoptClaim protects reclaimed work without inferring ownership from a
-// branch name alone. Raw marker history comes from the issue source, which can
+// branch name alone. Claim history comes from the issue source, which can
 // differ from the PR forge. An unavailable history cannot prove a takeover.
 func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch, issue string) ([]string, error) {
 	st, err := statusOf(be, issue)
@@ -283,11 +283,11 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 		}
 	}
 	var (
-		comments []tracker.Comment
-		have     bool
+		events []tracker.ClaimEvent
+		have   bool
 	)
 	if hist, ok := backlog.Optional[backlog.ClaimHistorian](be, func(c backlog.Capabilities) bool { return c.ClaimHistory }); ok {
-		comments, have, err = hist.ClaimComments(key)
+		events, have, err = hist.ClaimEvents(key)
 	}
 	if !have {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s unavailable; reclaimed-branch check skipped", issue)), nil
@@ -295,7 +295,7 @@ func (e Env) checkAdoptClaim(ctx context.Context, root string, be Board, branch,
 	if err != nil {
 		return append(warnings, fmt.Sprintf("adopt claim history on %s skipped: %v", issue, err)), nil
 	}
-	if backlog.ReclaimedBranchClaim(comments, agent, held) {
+	if backlog.ReclaimedBranchClaim(events, agent, held) {
 		return warnings, blocked(blockedby.Claimed, "%s was reclaimed from %s and is claimed by %s; branch %s cannot be adopted", issue, agent, strings.Join(held, ", "), branch)
 	}
 	return warnings, nil

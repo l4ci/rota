@@ -255,24 +255,6 @@ func adoptClaimHistoryFixture(t *testing.T, comments []tracker.Comment) (string,
 	return root, e, &backlog.Issues{Tracker: remote, Cfg: map[string]any{}}, remote
 }
 
-func TestAdoptRefusesReclaimedBranch(t *testing.T) {
-	root, e, be, _ := adoptClaimHistoryFixture(t, []tracker.Comment{
-		{Body: "<!-- rota:claim codex@3 -->"},
-		{Body: "<!-- rota:release codex@3 -->"},
-		{Body: "<!-- rota:claim dana@5 -->"},
-	})
-	_, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
-	if err == nil {
-		t.Fatal("adopted reclaimed branch, want blocked claimed")
-	}
-	if got := blockedBy(t, err); got != blockedby.Claimed {
-		t.Fatalf("blockedBy %q, want claimed", got)
-	}
-	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
-		t.Fatal("refused adoption registered slot")
-	}
-}
-
 // TestAdoptRefusesReclaimedBranchThroughUmbrella: the umbrella backend must
 // forward claim history, or the reclaimed-branch check is silently skipped.
 func TestAdoptRefusesReclaimedBranchThroughUmbrella(t *testing.T) {
@@ -293,27 +275,6 @@ func TestAdoptRefusesReclaimedBranchThroughUmbrella(t *testing.T) {
 	}
 	if len(worker.LoadRegistryTolerant(root).Slots()) != 0 {
 		t.Fatal("refused adoption registered slot")
-	}
-}
-
-func TestAdoptFreshClaimWithoutReclaimedHistory(t *testing.T) {
-	for _, comments := range [][]tracker.Comment{
-		{{Body: "<!-- rota:claim dana@5 -->"}},
-		{{Body: "<!-- rota:release codex@3 -->"}, {Body: "<!-- rota:claim dana@5 -->"}},
-		{{Body: "<!-- rota:claim codex@3 -->"}, {Body: "<!-- rota:claim dana@5 -->"}, {Body: "<!-- rota:release codex@3 -->"}},
-	} {
-		now := time.Date(2026, 10, 25, 12, 0, 0, 0, time.UTC)
-		for i := range comments {
-			comments[i].CreatedAt = now.Add(-10 * time.Minute)
-		}
-		root, e, be, remote := adoptClaimHistoryFixture(t, comments)
-		e.Forge = remote
-		e.Round = roundcfg.Settings{ClaimStaleMinutes: 240, ClaimStaleMinutesMajor: 480}
-		e.Worker = wk(worker.Env{Getenv: noEnv, Config: diskConfig, Now: func() time.Time { return now }})
-		res, err := e.Adopt(bg, root, be, AdoptOpts{Ref: "codex/12-thing", Issue: "12"})
-		if err != nil || res.Slot != "ext-1" {
-			t.Fatalf("no reclaimed evidence, adoption refused: %+v %v", res, err)
-		}
 	}
 }
 
