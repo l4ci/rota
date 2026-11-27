@@ -90,6 +90,10 @@ Assign each finding a strength:
 - **Worth exploring**: plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative**: a hunch the code does not yet back.
 
+Give each finding an **impact tier** beside its strength: **must**, **should** or **nice**, plus one `If skipped:` line (tiers in [`less-code.md`](less-code.md)). Order the findings by tier, then strength. The cap stays 8 to 12 across both lenses.
+
+When two fixes solve the same problem, take the one with the smaller net diff. Add a layer only when it removes more than it adds. Batch small findings (net change of 20 lines or fewer, no design choice) per package directory into one issue of at most 10 items.
+
 Tag each finding with a **dependency category**, which sets the test approach at its seam:
 
 - **In-process**: pure computation or in-memory state. Test through the interface directly; no adapter.
@@ -143,12 +147,13 @@ Body sections:
 - **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
 - **Benefits**: locality, leverage, test improvement.
 - **Strength**: Strong / Worth exploring / Speculative, and whether it is the top recommendation.
+- **Net lines, tier and if skipped**: the estimate as `~-N` or `~+N`, the impact tier and the `If skipped:` line.
 - **Dependencies**: the category (in-process, local-substitutable, remote-owned, true external) and the test approach it implies.
 - **Conflicts**: the recorded decision it contradicts, if any, and why it is worth reopening.
 - **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside". With a Behaviour to keep section, add "every behaviour listed under Behaviour to keep still runs, or the PR names its removal and justifies it".
 - **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
-Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, dropped findings with the reason, the top recommendation. End it with one line, `Not checked: <areas the review did not read>` (`Not checked: nothing` only when every file in scope was read in full). Zero filed is valid.
+Report: table of filed issues (number, title, tier, strength, net lines) with the summed net line estimate, skipped duplicates with the matched issue, dropped findings with the reason, the top recommendation. End it with one line, `Not checked: <areas the review did not read>` (`Not checked: nothing` only when every file in scope was read in full). Zero filed is valid.
 
 A hosted round architecture-review worker ends with `ROTA-DONE <slot> issues:#a,#b` for filed issues or `ROTA-DONE <slot> issues:none` for no findings. The summary above that line ends with the same `Not checked:` line; the `ROTA-DONE` line stays last and unchanged. Printing that final line reports completion; `round report` is solo-only. Solo reporting with no findings uses `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed).
 
