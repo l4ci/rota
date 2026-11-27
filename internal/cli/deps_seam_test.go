@@ -79,7 +79,7 @@ func TestDefaultRoundEnvLabelsComeFromConfig(t *testing.T) {
 func TestDefaultRoundEnvDefaultLabels(t *testing.T) {
 	e := buildRoundEnv(context.Background(), t.TempDir(), defaultDeps(), false, defaultDeps().workerEnv(), nil)
 	if e.Label != "in-progress" || e.NeedsHuman != "needs-human" || e.NeedsReview != "needs-review" || e.SupportLabel != "" || e.OnHold != "on-hold" {
-		t.Errorf("default labels = %q, %q, %q, %q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel)
+		t.Errorf("default labels = %q, %q, %q, %q, onHold=%q", e.Label, e.NeedsHuman, e.NeedsReview, e.SupportLabel, e.OnHold)
 	}
 }
 

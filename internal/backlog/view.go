@@ -236,9 +236,6 @@ func BuildListing(rows []Row, md string, active []Active, grep string) *Listing 
 		}
 		lr := ListRow{Row: r, Related: strings.TrimRight(r.Fields.Get("related"), "."),
 			Milestone: strings.Join(ms.IDs(r.Fields.Get("milestone")), ", ")}
-		if r.OnHold {
-			lr.Title += " (on hold)"
-		}
 		switch r.Section {
 		case "Bugs":
 			l.Bugs = append(l.Bugs, lr)
@@ -521,12 +518,18 @@ func (l *Listing) render(md string, active []Active, grep string) {
 		}
 		out = append(out, "")
 	}
+	title := func(r ListRow) string {
+		if r.OnHold {
+			return r.Title + " (on hold)"
+		}
+		return r.Title
+	}
 	table("Bugs", l.Bugs, []string{"ID", "Prio", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Tag, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, r.Tag, title(r), r.Related} })
 	table("Features", l.Features, []string{"ID", "Size", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Tag, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, r.Tag, title(r), r.Related} })
 	table("Tasks", l.Tasks, []string{"ID", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, title(r), r.Related} })
 	if len(l.clusterKeys) > 0 {
 		out = append(out, "### Clusters\n")
 		for _, c := range l.clusterKeys {
