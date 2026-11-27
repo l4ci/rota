@@ -62,6 +62,9 @@ type GateConfig struct {
 	SharedPaths []string
 	// TDD is work.tdd: a behavior change needs a recorded red-first run.
 	TDD bool
+	// BaseBranch is git.baseBranch, "" to auto-detect: the project's default
+	// branch, whose commits the attempt check never judges.
+	BaseBranch string
 	// Remote is git.remote: where the gate and the train fetch from and push to.
 	Remote string
 	// RemoteErr is an invalid git.remote: nothing runs git on it.
@@ -134,6 +137,7 @@ func ParseGateConfig(cfg any) GateConfig {
 	c.where, c.whereErr = parseFullWhere(cfg, c.CIChecks)
 	c.sourceErr = tracker.ValidateConfig(cfg)
 	c.Remote, c.RemoteErr = config.GitRemote(cfg)
+	c.BaseBranch = config.String(cfg, "git.baseBranch")
 	c.ciMinutes, c.ciErr = config.Int(cfg, "test.ciTimeoutMinutes", 1, 24*60)
 	c.review, c.reviewErr = config.ReviewPolicyOf(cfg)
 	c.cross, c.crossErr = roundcfg.ParseCrossReview(cfg)
