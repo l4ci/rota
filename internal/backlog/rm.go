@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/section"
@@ -236,27 +236,13 @@ func collectArchiveCrossRefs(content, id string) []XRef {
 }
 
 func (f *File) planFiles(id string) []string {
-	entries, err := os.ReadDir(f.rota("plans"))
-	if err != nil {
-		return []string{}
-	}
-	names := []string{}
-	for _, e := range entries {
-		name := e.Name()
-		ext := filepath.Ext(name)
-		if ext != ".md" || name == ".md" {
-			continue
-		}
-		if strings.HasSuffix(strings.TrimSuffix(name, ext), "-"+id) {
-			names = append(names, name)
+	plans := []string{}
+	for _, rel := range artifact.ItemFiles(f.Root, id) {
+		if strings.HasPrefix(rel, rotatree.Rel(rotatree.PlansDir)+"/") {
+			plans = append(plans, rel)
 		}
 	}
-	sort.Strings(names)
-	out := make([]string, len(names))
-	for i, n := range names {
-		out[i] = rotatree.Rel(rotatree.PlansDir, n)
-	}
-	return out
+	return plans
 }
 
 // Remove removes items from the backlog with their cross-references, detail
