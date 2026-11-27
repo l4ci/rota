@@ -36,7 +36,7 @@ func designPlanCommands() []*Command {
 			{Name: "validate-docs", Fence: fenceAllowed, Summary: "check doc-by-path deliverables", Verb: noFlags(runPlanValidateDocs)},
 			{Name: "rename-check", Fence: fenceAllowed, Summary: "files that mention a name", Verb: noFlags(runPlanRenameCheck)},
 			{Name: "pass", Fence: fenceAllowed, Summary: "mark an acceptance criterion met by a proof row", Verb: planPass},
-			{Name: "check", Fence: fenceAllowed, Summary: "every criterion has a task, every task a verify", Verb: noFlags(runPlanCheck)},
+			{Name: "check", Fence: fenceAllowed, Summary: "every criterion has a task, every task a verify", Details: "Criteria are the `- [ ]` lines under `## Acceptance` in the issue body, or in the design note when the body has none.\nTask shape: " + planTaskShape + ".", Verb: noFlags(runPlanCheck)},
 			{Name: "uncertain", Fence: fenceAllowed, Summary: "uncertainty pre-flight for an item", Verb: noFlags(runPlanUncertain)},
 		}},
 	}
