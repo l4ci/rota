@@ -80,7 +80,7 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 Dispatch one exploration subagent on `orchestrator.model` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-Per finding it reports files with line ranges, the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). No interface proposals.
+Per finding it reports files with line ranges, one concrete case (Step 4), the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). It also reports the areas it did not read, sampled files included. No interface proposals.
 
 ### Step 3 — Rank
 
@@ -102,6 +102,13 @@ Before filing a finding, grep for the seam it proposes: one that already exists 
 ### Step 4 — File
 
 File one issue per finding. Never file a finding you cannot state acceptance for.
+
+**Check each finding first.** Code moves while a review runs, so a premise may already be fixed.
+
+1. **Concrete case.** Name one input or situation and the wrong result or real cost it causes. Drop a finding with no concrete case.
+2. **Re-read at current HEAD.** `git fetch <remote> <base>` (`<base>` from `rota git base`, `<remote>` from `git.remote`), then read the cited lines with `git show <remote>/<base>:<path>`; no checkout. With no remote, read local `<base>`. Drop a finding whose case no longer holds, and update line ranges that moved.
+3. **Recently closed issues.** List them and read those that touch the same files: `rota tracker call -- issue list --state closed --limit 100 --json number,title,closedAt,body` (file-mode backlogs: `git log <remote>/<base> -- <path>`). Drop what they already fixed or decided.
+4. **Unused code.** Before you call code unused, search beyond Go callers (or the language's own callers): tests, smoke sections, skill and docs text, embedded files, and verb or flag names registered as strings. A hit that needs the code ends the claim. List where you searched in the body.
 
 **Dedup first.** Fetch refactor issues in every state and compare on files and problem, not title:
 
@@ -128,17 +135,22 @@ When findings must land in order (one builds on another's seam, or both rewrite 
 
 Body sections:
 
-- **Pointers**: exact file paths and line ranges, never a bare directory (the round overlap check matches a directory against every file below it). Paths live here only, never in Acceptance, which states behavior.
+- **Pointers**: exact file paths and line ranges, never a bare directory (the round overlap check matches a directory against every file below it). Paths live here and in Behaviour to keep and Searched, never in Acceptance, which states behavior.
 - **Problem**: the friction, in vocabulary terms, with the deletion-test result.
+- **Concrete case**: the input or situation, and the wrong result or real cost.
+- **## Behaviour to keep** (required when the fix merges, unifies or moves code): every check, error path, validation and report each copy does today, one bullet each with `file:line`, grouped by copy. Read every copy in full: a unify silently drops what only one copy does.
+- **Searched** (unused-code findings only): the places searched and the terms used.
 - **Solution**: what would change, in plain words. No signatures unless `--designs` ran.
 - **Benefits**: locality, leverage, test improvement.
 - **Strength**: Strong / Worth exploring / Speculative, and whether it is the top recommendation.
 - **Dependencies**: the category (in-process, local-substitutable, remote-owned, true external) and the test approach it implies.
 - **Conflicts**: the recorded decision it contradicts, if any, and why it is worth reopening.
-- **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside".
+- **## Acceptance**: checkable boxes: the interface the callers use afterwards, which duplicated logic is gone, which tests cross the seam. Include "existing tests still pass" and "unit tests superseded by seam-level tests are removed, not kept alongside". With a Behaviour to keep section, add "every behaviour listed under Behaviour to keep still runs, or the PR names its removal and justifies it".
 - **## Out of scope**: one to three bullets on what the fix must not touch, or "nothing noted". `rota round assign` copies it into the worker brief.
 
-Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, the top recommendation. Zero filed is valid. A hosted round architecture-review worker ends with `ROTA-DONE <slot> issues:#a,#b` for filed issues or `ROTA-DONE <slot> issues:none` for no findings. Printing that final line reports completion; `round report` is solo-only. Solo reporting with no findings uses `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed).
+Report: table of filed issues (number, title, strength), skipped duplicates with the matched issue, dropped findings with the reason, the top recommendation. End it with one line, `Not checked: <areas the review did not read>` (`Not checked: nothing` only when every file in scope was read in full). Zero filed is valid.
+
+A hosted round architecture-review worker ends with `ROTA-DONE <slot> issues:#a,#b` for filed issues or `ROTA-DONE <slot> issues:none` for no findings. The summary above that line ends with the same `Not checked:` line; the `ROTA-DONE` line stays last and unchanged. Printing that final line reports completion; `round report` is solo-only. Solo reporting with no findings uses `rota round report <slot> --state done --issues none` (include `--attempt <id>` when briefed).
 
 When the user rejects a finding, or `--interactive` was passed, read [`options.md`](options.md) (Rejections, Interactive filing).
 
