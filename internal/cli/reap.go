@@ -72,6 +72,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 			c.Warn("%s", w)
 		}
 		in.PrunableOnly = *prunable
+		in.Progress = func(step string) { fmt.Fprintf(c.Stderr, "%s: %s\n", c.Path, step) }
 		found, err := reap.Find(ctx, in, kinds)
 		if err != nil {
 			return Result{}, err

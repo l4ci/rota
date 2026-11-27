@@ -272,3 +272,27 @@ func TestReapApplyCatchesAnAgentThatAppearsAfterFind(t *testing.T) {
 		t.Fatal("worktree with a late agent was removed")
 	}
 }
+
+// A long preview is not silent: each slow step is named on stderr (#4287).
+func TestReapPrintsProgressOnStderr(t *testing.T) {
+	root, deps := reapProject(t, nil, true)
+	sys := t.TempDir()
+	deps.TempDir = func() string { return sys }
+	if err := os.MkdirAll(filepath.Join(sys, "rota-smoke.old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	deps.ProcessUses = func() ([]reap.ProcUse, error) { return nil, nil }
+	code, out, errOut := rotaInWith(t, deps, root, "--json", "reap", "--kind", "tmp,systmp")
+	data(t, out) // stdout stays one JSON envelope
+	if code != 0 {
+		t.Fatalf("preview = %d %s", code, errOut)
+	}
+	for _, want := range []string{"walking the system temp dir", "reading the process table"} {
+		if !strings.Contains(errOut, "rota reap: "+want) {
+			t.Errorf("stderr lacks %q: %q", want, errOut)
+		}
+		if strings.Contains(out, want) {
+			t.Errorf("progress leaked to stdout: %q", out)
+		}
+	}
+}

@@ -127,8 +127,10 @@ type Input struct {
 	SystemTemp string
 	// ProcessUses lists the paths each live process uses (pidlive.ReadPathUses). Nil
 	// or an error holds every tmp candidate: nothing can prove no process uses
-	// it. It is read afresh before each tmp removal.
+	// it. Find reads it once; it is read afresh before each tmp removal.
 	ProcessUses func() ([]ProcUse, error)
+	// Progress is told each slow step before Find takes it. Nil says nothing.
+	Progress func(step string)
 }
 
 // LeftoverAge is how long something a run left behind (a temp dir, a skill
@@ -174,6 +176,8 @@ type state struct {
 	checkedAt  map[string]string // the path of that worktree
 	live       *ownership
 	warnings   []string
+	// found is Find's one read of the process table (findUses); nil until read.
+	found *usesRead
 }
 
 // A finder names the kind it discovers so Find can select sources before
