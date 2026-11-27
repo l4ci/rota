@@ -95,7 +95,7 @@ Without a `rota-knowledge.json` the repo is treated as `{"write": "push"}`, and 
 
 ## Split a big topic
 
-A topic read in full costs every consumer its whole file. `rota doctor` warns (`external knowledge size`) when a topic passes `knowledge.externalMaxBullets` or `knowledge.externalMaxBytes`, or the index passes `knowledge.externalMaxTopics`; `rota knowledge stats --external` shows the numbers. `/rota-learn --external-review` drafts the split for you: it groups the bullets by theme into 3 to 7 subtopics, shows the plan, and always asks before it runs the verb, whatever `autonomy.level` says.
+A topic read in full costs every consumer its whole file. `rota doctor` warns (`external knowledge size`) when a topic passes `knowledge.externalMaxBullets` or `knowledge.externalMaxBytes`, or the index passes `knowledge.externalMaxTopics`; `rota knowledge stats --external` shows the numbers. The same line warns when a topic file cannot be read (a directory or symlink in its place, say): size and layout then go unchecked. `/rota-learn --external-review` drafts the split for you: it groups the bullets by theme into 3 to 7 subtopics, shows the plan, and always asks before it runs the verb, whatever `autonomy.level` says.
 
 The verb takes a plan, a JSON file naming each subtopic and the bold titles of the bullets that move into it:
 

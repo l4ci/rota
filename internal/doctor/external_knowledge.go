@@ -15,6 +15,9 @@ type ExternalKnowledge struct {
 	// Over names each topic past a size limit, and the index past the topic
 	// limit; empty when nothing is over or the clone could not be read.
 	Over []string
+	// Unmeasured is why the topics could not be read, so neither size nor
+	// layout was checked.
+	Unmeasured string
 	// Stray lists flat topic files an older rota left beside a split topic.
 	Stray []string
 	// Malformed lists index lines whose path is not a plain topic slug; rota
@@ -45,6 +48,9 @@ func (d *runner) externalKnowledge() Check {
 // externalKnowledgeSize warns when a topic or the index of the external
 // knowledge base has outgrown its limits. A base within them adds no line.
 func (d *runner) externalKnowledgeSize() (Check, bool) {
+	if why := d.in.ExternalKnowledge.Unmeasured; why != "" {
+		return Check{Name: "external knowledge size", Status: Warn, Detail: "size and layout not checked: " + why, Hint: "fix or remove that file in the knowledge repo"}, true
+	}
 	over := d.in.ExternalKnowledge.Over
 	if len(over) == 0 {
 		return Check{}, false
