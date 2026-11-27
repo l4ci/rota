@@ -83,7 +83,7 @@ note: `--external` measures the external base instead: topics (each split topic'
 rota knowledge topics [--external]
 repo: none (umbrella `.rota/KNOWLEDGE.md`, like `stats`)
 data: {"topics": [{"name": string, "bullets": number}]}
-exit: 2 on an argument. A missing file gives `{"topics": []}`.
+exit: 2 on an argument. A missing file gives `{"topics": []}`. With `--external`, 5 when an index or topic file exists but cannot be read.
 old: none (new)
 note: text is one `<heading>: <n> bullets` line per topic, in document order. `decisions topics` is the same over `.rota/DECISIONS.md`. Use it to find the heading text to pass to `query`. It is `stats` without the byte sizes.
 
@@ -326,7 +326,7 @@ note: format is unchanged: TSV `term<TAB>def<TAB>aliases<TAB>nots`, with `#` com
 rota block <key> [--body-file <path|->]
 repo: scoped (scope S) for key `knowledge` only. Key `decisions` is umbrella-only, so `--repo` with `decisions` or with `--body-file` exits 2. Sub-repo scope writes `<sub-repo>/AGENTS.md` or `CLAUDE.md`.
 data: {"key": string, "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: 2 when the key is unknown in generated mode (without `--body-file` only `knowledge` and `decisions` are valid) or a registered `--repo` is passed where it is not allowed; an unregistered `--repo` is 3 (rule 9)
+exit: 2 when the key is unknown in generated mode (without `--body-file` only `knowledge` and `decisions` are valid) or a registered `--repo` is passed where it is not allowed; an unregistered `--repo` is 3 (rule 9); 5 when the knowledge or decisions source exists but cannot be read (the message names the path)
 old: hv-managed-block <key> [--body-stdin] [--repo <name>]    (`--body-file -` becomes `--body-stdin` with the shim's stdin; `--body-file <p>` becomes `--body-stdin < <p>`)
 shim: the stdout status word becomes `status`; `changed` is `status != "unchanged"`.
 note: the key must be the first positional. With `--body-file`, any key is accepted and the body is wrapped in `<!-- rota-<key>-start -->` … `<!-- rota-<key>-end -->`. The managed file is `AGENTS.md` if it exists, else `CLAUDE.md` (created if absent). Legacy `<!-- hv:knowledge:start -->` markers migrate in place. The unknown-key exit moves from 1 to 2.
@@ -364,7 +364,7 @@ note: returns each `.rota/map/<name>.md` body without frontmatter, in argument o
 rota map index
 repo: none
 data: {"key": "map", "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: implied only
+exit: 5 when the map directory or a map file exists but cannot be read (the message names the path)
 old: hv-map-index    (stdout status word)
 shim: same transform as `rota block`.
 note: the generated block text names `rota map query <name>` (it names `.hv/bin/hv-map-query` today).
@@ -374,7 +374,7 @@ note: an unreadable map directory or file fails with its path and leaves the ins
 rota map stats [--cap]
 repo: none
 data: {"subsystems": [{"name": string, "bytes": number, "touched": string, "entryPoints": number, "brokenRefs": number, "commitsBehind"?: number}], "count": number, "cap"?: number, "overCap"?: bool}
-exit: implied only. `--cap` and the staleness warning are advisory and never fail.
+exit: implied only. `--cap` and the staleness warning are advisory and never fail; 5 when the map directory or a map file exists but cannot be read (the message names the path)
 old: hv-map-stats    (and, with `--cap`, also hv-map-cap-check)
 shim: the old JSON keys `entry_points` and `broken_refs` are renamed to `entryPoints` and `brokenRefs`, and `count` is `len(subsystems)`. With `--cap` the shim also runs hv-map-cap-check; a stderr `note: project map has N subsystems (cap C)…` sets `overCap: true` and becomes a `warnings` entry. `cap` is config `map.softcap_subsystems`, default 20.
 note: `touched` is `YYYY-MM-DD` from frontmatter `touched:`, else the git mtime, else `""`. A missing `.rota/map/` gives `subsystems: []`. In text mode `--cap` prints only the nudge, or nothing below the cap.
@@ -395,7 +395,7 @@ note: same shape and rules as `rota map query`, over `.rota/qa/<target>.md`. The
 rota qa index
 repo: none
 data: {"key": "qa", "status": "created"|"updated"|"appended"|"unchanged", "changed": bool}
-exit: implied only
+exit: 5 when the QA directory or a QA file exists but cannot be read (the message names the path)
 old: hv-qa-index    (stdout status word)
 shim: same transform as `rota block`.
 note: the generated block text names `rota qa query <target>` (it names `.hv/bin/hv-qa-query` today).

@@ -87,7 +87,7 @@ func Entries(root string) ([]Entry, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, fsio.Unreadable(err)
 		}
 		fm, _, body := frontmatter.Parse(raw)
 		if name := fileName(f); validName(name) {
@@ -106,7 +106,7 @@ func sourceFiles(dir string) ([]string, error) {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fsio.Unreadable(err)
 	}
 	var out []string
 	for _, f := range files {
@@ -174,7 +174,7 @@ func QAIndexBlock(root string) (string, error) {
 				continue
 			}
 			if err != nil {
-				return "", err
+				return "", fsio.Unreadable(err)
 			}
 			fm, _, _ := frontmatter.Parse(raw)
 			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", fileName(f), strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
@@ -220,7 +220,7 @@ func Stats(repo git.Repo, root string) ([]Subsystem, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			return nil, fsio.Unreadable(err)
 		}
 		touched := ""
 		if d, ok := e.TouchedIn(repo, root); ok {

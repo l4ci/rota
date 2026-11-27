@@ -49,7 +49,7 @@ func (s Store) BlockInputs(key, scope string) (topics []string, target string, e
 			return nil, nil
 		}
 		if err != nil {
-			return nil, err
+			return nil, fsio.Unreadable(err)
 		}
 		text := raw
 		topics := section.Topics(text)

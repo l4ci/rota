@@ -517,6 +517,14 @@ func TestDoctorReportsUnreadableExternalFiles(t *testing.T) {
 			if strings.HasSuffix(rel, "hooks.md") {
 				knWrite(t, filepath.Join(clone, "topics/git/README.md"), "# Git\n\n- [Hooks](hooks.md) — checks\n")
 			}
+			if rel != "README.md" {
+				index := filepath.Join(clone, "README.md")
+				raw, err := os.ReadFile(index)
+				if err != nil {
+					t.Fatal(err)
+				}
+				knWrite(t, index, string(raw)+"- [Bad](topics/*.md)\n")
+			}
 			source := filepath.Join(clone, rel)
 			if err := os.Remove(source); err != nil && !os.IsNotExist(err) {
 				t.Fatal(err)
@@ -533,12 +541,18 @@ func TestDoctorReportsUnreadableExternalFiles(t *testing.T) {
 			if err := json.Unmarshal([]byte(out), &env); err != nil {
 				t.Fatalf("%v: %s", err, out)
 			}
+			var size, index bool
 			for _, c := range env.Data.Checks {
-				if c.Name == "external knowledge size" && c.Status == "warn" && strings.Contains(c.Detail, rel) {
-					return
+				if c.Status != "warn" {
+					continue
 				}
+				size = size || c.Name == "external knowledge size" && strings.Contains(c.Detail, rel)
+				index = index || c.Name == "external knowledge index" && strings.Contains(c.Detail, "[Bad]")
 			}
-			t.Fatalf("doctor does not report unreadable %s: %s", rel, out)
+			// Without a readable root index there are no index lines to report.
+			if !size || !index && rel != "README.md" {
+				t.Fatalf("doctor misses the report for unreadable %s (size %t, index %t): %s", rel, size, index, out)
+			}
 		})
 	}
 }

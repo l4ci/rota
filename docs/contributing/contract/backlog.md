@@ -274,7 +274,7 @@ note: Ported on the maintainer's decision (the triage had it as a delete). Moves
 rota backlog stale --kind <map|knowledge|todo> [--days <n>]
 repo: scoped
 data: {"kind": string, "days": number, "entries": [{"name": string, "date": string|null}], "skippedUndated": number (todo only)}
-exit: 2 when `--kind` is missing or not map|knowledge|todo
+exit: 2 when `--kind` is missing or not map|knowledge|todo; 5 when `--kind map` finds a map directory or file it cannot read
 old: hv-staleness <kind> [--days <n>]    (`--kind` is the old positional)
 shim: each stdout line `<name> <YYYY-MM-DD>` becomes an entry; the literal `unknown` becomes null. `days` defaults to 90. `skippedUndated` (kind todo only) counts open items with no usable Captured date, which cannot be aged; the text adds one line when it is above 0. Test hook `--today` becomes env `ROTA_TEST_TODAY=YYYY-MM-DD`, passed through as `--today`.
 note: the verb stays under `backlog stale`, as the tree says, though map and knowledge are not backlog data. `kind` is a flag (rule 1).

@@ -47,7 +47,7 @@ func TestBlockReportsUnreadableSourceWithoutWriting(t *testing.T) {
 					}
 				}
 				got := knNew(t, dir, "", tc.args...)
-				if got.rc == 0 || !strings.Contains(got.stderr, tc.source) {
+				if got.rc != ExitUnavailable || !strings.Contains(got.stderr, tc.source) {
 					t.Errorf("expected error naming source %s: %+v", tc.source, got)
 				}
 				after, err := os.ReadFile(target)
@@ -85,7 +85,7 @@ func TestMapAndQAReportUnreadableSources(t *testing.T) {
 						t.Fatal(err)
 					}
 					got := knNew(t, dir, "", args...)
-					if got.rc == 0 || !strings.Contains(got.stderr, source) {
+					if got.rc != ExitUnavailable || !strings.Contains(got.stderr, source) {
 						t.Errorf("expected read error naming %s: %+v", source, got)
 					}
 					after, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
@@ -113,7 +113,7 @@ func TestExternalTopicsReportUnreadableFiles(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := knNew(t, project, "", "knowledge", "topics", "--external")
-			if got.rc == 0 || !strings.Contains(got.stderr, rel) {
+			if got.rc != ExitUnavailable || !strings.Contains(got.stderr, rel) {
 				t.Fatalf("expected error naming %s: %+v", rel, got)
 			}
 		})

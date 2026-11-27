@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/bulletfmt"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/toolver"
 	"github.com/l4ci/rota/internal/topicmatch"
 )
@@ -60,7 +61,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, c.indexName())
 		}
-		return nil, nil, err
+		return nil, nil, fsio.Unreadable(err)
 	}
 	var roots []Topic
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -94,7 +95,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 	for _, t := range roots {
 		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, nil, err
+			return nil, bad, fsio.Unreadable(err)
 		}
 		if err == nil {
 			if t.Split {
@@ -108,7 +109,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 					st := &t.Subtopics[i]
 					sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File)))
 					if err != nil && !errors.Is(err, os.ErrNotExist) {
-						return nil, nil, err
+						return nil, bad, fsio.Unreadable(err)
 					}
 					if err == nil {
 						st.Bullets = bulletCount(string(sb))
