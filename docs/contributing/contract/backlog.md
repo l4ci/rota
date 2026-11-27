@@ -1,10 +1,13 @@
 ---
 refs:
+  - internal/artifact
   - internal/backlog
   - internal/cli/backlog.go
   - internal/cli/item.go
   - internal/cli/labels.go
   - internal/cli/item_template.go
+  - internal/cli/work.go
+  - internal/cycle
   - internal/itembody
   - internal/marker
 ---
@@ -82,7 +85,7 @@ data: {"id": string, "type": "B"|"F"|"T", "ready": bool, "reasons": []string}
 exit: 1 when not ready (`reasons` filled); 3 item unknown; tracker
 old: hv-item-ready <ID>
 shim: rc 0 gives ready true; rc 1 with stdout reasons (no `error:` on stderr) gives ready false and one reason per stdout line; rc 1 with `error:` on stderr maps to 3 or 2 by message. Works in file mode too.
-note: checks acceptance criteria or a design/plan note, plus the same required template sections a fresh round assignment needs. Features of every size need Acceptance and Out of scope headings; research and decision items are exempt from the template requirement. Missing sections are named in `reasons`. Bugs and tasks retain their existing criteria rule.
+note: checks acceptance criteria or a design/plan note with nonblank text, plus the same required template sections a fresh round assignment needs. In file mode the note paths are `.rota/designs/<ID>.md` and `.rota/plans/<milestone>-<ID>.md`; an empty or whitespace-only file is no note. Features of every size need Acceptance and Out of scope headings; research and decision items are exempt from the template requirement. Missing sections are named in `reasons`. Bugs and tasks retain their existing criteria rule.
 
 ### rota item state
 rota item state <ID> --to <in-progress|needs-review|changes-requested|none>
@@ -335,7 +338,7 @@ rota work start <ID>[,<ID>…] [--branch <name>]
 repo: scoped
 data: {"branch": string, "base": string, "isolation": "branch"|"worktree", "worktree": string|null, "items": [{"id": string, "claim": "claimed"|"held"|"none"|"dropped", "ready": bool, "missing": []string}], "swept": []string, "changed": bool}
 exit: 2 when no ID is given; 3 when an item is unknown or no base branch resolves; 1 when the tree has a change other than a tool-generated sibling or the target's own design or plan file (`data.dirty` lists those paths), or the repo has no commit yet; 4 when `ROTA_SLOT` is set (`blockedBy: "round worker"`) or the project is an umbrella (`blockedBy: "umbrella"`), before any change; 4 when the branch exists with no `status.json` entry (`blockedBy: "exists"`, pass `--branch`); 4 when another worker holds every item (`blockedBy: "claimed"`); 5 when git fails; tracker
-note: the bookkeeping head of `/rota-work` (Steps 1, 3 and 5) in one call. It runs the clean-tree guard, commits a dirty tree made only of tool-generated siblings or the target's `.rota/designs/<ID>.md` and `.rota/plans/<ID>.md` by name (`swept`), names the branch (`--branch`, else `rota/<first ID, lowercased>-<slug of its title>`), creates it per `work.isolation` (`branch` checks it out, `worktree` adds `.claude/worktrees/<branch>`), registers it with `rota status add`, and on a tracker backend runs `item ready` and `item claim --as <branch>` per item. An item another worker holds is `dropped` and the run goes on with the rest.
+note: the bookkeeping head of `/rota-work` (Steps 1, 3 and 5) in one call. It runs the clean-tree guard, commits a dirty tree made only of tool-generated siblings or the target's `.rota/designs/<ID>.md` and `.rota/plans/<milestone>-<ID>.md` by name (`swept`), names the branch (`--branch`, else `rota/<first ID, lowercased>-<slug of its title>`), creates it per `work.isolation` (`branch` checks it out, `worktree` adds `.claude/worktrees/<branch>`), registers it with `rota status add`, and on a tracker backend runs `item ready` and `item claim --as <branch>` per item. File plans always require a milestone (e.g. `M01-B07.md`); the sweep groups that plan under item `B07`, and another item's plan or a slice plan remains a user change. An item another worker holds is `dropped` and the run goes on with the rest.
 note: idempotent. With a `status.json` entry for the branch already present it creates and registers nothing, checks the branch out when it is not current, re-claims (a claim under the same ID is a no-op) and reports `changed: false` when nothing moved.
 
 ### rota status add
