@@ -11,35 +11,55 @@ import (
 
 // ---- project metadata kept in step with writes ------------------------------
 
+// cachedLabel is the id of label name among those read or created so far.
+func (t *Itsaplan) cachedLabel(name string) (int, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, l := range t.meta.Labels {
+		if sameLabelName(itsaplanLabelRule, l.Name, name) {
+			return l.ID, true
+		}
+	}
+	return 0, false
+}
+
+// loadLabels reads the project, and rereads its labels once when one of names
+// is missing, since another writer may have made it.
+func (t *Itsaplan) loadLabels(ctx context.Context, names []string) error {
+	if _, err := t.projectMeta(ctx); err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(names, func(n string) bool { _, ok := t.cachedLabel(n); return !ok }) {
+		return nil
+	}
+	return t.refreshLabels(ctx)
+}
+
 // labelIDs is the ids of the named labels, creating the missing ones when
 // create is set; without it a missing label is KindNotFound.
 func (t *Itsaplan) labelIDs(ctx context.Context, names []string, create bool) ([]int, error) {
-	if _, err := t.projectMeta(ctx); err != nil {
+	names = uniq(names)
+	if err := t.loadLabels(ctx, names); err != nil {
 		return nil, err
 	}
 	var ids []int
-	for _, name := range uniq(names) {
-		id, err := t.labelID(ctx, name, create)
-		if err != nil {
-			return nil, err
+	for _, name := range names {
+		id, ok := t.cachedLabel(name)
+		if !ok {
+			if !create {
+				return nil, &Error{Kind: KindNotFound, Code: 1, Message: fmt.Sprintf("It's a Plan project %s has no label %q", t.project, name)}
+			}
+			var err error
+			if id, err = t.createLabel(ctx, name); err != nil {
+				return nil, err
+			}
 		}
 		ids = append(ids, id)
 	}
 	return ids, nil
 }
 
-func (t *Itsaplan) labelID(ctx context.Context, name string, create bool) (int, error) {
-	t.mu.Lock()
-	for _, l := range t.meta.Labels {
-		if sameLabelName(itsaplanLabelRule, l.Name, name) {
-			t.mu.Unlock()
-			return l.ID, nil
-		}
-	}
-	t.mu.Unlock()
-	if !create {
-		return 0, &Error{Kind: KindNotFound, Code: 1, Message: fmt.Sprintf("It's a Plan project %s has no label %q", t.project, name)}
-	}
+func (t *Itsaplan) createLabel(ctx context.Context, name string) (int, error) {
 	var l itsaplanLabel
 	if err := t.rest.Do(ctx, http.MethodPost, t.projectPath("/labels"), map[string]any{"name": name}, &l); err != nil {
 		return 0, err
@@ -242,16 +262,14 @@ func (t *Itsaplan) RemoveLabels(ctx context.Context, key IssueKey, labels []stri
 		return nil
 	}
 	// a label no one made is on no issue: only the names that exist are removed
+	if err := t.loadLabels(ctx, labels); err != nil {
+		return err
+	}
 	var drop []int
 	for _, n := range labels {
-		ids, err := t.labelIDs(ctx, []string{n}, false)
-		if IsKind(err, KindNotFound) {
-			continue
+		if id, ok := t.cachedLabel(n); ok {
+			drop = append(drop, id)
 		}
-		if err != nil {
-			return err
-		}
-		drop = append(drop, ids...)
 	}
 	if len(drop) == 0 {
 		return nil

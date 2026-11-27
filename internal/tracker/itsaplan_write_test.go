@@ -132,7 +132,8 @@ func TestItsaplanAddLabelsKeepsOthers(t *testing.T) {
 	if err := it.AddLabels(ctx, key, []string{"nope"}, false); !IsKind(err, KindNotFound) {
 		t.Errorf("a missing label with autoCreate off: %v", err)
 	}
-	if err := it.EnsureLabels(ctx, []string{"made"}, true); err != nil {
+	// two spellings of one new label are one label
+	if err := it.EnsureLabels(ctx, []string{"made", "Made"}, true); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -217,4 +218,76 @@ func TestItsaplanCommentsCRUDKeepMarkers(t *testing.T) {
 	if err := it.EditComment(ctx, "OTHER-1", "1", "x"); !IsKind(err, KindNotFound) {
 		t.Errorf("a key of another project: %v", err)
 	}
+}
+
+// A label another writer creates after the adapter read the project shows up on
+// later reads, and adding or removing it does not create it again.
+func TestItsaplanRereadsLabelsMadeByAnotherWriter(t *testing.T) {
+	ctx := context.Background()
+	read := map[string]func(*Itsaplan) ([]string, error){
+		"get": func(it *Itsaplan) ([]string, error) {
+			is, err := it.Get(ctx, "MKT-1", false)
+			return is.Labels, err
+		},
+		"list": func(it *Itsaplan) ([]string, error) {
+			got, err := it.List(ctx, ListFilter{Labels: []string{"late"}})
+			if err != nil || len(got) != 1 {
+				return nil, err
+			}
+			return got[0].Labels, nil
+		},
+	}
+	write := map[string]func(*Itsaplan) error{
+		"add":           func(it *Itsaplan) error { return it.AddLabels(ctx, "MKT-1", []string{"late"}, true) },
+		"add-no-create": func(it *Itsaplan) error { return it.AddLabels(ctx, "MKT-1", []string{"late"}, false) },
+		"ensure":        func(it *Itsaplan) error { return it.EnsureLabels(ctx, []string{"late"}, true) },
+		"remove":        func(it *Itsaplan) error { return it.RemoveLabels(ctx, "MKT-1", []string{"late"}) },
+	}
+	// stale is an adapter that read the project before "late" existed.
+	stale := func(t *testing.T) (*Itsaplan, *itsaplantest.Server) {
+		it, s := fakeItsaplan(t, itsaplantest.Options{Labels: []string{"bug"}})
+		s.Add(itsaplantest.Issue{Title: "a", Labels: []string{"bug"}})
+		if _, err := it.Get(ctx, "MKT-1", false); err != nil {
+			t.Fatal(err)
+		}
+		s.SetLabels("MKT-1", "bug", "late")
+		return it, s
+	}
+	for name, f := range read {
+		t.Run(name, func(t *testing.T) {
+			it, _ := stale(t)
+			if got, err := f(it); err != nil || !slices.Equal(got, []string{"bug", "late"}) {
+				t.Errorf("labels %v, %v", got, err)
+			}
+		})
+	}
+	for name, f := range write {
+		t.Run(name, func(t *testing.T) {
+			it, s := stale(t)
+			if err := f(it); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"bug", "late"}
+			if name == "remove" {
+				want = []string{"bug"}
+			}
+			if got := s.Labels("MKT-1"); !slices.Equal(got, want) {
+				t.Errorf("labels %v, want %v", got, want)
+			}
+			if n := s.Count("/projects/MKT/labels"); n != 0 {
+				t.Errorf("%d label creations", n)
+			}
+		})
+	}
+	// Names no writer made cost one reread per call, not one each.
+	t.Run("one reread", func(t *testing.T) {
+		it, s := stale(t)
+		before := s.Count("/projects/MKT")
+		if err := it.RemoveLabels(ctx, "MKT-1", []string{"ghost", "phantom"}); err != nil {
+			t.Fatal(err)
+		}
+		if n := s.Count("/projects/MKT") - before; n != 1 {
+			t.Errorf("%d project reads, want 1", n)
+		}
+	})
 }
