@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"github.com/l4ci/rota/internal/git"
@@ -165,8 +166,13 @@ func (g *gateRun) awaitMerged() (sha string, done bool) {
 // reported distinctly so nobody retries an already-merged PR.
 func (g *gateRun) confirmLanded(sha string) (done bool) {
 	o := g.o
-	if _, code := g.git(g.root, "fetch", g.rem(), "-q"); code != 0 {
-		g.broke("git fetch " + g.rem() + " failed after merging")
+	if cause := g.fetchMerged(); cause != "" {
+		// The forge already reports the PR merged: it landed, only unconfirmed here.
+		g.res.Changed, g.res.VerifySkipped = true, true
+		g.res.SHA = strutil.ShortSHA(sha)
+		g.verdict(landing.GateMergedRemotely,
+			fmt.Sprintf("MERGED-REMOTELY %s — PR %s is merged into %s on the forge, but git fetch %s failed %d times after merging (%s); do not re-merge, reconcile %s by hand", o.Slot, g.prNum, o.Base, g.rem(), gateFetchTries, cause, o.Base),
+			fmt.Sprintf("the merged tree was NOT verified: once %s answers, fetch it, fast-forward the local %s to %s, then run the full gate on %s", g.rem(), o.Base, g.baseRef, o.Base))
 		return true
 	}
 	onBase, err := g.isAncestor(g.root, sha, g.baseRef)
@@ -196,6 +202,26 @@ func (g *gateRun) confirmLanded(sha string) (done bool) {
 		return true
 	}
 	return false
+}
+
+// fetchMerged fetches the remote after a forge merge, retrying a failure. It
+// returns "" on success, else the last failure's last line.
+func (g *gateRun) fetchMerged() (cause string) {
+	for i := 1; ; i++ {
+		res, err := g.e.Git(g.ctx, g.root, "fetch", g.rem(), "-q")
+		switch {
+		case err != nil:
+			cause = err.Error()
+		case res.ExitCode != 0:
+			cause = cmp.Or(tailLines(strings.TrimSpace(res.Stderr), 1), fmt.Sprintf("exit %d", res.ExitCode))
+		default:
+			return ""
+		}
+		if i == gateFetchTries {
+			return cause
+		}
+		g.e.Sleep(gateHeadWait)
+	}
 }
 
 // mergedRemotely ends the gate on a PR that is on origin but not on the local
