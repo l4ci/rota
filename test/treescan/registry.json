@@ -48,7 +48,7 @@
     "./internal/cli/TestFileCompleteUnmetAcceptance": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredAppendsToOpenItem": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredBrokenFollowUpReportsItem": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
-    "./internal/cli/TestFileDeferredDefaultFilesOnlyMajor": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
+    "./internal/cli/TestFileDeferredDefaultFilesMajorAndAbove": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredFloor": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredOneItemPerPR": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
     "./internal/cli/TestFileDeferredSkipsFollowUpPR": "Reads generated Markdown in a temporary test project or copied testdata; does not inspect repository source/docs.",
