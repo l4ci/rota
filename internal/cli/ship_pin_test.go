@@ -242,3 +242,26 @@ func TestShipMergeRecoversFailAtPinAfterRefMoves(t *testing.T) {
 		t.Errorf("branch-keyed recovered verdict = %+v", records)
 	}
 }
+
+// A rename out of a covered path touches that path: ship asks for approval as
+// the gate and the train do (#4372).
+func TestShipMergeRenameOutOfProtectedPathNeedsApproval(t *testing.T) {
+	shipDeterministic(t)
+	work := shipFixture(t, `{"forge":{"provider":"github"},"issues":{"source":"file"},"ship":{"mergeApproval":"paths","mergeApprovalPaths":["protected/**"]}}`)
+	write(t, filepath.Join(work, "protected", "a.txt"), "protected content\n")
+	gittest.Run(t, work, "add", "protected/a.txt")
+	gittest.Run(t, work, "commit", "-q", "-m", "add protected file")
+	gittest.Run(t, work, "checkout", "-q", "-b", "feat/x")
+	gittest.Run(t, work, "mv", "protected/a.txt", "moved.txt")
+	gittest.Run(t, work, "commit", "-q", "-m", "move out of protected")
+	gittest.Run(t, work, "checkout", "-q", "main")
+	base := gittest.Run(t, work, "rev-parse", "main")
+	out := trRun(t, work, "merge: move", "ship", "merge", "feat/x", "--body-file", "-", "--json")
+	d := data(t, out.stdout)
+	if out.code != ExitRefused || d["gate"] != "merge-approval" || !reflect.DeepEqual(d["paths"], []any{"protected/a.txt"}) {
+		t.Errorf("rename out of a protected path must require approval: output=%+v data=%v", out, d)
+	}
+	if got := gittest.Run(t, work, "rev-parse", "main"); got != base {
+		t.Errorf("refused merge changed base: %s", got)
+	}
+}

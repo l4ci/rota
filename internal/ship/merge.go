@@ -76,11 +76,11 @@ func mergeWords(branch string) land.Words {
 	}
 }
 
-// ChangedFiles lists the files a merge range changes, for the merge-approval
-// gate.
+// ChangedFiles lists the files a merge range changes, both names of a rename,
+// for the merge-approval gate.
 func ChangedFiles(g Git, rng string) ([]string, error) {
 	run := func(_ context.Context, _ string, args ...string) (git.Result, error) { return g.Run(args...) }
-	paths, err := git.ChangedPaths(context.Background(), run, "", rng)
+	paths, err := git.DiffFiles(context.Background(), run, "", rng)
 	var ee *git.ExitError
 	if errors.As(err, &ee) {
 		return nil, &GitError{Msg: "git diff " + rng + ": " + strutil.FirstLine(ee.Stderr)}
