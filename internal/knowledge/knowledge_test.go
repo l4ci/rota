@@ -66,7 +66,7 @@ func TestLegacyBulletHasOneTierAcrossReaders(t *testing.T) {
 	os.MkdirAll(rota, 0o777)
 	os.WriteFile(filepath.Join(rota, "KNOWLEDGE.md"), []byte("# K\n\n## Arch\n\n- **Old** — legacy <!-- 2026-01-01 -->\n- **Kept** — tracked <!-- 2026-01-02 -->\n\n## Glossary\n\n- **Term** — never tiered\n"), 0o666)
 	s := Store{Root: root}
-	if _, _, err := s.TierSet(Umbrella, "Arch", "Kept", Confirmed); err != nil {
+	if _, err := s.TierSet(Umbrella, "Arch", "Kept", Confirmed); err != nil {
 		t.Fatal(err)
 	}
 	sidecar := filepath.Join(rota, "knowledge-tier.json")
@@ -150,10 +150,10 @@ func TestAmendKeepsStampFinalForQuery(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.TierSet(Umbrella, "T", "Old", Deprecated); err != nil {
+	if _, err := s.TierSet(Umbrella, "T", "Old", Deprecated); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.TierSet(Umbrella, "T", "Pinned", Confirmed); err != nil {
+	if _, err := s.TierSet(Umbrella, "T", "Pinned", Confirmed); err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range []string{"Old", "Pinned", "Fresh"} {

@@ -29,10 +29,10 @@ func TestKnowledgeRm(t *testing.T) {
 		t.Errorf("KNOWLEDGE.md:\n%s\nwant:\n%s", k, want)
 	}
 	st := knowledge.Store{Root: dir}
+	tracked := knTracked(t, st, "Architecture")
 	for _, title := range []string{"Beta rule", "Alpha rule", "Old rule"} {
-		_, found, err := st.TierGet(knowledge.Umbrella, "Architecture", title)
-		if err != nil || found != (title != "Beta rule") {
-			t.Errorf("%s: found=%v err=%v", title, found, err)
+		if _, found := tracked[title]; found != (title != "Beta rule") {
+			t.Errorf("%s: found=%v", title, found)
 		}
 	}
 

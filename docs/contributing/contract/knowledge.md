@@ -162,7 +162,8 @@ data: {"topic": string, "title": string, "found": bool, "tier"?: string, "hits"?
 exit: 2 when `--topic` or `--title` is missing
 old: hv-knowledge-tier [--repo <name>] --get --topic <T> --title <S>
 shim: stdout `{}` gives `found: false`; otherwise the keys are copied across (`lastSeen` is already camelCase).
-note: reads the sidecar with buffered hits replayed in memory and a provisional entry for each bullet that has none; nothing is written. redesign. `rota knowledge tier` is now a group with sub-verbs `get`, `set`, `list` and `fold`, replacing the old `--get/--set/--init/--inc/--list` mode flags. An untracked entry is `found: false` with exit 0, as the old helper returned `{}`. Topic `Glossary` is always `found: false`.
+note: reads the sidecar with buffered hits replayed in memory and a provisional entry for each bullet that has none; nothing is written. redesign. `rota knowledge tier` is now a group with sub-verbs `get`, `set`, `list` and `fold`, replacing the old `--get/--set/--init/--inc/--list` mode flags. Topic `Glossary` is always `found: false`.
+note: the title is read as `knowledge hit` reads it (#4307): matched case-insensitively against the topic's bullets, with `data.title` the stored title. Exit 3 when no bullet under the topic has that title; exit 4 when several share it up to case. The old helper returned `{}` for an unknown title.
 
 ### rota knowledge tier set
 rota knowledge tier set --topic <T> --title <S> --tier provisional|confirmed|deprecated
@@ -171,7 +172,8 @@ data: {"topic": string, "title": string, "tier": string, "previousTier"?: string
 exit: 2 when a flag is missing or `--tier` is not one of the three values
 old: hv-knowledge-tier [--repo <name>] --set --topic <T> --title <S> --tier <t>    (`--tier` is always emitted after `--set`)
 shim: `previousTier` and `changed` come from a `--get` call made before the `--set`.
-note: `--tier` is a plain value here and a filter only in `tier list`. Its meaning no longer depends on flag order, because each sub-verb fixes it. Setting an untracked entry creates it with hits 0 (old behaviour), with `previousTier` absent. Topic `Glossary` is a no-op with `changed: false` and exit 0.
+note: `--tier` is a plain value here and a filter only in `tier list`. Its meaning no longer depends on flag order, because each sub-verb fixes it. Setting a bullet with no sidecar entry creates it with hits 0, with `previousTier` absent when there was none. Topic `Glossary` is a no-op with `changed: false` and exit 0.
+note: the title is read as in `tier get` (#4307), and the record is keyed by the stored title. An unknown title (exit 3) or a shared one (exit 4) writes nothing; the old helper recorded any string.
 note: the port reads the value it reports in the same locked pass as the write; the shim's follow-up read can skew it under concurrent writers.
 
 ### rota knowledge tier list
