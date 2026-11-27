@@ -2,6 +2,7 @@ package marker
 
 import (
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -28,8 +29,8 @@ type ClaimState struct {
 }
 
 // FoldClaims is the one reading of claim markers: held claims, when each was
-// taken and which were handed back by a person. It is pure; callers that keep
-// claims elsewhere (a tracker claim store) filter the result against it.
+// taken and which were handed back by a person. The tracker claim surface
+// adapts its storage form and filters the result against authoritative records.
 func FoldClaims(comments []ClaimComment) ClaimState {
 	var st ClaimState
 	for _, c := range comments {
@@ -58,4 +59,32 @@ func FoldClaims(comments []ClaimComment) ClaimState {
 		}
 	}
 	return st
+}
+
+// ClaimHistory retains the server identity and time of a plain claim comment
+// before its release deletes it. It rides on the release, never on visible
+// claim text. The original comment id preserves ordering when times tie.
+func ClaimHistory(id string, at time.Time, commentID string) string {
+	return Line("claim-history", id, at.Format(time.RFC3339Nano), commentID)
+}
+
+// ParseClaimHistory reads a release's archived claim, when it names that same
+// holder. A bare release is not evidence that a claim ever existed.
+func ParseClaimHistory(body string) (id string, at time.Time, commentID string, ok bool) {
+	verb, holder, release := ParseClaim(body)
+	if !release || verb != KindRelease {
+		return
+	}
+	for _, line := range strings.Split(body, "\n") {
+		words := strings.Fields(line)
+		if len(words) != 6 || words[0] != "<!--" || words[1] != "rota:claim-history" || words[2] != holder || words[5] != "-->" {
+			continue
+		}
+		parsed, err := time.Parse(time.RFC3339Nano, words[3])
+		if err != nil {
+			continue
+		}
+		return holder, parsed, words[4], true
+	}
+	return
 }
