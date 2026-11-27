@@ -55,13 +55,13 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 	began := time.Now()
 	defer func() {
 		res.DiagnoseTime += time.Since(began)
-		e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k])
+		t.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k])
 	}()
 	// rerun reports whether the failing tests fail on the base plus members
 	// (merged in order); merged is false when the members do not merge cleanly
 	// without the ones between them.
 	rerun := func(members ...int) (red, merged bool, err error) {
-		if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[0]); code != 0 {
+		if _, code := t.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[0]); code != 0 {
 			return false, false, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[0])
 		}
 		labels := []string{}
@@ -106,7 +106,7 @@ func (t *trainRun) classifyRed(p trainPlan, res *landing.TrainResult, k int, fai
 	// A narrowed pass proves less, so the pair run (the whole prefix when
 	// last is 1) is confirmed by the full commands too.
 	if last > 1 || confirm != nil {
-		if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k]); code != 0 {
+		if _, code := t.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[k]); code != 0 {
 			return redClass{}, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[k])
 		}
 		t.phase("classify: base + %d member(s), %d command(s)", k, len(cmds))
@@ -367,11 +367,11 @@ func (t *trainRun) bisectNarrowed(p trainPlan, res *landing.TrainResult, tier st
 	}
 	classify := func(k int, f VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, f, &np) }
 	snap := cloneTrainResult(*res)
-	passing, stop, err := e.bisectTrain(scratch, res, p.tips, tier, narrow, classify, failed, t.o.LandGreen)
+	passing, stop, err := t.bisectTrain(scratch, res, p.tips, tier, narrow, classify, failed, t.o.LandGreen)
 	if err != nil || stop || passing == 0 {
 		return passing, stop, err
 	}
-	if _, code := e.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[passing]); code != 0 {
+	if _, code := t.git(scratch, "checkout", "-q", "-f", "--detach", p.tips[passing]); code != 0 {
 		return 0, true, fmt.Errorf("git checkout %s failed in the scratch tree", p.tips[passing])
 	}
 	r, err := run(passing)
@@ -389,7 +389,7 @@ func (t *trainRun) bisectNarrowed(p trainPlan, res *landing.TrainResult, tier st
 	*res = snap
 	res.DiagnoseTime, res.Original = spent, nil
 	plain := func(k int, f VerifyResult) (redClass, error) { return t.classifyRed(p, res, k, f, nil) }
-	passing, stop, err = e.bisectTrain(scratch, res, p.tips, tier, run, plain, r, t.o.LandGreen)
+	passing, stop, err = t.bisectTrain(scratch, res, p.tips, tier, run, plain, r, t.o.LandGreen)
 	if orig != nil {
 		res.Original = orig
 	}
