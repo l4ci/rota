@@ -114,7 +114,7 @@ func TestMapQueryAndQAQueryMatchGolden(t *testing.T) {
 }
 
 // The goldens carry the old helpers' blocks with the A9 G4 text: the pointer
-// names the rota verb. Everything else is the frozen output, byte for byte.
+// names the rota verb. Since #4310 a map file without `subsystem:` is listed too.
 func TestMapAndQAIndexMatchGolden(t *testing.T) {
 	for _, c := range []struct{ group string }{{"map"}, {"qa"}} {
 		for _, withEntries := range []bool{true, false} {
@@ -139,7 +139,7 @@ func TestMapAndQAIndexMatchGolden(t *testing.T) {
 func TestMapStats(t *testing.T) {
 	dir := mapProject(t)
 	n := knNew(t, dir, "", "map", "stats", "--json")
-	for _, want := range []string{`"name": "alpha"`, `"name": "cli"`, `"entryPoints": 3`, `"brokenRefs": 2`, `"touched": "2026-09-01"`, `"count": 2`} {
+	for _, want := range []string{`"name": "alpha"`, `"name": "cli"`, `"entryPoints": 3`, `"brokenRefs": 2`, `"touched": "2026-09-01"`, `"name": "nofm"`, `"count": 3`} {
 		if !strings.Contains(n.stdout, want) {
 			t.Errorf("missing %s: %s", want, n.stdout)
 		}
@@ -162,12 +162,12 @@ func TestMapStatsCap(t *testing.T) {
 	}
 	knWrite(t, filepath.Join(dir, ".rota", "config.json"), `{"map": {"softcap_subsystems": 2}}`)
 	over := knNew(t, dir, "", "map", "stats", "--cap", "--json")
-	if !strings.Contains(over.stdout, `"cap": 2, "overCap": true`) || !strings.Contains(over.stdout, `"warnings": ["project map has 2 subsystems (cap 2);`) {
+	if !strings.Contains(over.stdout, `"cap": 2, "overCap": true`) || !strings.Contains(over.stdout, `"warnings": ["project map has 3 subsystems (cap 2);`) {
 		t.Errorf("over cap: %s", over.stdout)
 	}
 	// The old nudge text matches: the helper printed it on stderr, rota prints it on stdout.
 	got := knFrozenView(t, dir, "", func(o *knFrozenOut) { o.Stdout, o.Stderr = "", o.Stdout }, "map", "stats", "--cap")
-	if !strings.HasPrefix(got.Stdout, "note: project map has 2 subsystems") {
+	if !strings.HasPrefix(got.Stdout, "note: project map has 3 subsystems") {
 		t.Errorf("text mode: %q", got.Stdout)
 	}
 }
