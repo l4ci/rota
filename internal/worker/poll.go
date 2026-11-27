@@ -444,8 +444,10 @@ func (e Env) openPRsByHead(ctx context.Context, root string, reg Registry, polle
 		return nil
 	}
 	out := map[string]string{}
-	for _, p := range prs {
-		out[p.Branch] = p.URL
+	for _, s := range reg.Slots() {
+		if p, ok := tracker.BranchPR(prs, s.Branch()); ok {
+			out[s.Branch()] = p.URL
+		}
 	}
 	return out
 }

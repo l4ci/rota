@@ -151,12 +151,8 @@ func (e Env) openBranchPR(ctx context.Context, branch string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, p := range prs {
-		if p.Branch == branch && p.URL != "" {
-			return p.URL, nil
-		}
-	}
-	return "", nil
+	p, _ := tracker.BranchPR(prs, branch)
+	return p.URL, nil
 }
 
 // mergedBranchPR is the merged PR headed by branch that the branch owns, nil

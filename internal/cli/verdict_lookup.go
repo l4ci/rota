@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -18,15 +19,11 @@ func lookupVerdicts(c *Ctx, t verdictBranch) []verdict.Record {
 		prs, e := f.OpenPRs(c.Context())
 		err = e
 		if err == nil {
-			for _, pr := range prs {
-				if pr.Branch == t.branch && pr.SameRepository {
-					source, ok := f.(verdict.ReportSource)
-					if !ok {
-						err = fmt.Errorf("%s cannot resolve the authenticated report author", f.Provider())
-						break
-					}
+			if pr, found := tracker.BranchPR(prs, t.branch); found {
+				if source, ok := f.(verdict.ReportSource); ok {
 					err = verdict.RecoverPR(c.Context(), t.root, t.key, t.head, pr.Number, source)
-					break
+				} else {
+					err = fmt.Errorf("%s cannot resolve the authenticated report author", f.Provider())
 				}
 			}
 		}

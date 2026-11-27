@@ -547,17 +547,15 @@ func openPRBase(c *Ctx, t *branchTarget) int {
 	if err != nil {
 		return 0
 	}
+	pr, ok := tracker.BranchPR(prs, t.Branch)
+	if !ok || pr.Base == "" || pr.Base == t.Branch {
+		return 0
+	}
 	r := c.deps().Repo(t.Dir)
-	for _, pr := range prs {
-		// A fork PR may reuse the branch name: only the project's own PR counts.
-		if pr.Branch != t.Branch || pr.Base == "" || pr.Base == t.Branch || !pr.SameRepository {
-			continue
-		}
-		for _, ref := range []string{pr.Base, "origin/" + pr.Base} {
-			if ok, err := r.Verify(c.Context(), ref+"^{commit}"); err == nil && ok {
-				t.Base = ref
-				return pr.Number
-			}
+	for _, ref := range []string{pr.Base, "origin/" + pr.Base} {
+		if ok, err := r.Verify(c.Context(), ref+"^{commit}"); err == nil && ok {
+			t.Base = ref
+			return pr.Number
 		}
 	}
 	return 0
@@ -609,20 +607,6 @@ func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDep
 		return worker.ReviewDepth{}, "", Failed("%v", err)
 	}
 	return res, inputs.PreviewWhy(res), nil
-}
-
-// branchPRBody is the body of branch's open PR for change classification.
-func branchPRBody(c *Ctx, f tracker.Forge, branch string) (body string, found bool, err error) {
-	prs, err := f.OpenPRs(c.Context())
-	if err != nil {
-		return "", false, err
-	}
-	for _, pr := range prs {
-		if pr.Branch == branch {
-			return pr.Body, true, nil
-		}
-	}
-	return "", false, nil
 }
 
 // crossAccountLine is the one-line REVIEW-ACCOUNT form of the reviewer login:

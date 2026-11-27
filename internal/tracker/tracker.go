@@ -198,6 +198,18 @@ type PR struct {
 	SameRepository bool
 }
 
+// BranchPR is the one answer to "which open PR belongs to this branch": the
+// first PR of an OpenPRs listing headed by branch in the project's own
+// repository. A fork may reuse the branch name, so its PR never counts.
+func BranchPR(prs []PR, branch string) (PR, bool) {
+	for _, p := range prs {
+		if p.Branch == branch && p.SameRepository {
+			return p, true
+		}
+	}
+	return PR{}, false
+}
+
 // PRInfo is one PR/MR as the merge gate reads it. State is OPEN, MERGED or
 // CLOSED on both forges. MergeSHA is the merge commit, the squash commit on a
 // GitLab squash merge, and "" when the forge has none (a fast-forward or

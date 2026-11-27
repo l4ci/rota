@@ -615,7 +615,7 @@ func TestDonePRSectionWarnings(t *testing.T) {
 func TestDoneWarnsForUnrecordedOpenPR(t *testing.T) {
 	r := newDoneRig(t, oneSlot, fastCfg)
 	r.pass("7", proof.FastTierCheck)
-	r.forge(donePRForge{prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Assumptions\nNone\n"}}})
+	r.forge(donePRForge{prs: []tracker.PR{{SameRepository: true, Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Assumptions\nNone\n"}}})
 	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.SetPR("") }); err != nil {
 		t.Fatal(err)
 	}
@@ -642,8 +642,8 @@ func TestDoneUnrecordedPRCleanCases(t *testing.T) {
 		err  error
 	}{
 		{name: "no open PR"},
-		{name: "another branch", prs: []tracker.PR{{Branch: "dana/8-y", URL: ghURL}}},
-		{name: "complete body", prs: []tracker.PR{{Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"}}},
+		{name: "another branch", prs: []tracker.PR{{SameRepository: true, Branch: "dana/8-y", URL: ghURL}}},
+		{name: "complete body", prs: []tracker.PR{{SameRepository: true, Branch: "ben/7-x", URL: ghURL, Body: "## Approvals\nNone\n## Rulings\nNone\n## Assumptions\nNone\n"}}},
 		{name: "forge unavailable", err: errors.New("forge offline")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
