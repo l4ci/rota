@@ -156,21 +156,26 @@ func knExtQuery(c *Ctx, topics []string, all bool) (Result, error) {
 	if err != nil {
 		return Result{}, extErr(err)
 	}
-	text, missing, recheck := res.Text, res.Missing, res.Recheck
-	for _, s := range res.Strays {
+	ms, rs := extReport(c, cl, res.Strays, res.Missing, res.Recheck)
+	return Result{Data: jsonx.Obj("text", res.Text, "missing", ms, "recheck", rs), Text: res.Text}, nil
+}
+
+// extReport warns about what a query or match walk found beside its bullets
+// and returns the missing and recheck JSON arrays.
+func extReport(c *Ctx, cl extknowledge.Clone, strays []extknowledge.StrayRef, missing []string, recheck []extknowledge.Recheck) (ms, rs []any) {
+	for _, s := range strays {
 		c.Warn("%s has a stray file %s beside its folder (an older rota wrote it): run `rota knowledge split --external --topic %s` to fold it in", s.Topic, s.File, s.Topic)
 	}
 	warnMalformed(c, cl.Malformed())
-	ms := []any{}
+	ms, rs = []any{}, []any{}
 	for _, m := range missing {
 		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
 		ms = append(ms, m)
 	}
-	rs := []any{}
 	for _, r := range recheck {
 		rs = append(rs, jsonx.Obj("topic", r.Topic, "title", r.Title, "tool", r.Tool, "seen", r.Seen, "project", r.Project))
 	}
-	return Result{Data: jsonx.Obj("text", text, "missing", ms, "recheck", rs), Text: text}, nil
+	return ms, rs
 }
 
 // warnMalformed names each index line the base wrote outside the slugs rota
@@ -200,16 +205,11 @@ func knExtMatch(c *Ctx, topics []string, match string) (Result, error) {
 	if err != nil {
 		return Result{}, extErr(err)
 	}
-	warnMalformed(c, cl.Malformed())
-	ms := []any{}
-	for _, m := range res.Missing {
-		c.Warn("no external topic matches %q — run `rota knowledge topics --external` to list them", m)
-		ms = append(ms, m)
-	}
+	ms, rs := extReport(c, cl, res.Strays, res.Missing, res.Recheck)
 	if res.N == 0 && len(res.Missing) == 0 {
 		c.Warn("no bullet matches %q", match)
 	}
-	return Result{Data: jsonx.Obj("text", res.Text, "missing", ms, "recheck", []any{}, "matches", res.N), Text: res.Text}, nil
+	return Result{Data: jsonx.Obj("text", res.Text, "missing", ms, "recheck", rs, "matches", res.N), Text: res.Text}, nil
 }
 
 // projectTools is the tool versions the current project runs, read from its

@@ -181,76 +181,43 @@ type Recheck struct{ Topic, Title, Tool, Seen, Project string }
 // only its file. A stray flat file beside a split topic prints under
 // "## Name (stray: file)" and is listed in Strays.
 func (c Clone) QueryWith(want []string, opts QueryOpts) (QueryResult, error) {
-	topics, err := c.Topics()
+	if len(want) == 0 {
+		return QueryResult{}, nil // the walk reads that as every topic
+	}
+	w, err := c.walk(want, opts.All)
 	if err != nil {
 		return QueryResult{}, err
 	}
-	var res QueryResult
+	res := QueryResult{Missing: w.Missing, Strays: w.Strays}
 	var parts []string
-	printed := map[string]bool{}
-	section := func(heading, rel, name string) error {
-		if printed[rel] {
-			return nil
-		}
-		printed[rel] = true
-		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+	for _, f := range w.Files {
+		file, rows, err := markRecheck(f.Topic.Name, f.Content, opts.Project)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return nil // indexed but not written yet: nothing to print
-			}
-			return err
+			return QueryResult{}, err
 		}
-		file, rows, err := markRecheck(name, string(body), opts.Project)
-		if err != nil {
-			return err
+		for _, r := range rows {
+			res.Recheck = append(res.Recheck, r.Recheck)
 		}
-		res.Recheck = append(res.Recheck, rows...)
-		parts = append(parts, "## "+heading+"\n"+sectionBody(file))
-		return nil
+		parts = append(parts, "## "+f.heading()+"\n"+sectionBody(file))
 	}
-	missed := map[string]bool{}
-	for _, w := range want {
-		hit := resolve(w, topics)
-		if len(hit) == 0 {
-			if k := strings.ToLower(strings.TrimSpace(w)); k != "" && !missed[k] {
-				missed[k] = true
-				res.Missing = append(res.Missing, w)
-			}
-			continue
-		}
-		for _, t := range hit {
-			if err := section(t.Name, t.File, t.Name); err != nil {
-				return QueryResult{}, err
-			}
-			if t.Stray != "" && !printed[t.Stray] {
-				if err := section(t.Name+" (stray: "+t.Stray+")", t.Stray, t.Name); err != nil {
-					return QueryResult{}, err
-				}
-				res.Strays = append(res.Strays, StrayRef{Topic: t.Name, File: t.Stray})
-			}
-			if opts.All {
-				for _, st := range t.Subtopics {
-					if err := section(st.Name, st.File, st.Name); err != nil {
-						return QueryResult{}, err
-					}
-				}
-			}
-		}
-	}
-	if len(parts) > 0 {
-		res.Text = strings.Join(parts, "\n")
-	}
+	res.Text = strings.Join(parts, "\n")
 	return res, nil
+}
+
+// lineRecheck is a recheck row and the zero-based line of its bullet.
+type lineRecheck struct {
+	line int
+	Recheck
 }
 
 // markRecheck inserts the recheck marker before the stamp of every bullet of
 // file that was seen on an older version than project's, and lists them.
-func markRecheck(topic, file string, project map[string]string) (string, []Recheck, error) {
+func markRecheck(topic, file string, project map[string]string) (string, []lineRecheck, error) {
 	if len(project) == 0 {
 		return file, nil, nil
 	}
 	lines := strings.Split(file, "\n")
-	var rows []Recheck
+	var rows []lineRecheck
 	for _, b := range parseBullets(file) {
 		if b.SeenErr != nil {
 			return "", nil, fmt.Errorf("topic %s bullet %q: bad seen stamp: %w", topic, b.Title, b.SeenErr)
@@ -259,7 +226,7 @@ func markRecheck(topic, file string, project map[string]string) (string, []Reche
 		for _, tv := range b.Seen {
 			if pv, ok := project[tv.Tool]; ok && toolver.Newer(tv.Version, pv) {
 				notes = append(notes, fmt.Sprintf("seen on %s %s, project on %s", tv.Tool, tv.Version, pv))
-				rows = append(rows, Recheck{Topic: topic, Title: b.Title, Tool: tv.Tool, Seen: tv.Version, Project: pv})
+				rows = append(rows, lineRecheck{b.Line, Recheck{Topic: topic, Title: b.Title, Tool: tv.Tool, Seen: tv.Version, Project: pv}})
 			}
 		}
 		if len(notes) == 0 {
@@ -378,6 +345,8 @@ type MatchResult struct {
 	Text    string
 	N       int
 	Missing []string
+	Recheck []Recheck // of the printed bullets only
+	Strays  []StrayRef
 }
 
 // MatchWith prints "## Name" sections holding only the bullets (with their
@@ -387,7 +356,7 @@ type MatchResult struct {
 // topics it searches those (a split parent includes its subtopics, and a
 // stray flat file beside a split topic is searched too). A matched bullet
 // carries the recheck marker as QueryWith prints it. N counts the bullets;
-// Missing lists the requested topics that named no index entry.
+// Missing and Strays are as QueryWith reports them.
 func (c Clone) MatchWith(words []string, want []string, project map[string]string) (MatchResult, error) {
 	var ws []string
 	for _, w := range words {
@@ -396,79 +365,34 @@ func (c Clone) MatchWith(words []string, want []string, project map[string]strin
 	if len(ws) == 0 {
 		return MatchResult{}, fmt.Errorf("%w: --match needs at least one word", ErrUsage)
 	}
-	all, err := c.Topics()
+	w, err := c.walk(want, true)
 	if err != nil {
 		return MatchResult{}, err
 	}
-	var res MatchResult
+	res := MatchResult{Missing: w.Missing, Strays: w.Strays}
 	var parts []string
-	seen := map[string]bool{}
-	section := func(heading, rel, name string, split bool) error {
-		if seen[rel] {
-			return nil
-		}
-		seen[rel] = true
-		raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(rel)))
+	for _, f := range w.Files {
+		marked, rows, err := markRecheck(f.Topic.Name, f.Content, project)
 		if err != nil {
-			if errors.Is(err, os.ErrNotExist) {
-				return nil
-			}
-			return err
+			return MatchResult{}, err
 		}
-		file := string(raw)
-		marked, _, err := markRecheck(name, file, project)
-		if err != nil {
-			return err
-		}
-		orig, out := strings.Split(file, "\n"), strings.Split(marked, "\n")
+		orig, out := strings.Split(f.Content, "\n"), strings.Split(marked, "\n")
 		var lines []string
-		for _, b := range parseBullets(file) {
-			if split && isSubIndexLine(orig[b.Line]) {
-				continue
-			}
+		for _, b := range f.bullets() {
 			end := bulletfmt.End(orig, b.Line)
 			if !hasAll(bulletText(b, orig[b.Line:end]), ws) {
 				continue
 			}
 			lines = append(lines, out[b.Line:end]...)
 			res.N++
-		}
-		if len(lines) > 0 {
-			parts = append(parts, "## "+heading+"\n"+strings.Join(lines, "\n")+"\n")
-		}
-		return nil
-	}
-	withStray := func(t Topic) error {
-		if err := section(t.Name, t.File, t.Name, t.Split); err != nil {
-			return err
-		}
-		if t.Stray != "" {
-			return section(t.Name+" (stray: "+t.Stray+")", t.Stray, t.Name, false)
-		}
-		return nil
-	}
-	if len(want) == 0 {
-		for _, t := range all {
-			if err := withStray(t); err != nil {
-				return MatchResult{}, err
-			}
-		}
-	}
-	for _, w := range want {
-		hit := resolve(w, all)
-		if len(hit) == 0 {
-			res.Missing = append(res.Missing, w)
-			continue
-		}
-		for _, t := range hit {
-			if err := withStray(t); err != nil {
-				return MatchResult{}, err
-			}
-			for _, st := range t.Subtopics {
-				if err := withStray(st); err != nil {
-					return MatchResult{}, err
+			for _, r := range rows {
+				if r.line == b.Line {
+					res.Recheck = append(res.Recheck, r.Recheck)
 				}
 			}
+		}
+		if len(lines) > 0 {
+			parts = append(parts, "## "+f.heading()+"\n"+strings.Join(lines, "\n")+"\n")
 		}
 	}
 	res.Text = strings.Join(parts, "\n")

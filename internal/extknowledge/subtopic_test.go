@@ -314,3 +314,25 @@ func TestStrayFlatFileNeverWritten(t *testing.T) {
 		t.Fatal("the stray file was written")
 	}
 }
+
+// An unreadable stray fails every walk, not only query.
+func TestUnreadableStrayFailsEveryWalk(t *testing.T) {
+	f := strayFixture(t)
+	p := filepath.Join(f.a, "topics", "godot.md")
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(p, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := f.clone()
+	if _, err := c.QueryWith([]string{"Godot"}, QueryOpts{}); err == nil {
+		t.Error("query: want an error")
+	}
+	if _, err := c.MatchWith([]string{"x"}, nil, nil); err == nil {
+		t.Error("match: want an error")
+	}
+	if _, err := c.Stats(); err == nil {
+		t.Error("stats: want an error")
+	}
+}
