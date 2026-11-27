@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/host"
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
@@ -14,18 +15,18 @@ func TestClassifyBlockedBeforeRelayIsNotBlocked(t *testing.T) {
 	relay := "--- ORCHESTRATOR (round 29) ---\n[ORCHESTRATOR RELAY — forwarded.]\n[relay 1]\n\nUse option 1.\n\n"
 	pane := "● ROTA-BLOCKED ben: which option?\n\n" + relay
 	for i := 0; i < 2; i++ { // two watch ticks over the same scrollback
-		if st, ev := Classify(pane, false, 60, "idle"); st == StateBlocked {
+		if st, ev := Classify(pane, false, 60, host.AgentStatus{State: "idle"}); st == StateBlocked {
 			t.Fatalf("tick %d: answered question read as blocked: %s %q", i, st, ev)
 		}
 	}
 	// A different question after the relay is reported.
 	other := pane + "● thinking\n● ROTA-BLOCKED ben: another question\n"
-	if st, ev := Classify(other, false, 60, "idle"); st != StateBlocked || ev != "another question" {
+	if st, ev := Classify(other, false, 60, host.AgentStatus{State: "idle"}); st != StateBlocked || ev != "another question" {
 		t.Errorf("new question: %s %q", st, ev)
 	}
 	// The worker re-asking the same question after the relay is blocked again.
 	again := pane + "● ROTA-BLOCKED ben: which option?\n"
-	if st, ev := Classify(again, false, 60, "idle"); st != StateBlocked || ev != "which option?" {
+	if st, ev := Classify(again, false, 60, host.AgentStatus{State: "idle"}); st != StateBlocked || ev != "which option?" {
 		t.Errorf("re-asked question: %s %q", st, ev)
 	}
 }

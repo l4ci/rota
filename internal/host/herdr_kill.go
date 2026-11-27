@@ -25,7 +25,7 @@ func (h *herdr) Kill(ctx context.Context, slot, handle string) error {
 	evidenceUnknown := false
 	ag := h.herdr(ctx, "agent", "get", name)
 	if ag.ExitCode != 0 {
-		evidenceUnknown = failedStatus(ag) == UnverifiablePrefix+ReasonHostUnreachable
+		evidenceUnknown = failedStatus(ag).Reason == ReasonHostUnreachable
 	}
 	pane := jget(ag.Stdout, "result.agent.pane_id")
 	if pane != "" {

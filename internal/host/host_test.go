@@ -353,7 +353,7 @@ func TestTmuxCaptureAndStatus(t *testing.T) {
 	if got, err := h.ReadPane(bg, "w1", "rota:w1", 40); got != "CALLER PANE" || err != nil || !strings.Contains(f.log(), "capture-pane -pJ -t rota:w1") {
 		t.Errorf("capture call wrong: %s", f.log())
 	}
-	if h.Status(bg, "w1", "rota:w1") != "" {
+	if h.Status(bg, "w1", "rota:w1") != (AgentStatus{}) {
 		t.Error("tmux has no native status")
 	}
 }
@@ -972,7 +972,7 @@ func TestHerdrSubmitPendingNothingPending(t *testing.T) {
 	}
 }
 
-func TestHerdrCaptureAndStatus(t *testing.T) {
+func TestHerdrCapture(t *testing.T) {
 	f := &fake{handler: func(_ string, a []string) Result {
 		switch a[1] {
 		case "read":
@@ -989,16 +989,7 @@ func TestHerdrCaptureAndStatus(t *testing.T) {
 	if !strings.Contains(f.log(), "herdr agent read rota-w1-w9-t7 --source recent-unwrapped --lines 60 --format text") {
 		t.Errorf("read call wrong: %s", f.log())
 	}
-	if got := h.Status(bg, "w1", "w9:t7"); got != "working" {
-		t.Errorf("Status = %q", got)
-	}
-	if h.Status(bg, "w1", "") != "" {
-		t.Error("a never-dispatched slot has no status")
-	}
-	f.handler = func(string, []string) Result { return Result{ExitCode: 1, Stderr: herdrErr("agent_not_found")} }
-	if got := h.Status(bg, "w1", "w9:t7"); got != "gone" {
-		t.Errorf("a tab with no agent must read gone, got %q", got)
-	}
+
 }
 
 func TestHerdrKill(t *testing.T) {

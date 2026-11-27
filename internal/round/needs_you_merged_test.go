@@ -21,7 +21,7 @@ func TestStatusReadsRecordedPRStateOfParkedSlot(t *testing.T) {
 		}),
 	)
 	forge := &fakeRemote{states: map[int]string{9: "merged"}, labelled: []int{56}}
-	agents := []host.Agent{{Tab: "w1:t1", Name: "ben", Status: "done"}}
+	agents := []host.Agent{{Tab: "w1:t1", Name: "ben", Status: host.AgentStatus{State: "done"}}}
 	rep, err := env(agents, forge.asForge()).Status(bg, root)
 	if err != nil {
 		t.Fatal(err)

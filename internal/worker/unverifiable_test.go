@@ -25,17 +25,14 @@ func (u unreadableHost) ReadPane(context.Context, string, string, int) (string, 
 }
 
 func TestClassifyUnverifiableHostStatus(t *testing.T) {
-	for native, reason := range map[string]string{
-		"unverifiable:host-unreachable": "host-unreachable",
-		"unverifiable:stale-handle":     "stale-handle",
-		"unverifiable:pane-unreadable":  "pane-unreadable",
-	} {
+	for _, reason := range []string{host.ReasonHostUnreachable, host.ReasonStaleHandle, host.ReasonPaneUnreadable} {
+		native := host.AgentStatus{State: host.StatusUnverifiable, Reason: reason}
 		if st, ev := Classify("  claude ready\n> \n", false, 60, native); st != "UNVERIFIABLE" || ev != reason {
-			t.Errorf("%s: %s %q, want UNVERIFIABLE %q", native, st, ev, reason)
+			t.Errorf("%v: %s %q, want UNVERIFIABLE %q", native, st, ev, reason)
 		}
 	}
 	// A printed sentinel is still read.
-	if st, _ := Classify("ROTA-DONE w1 https://github.com/o/r/pull/9\n", false, 60, "unverifiable:host-unreachable"); st != StateDone {
+	if st, _ := Classify("ROTA-DONE w1 https://github.com/o/r/pull/9\n", false, 60, host.AgentStatus{State: host.StatusUnverifiable, Reason: "host-unreachable"}); st != StateDone {
 		t.Errorf("sentinel under unverifiable: %s", st)
 	}
 }
@@ -43,7 +40,7 @@ func TestClassifyUnverifiableHostStatus(t *testing.T) {
 func TestPollRecordsUnverifiableWithItsReason(t *testing.T) {
 	dir, f := pollRegistry(t, "herdr")
 	f.panes["w1"] = []string{"x\n", "x\n"}
-	f.status["w1"] = "unverifiable:stale-handle"
+	f.status["w1"] = host.AgentStatus{State: host.StatusUnverifiable, Reason: "stale-handle"}
 	res, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60, Slot: "w1"})
 	if err != nil || len(res.Slots) != 1 || res.Slots[0] != (PollRow{"w1", "UNVERIFIABLE", "stale-handle"}) {
 		t.Fatalf("%+v %v", res, err)
@@ -75,7 +72,7 @@ func TestPollReadsAFailedPaneRead(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir, f := pollRegistry(t, "herdr")
-			f.status["w1"] = tc.native
+			f.status["w1"] = host.AgentStatus{State: tc.native}
 			res, err := envWith(unreadableHost{f, tc.err}).Poll(bg, dir, PollOpts{Lines: 60, Slot: "w1"})
 			if err != nil || len(res.Slots) != 1 || res.Slots[0] != tc.want {
 				t.Fatalf("%+v %v, want %+v", res, err, tc.want)
@@ -87,7 +84,7 @@ func TestPollReadsAFailedPaneRead(t *testing.T) {
 func TestWaitKeepsWaitingThroughAnUnverifiableSlotAndRecordsIt(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "", "unverifiable:host-unreachable")
+	h.set("w1", "", host.AgentStatus{State: host.StatusUnverifiable, Reason: "host-unreachable"})
 	e := envWith(watcherHost{h})
 	for i := 0; i < 2; i++ {
 		res, err := e.Wait(bg, dir, WaitOpts{Timeout: 60 * time.Millisecond})
@@ -104,7 +101,7 @@ func TestWaitKeepsWaitingThroughAnUnverifiableSlotAndRecordsIt(t *testing.T) {
 	if got := seenField(dir, "w1", "seen"); got != "" {
 		t.Errorf("seen = %q: the reason must not be rewritten into the returned marker", got)
 	}
-	h.set("w1", "working...\n", "working")
+	h.set("w1", "working...\n", host.AgentStatus{State: "working"})
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 60 * time.Millisecond}); err != nil || !res.TimedOut {
 		t.Fatalf("%+v %v", res, err)
 	}
@@ -121,7 +118,7 @@ func TestWaitKeepsWaitingThroughAnUnverifiableSlotAndRecordsIt(t *testing.T) {
 func TestWaitReturnsALongUnverifiableSlotOnce(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr")
-	h.set("w1", "", "unverifiable:host-unreachable")
+	h.set("w1", "", host.AgentStatus{State: host.StatusUnverifiable, Reason: "host-unreachable"})
 	e := envWith(watcherHost{h})
 	after := 30 * time.Minute
 	if res, err := e.Wait(bg, dir, WaitOpts{Timeout: 60 * time.Millisecond, UnverifiableAfter: after}); err != nil || !res.TimedOut {
@@ -146,7 +143,7 @@ func TestWaitReturnsALongUnverifiableSlotOnce(t *testing.T) {
 func TestWaitOnEventsReturnsAnUnverifiableSlotWhenItComesDue(t *testing.T) {
 	dir := waitProject(t, 1, map[string]string{"w1": "w9:t1"})
 	h := newWaitHost("herdr") // never emits
-	h.set("w1", "", "unverifiable:stale-handle")
+	h.set("w1", "", host.AgentStatus{State: host.StatusUnverifiable, Reason: "stale-handle"})
 	e := envWith(watcherHost{h})
 	// A clock that starts at its first read, which is the wait's own: a
 	// scheduler stall between the registry write and the wait cannot make the
