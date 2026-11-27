@@ -46,9 +46,26 @@ func Headings(want string, names []string) []string {
 	return partial
 }
 
+// exactIndex finds the entry w (normalised) names exactly: by name anywhere in
+// the list first, then by slug. Reads and writes share it, so a slug match on an
+// earlier entry never takes a write away from what a query of that name prints.
+func exactIndex(w string, entries []Entry) (int, bool) {
+	for i, e := range entries {
+		if strings.ToLower(e.Name) == w {
+			return i, true
+		}
+	}
+	for i, e := range entries {
+		if e.Slug == w {
+			return i, true
+		}
+	}
+	return -1, false
+}
+
 // ReadIndex resolves want against the external store's topic index for a read.
-// An entry whose name or slug equals want (case-insensitive) wins alone;
-// otherwise every entry whose name contains want, in index order. It returns indexes into entries. It does not
+// An entry whose name or slug equals want (case-insensitive) wins alone, the
+// name before the slug; otherwise every entry whose name contains want, in index order. It returns indexes into entries. It does not
 // dedupe: index entries are distinct topics even when two names collide, and
 // each one is a file to print. The slug is matched only for the exact hit, so
 // a substring of a slug alone finds nothing.
@@ -57,11 +74,11 @@ func ReadIndex(want string, entries []Entry) []int {
 	if w == "" {
 		return nil
 	}
+	if i, ok := exactIndex(w, entries); ok {
+		return []int{i}
+	}
 	var partial []int
 	for i, e := range entries {
-		if strings.ToLower(e.Name) == w || e.Slug == w {
-			return []int{i}
-		}
 		if strings.Contains(strings.ToLower(e.Name), w) {
 			partial = append(partial, i)
 		}
@@ -72,12 +89,15 @@ func ReadIndex(want string, entries []Entry) []int {
 // WriteIndex resolves want against the external store's topic index for a
 // write. Exact only, never a partial match: a write that guessed would change
 // the wrong topic. Besides name and slug it accepts Slugify(want), so a
-// spelled-out "Go Tests" reaches the "go-tests" file. It returns the index
-// into entries.
+// spelled-out "Go Tests" reaches the "go-tests" file; that match ranks last.
+// It returns the index into entries.
 func WriteIndex(want string, entries []Entry) (int, bool) {
-	w := norm(want)
+	if i, ok := exactIndex(norm(want), entries); ok {
+		return i, true
+	}
+	slug := Slugify(want)
 	for i, e := range entries {
-		if strings.ToLower(e.Name) == w || e.Slug == w || e.Slug == Slugify(want) {
+		if e.Slug == slug {
 			return i, true
 		}
 	}

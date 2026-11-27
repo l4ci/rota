@@ -2,7 +2,9 @@ package extknowledge
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -68,12 +70,12 @@ func (c Clone) topicFiles() ([]topicFileRef, error) {
 	}
 	var out []topicFileRef
 	for _, t := range topics {
-		_, raw, err := c.topicFile(t.Name)
+		raw, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
+		if errors.Is(err, os.ErrNotExist) {
+			continue // indexed but not written yet
+		}
 		if err != nil {
 			return nil, err
-		}
-		if raw == nil {
-			continue
 		}
 		out = append(out, topicFileRef{Topic: t, Rel: t.File, Content: string(raw)})
 		if t.Stray == "" || t.Parent != "" {
