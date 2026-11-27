@@ -55,6 +55,10 @@ func (f *swForge) List(_ context.Context, fl tracker.ListFilter) ([]tracker.Issu
 	}
 	return out, nil
 }
+func (f *swForge) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: "github"}).LabelMatcher()
+}
+
 func (f *swForge) Get(_ context.Context, k tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	f.gets = append(f.gets, k.String())
 	n, _ := k.Number()

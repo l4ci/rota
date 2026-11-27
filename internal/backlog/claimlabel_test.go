@@ -328,17 +328,32 @@ func (tr *overlappingClaimTracker) AddComment(ctx context.Context, key tracker.I
 	return tr.fakeTracker.AddComment(ctx, key, body)
 }
 
-func TestClosedIssueLabelsKeepsNonWorkflowLabels(t *testing.T) {
-	workflow := labels.ClosedDrop(nil)
-	closed := tracker.Issue{State: "closed", Labels: []string{"needs-review", "needs-human", "in-progress", "claimed:a@main", "type:bug", "p1", "harness:codex"}}
-	got := closedIssueLabels(closed, workflow)
-	want := []string{"needs-review", "needs-human", "in-progress", "claimed:a@main"}
-	if !slices.Equal(got, want) {
-		t.Fatalf("closed drop = %v, want %v", got, want)
-	}
-	open := closed
-	open.State = "open"
-	if got := closedIssueLabels(open, workflow); got != nil {
-		t.Fatalf("open issue drop = %v, want none", got)
+func TestCleanupClosedIssueLabelsKeepsNonWorkflowLabels(t *testing.T) {
+	for _, provider := range []string{"github", "linear", "itsaplan", "gitlab", "jira"} {
+		for _, state := range []string{"open", "closed"} {
+			t.Run(provider+"/"+state, func(t *testing.T) {
+				tr := &fakeTracker{ProviderName: provider, Issues: []tracker.Issue{{Key: tracker.NumKey(1), State: state,
+					Labels: []string{"Needs-Review", "needs-human", "In-Progress", "claimed:a@main", "type:bug", "p1", "harness:codex"}}}}
+				drop, err := CleanupClosedIssueLabels(context.Background(), tr, tracker.NumKey(1), labels.ClosedDrop(nil))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var want []string
+				if state == "closed" {
+					want = []string{"Needs-Review", "needs-human", "In-Progress", "claimed:a@main"}
+					if provider == "gitlab" || provider == "jira" {
+						want = []string{"needs-human", "claimed:a@main"}
+					}
+				}
+				if !slices.Equal(drop, want) {
+					t.Fatalf("drop = %v, want %v", drop, want)
+				}
+				for _, label := range drop {
+					if slices.Contains(tr.Issues[0].Labels, label) {
+						t.Fatalf("label %s survived cleanup", label)
+					}
+				}
+			})
+		}
 	}
 }

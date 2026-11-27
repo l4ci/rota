@@ -77,6 +77,7 @@ const NeedsInfoLabel = labels.NeedsInfo
 // Forge is the part of the tracker adapter a round reads and, for the
 // label repair, writes. tracker.Adapter satisfies it.
 type Forge interface {
+	tracker.LabelSource
 	OpenPRs(ctx context.Context) ([]tracker.PR, error)
 	MergedPRs(ctx context.Context, branch string) ([]tracker.PR, error)
 	PRState(ctx context.Context, pr int) (string, error)
@@ -795,7 +796,7 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 		// list from it. The error surfaces on the filtered list.
 		open, _ := e.Forge.List(ctx, tracker.ListFilter{State: "open"})
 		for _, is := range open {
-			if backlog.HasClaimLabel(is.Labels) {
+			if backlog.HasClaimLabel(is.Labels, tracker.LabelsFor(e.Forge)) {
 				fs.claimLabelled[is.Key] = true
 			}
 		}
@@ -810,7 +811,7 @@ func (e Env) readForge(ctx context.Context, rep *Report) forgeState {
 				rep.unavailable(SourceForge, err.Error())
 			} else {
 				for _, is := range closed {
-					if is.State == "closed" && slices.Contains(is.Labels, e.Label) {
+					if is.State == "closed" && tracker.HasLabel(e.Forge, is.Labels, e.Label) {
 						fs.stale = append(fs.stale, is.Key)
 					}
 				}

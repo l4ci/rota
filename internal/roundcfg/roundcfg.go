@@ -761,10 +761,14 @@ func MachineName(support, role string) string {
 func (s Settings) MachineName() string { return MachineName(s.Support, s.Role) }
 
 // PinsOf returns nonempty machine names, preserving label order.
-func PinsOf(labels []string) []string {
+func PinsOf(labels []string, parsers ...func(string, string) (string, bool)) []string {
+	cut := strings.CutPrefix
+	if len(parsers) > 0 {
+		cut = parsers[0]
+	}
 	var pins []string
 	for _, label := range labels {
-		if name, ok := strings.CutPrefix(label, MachinePrefix); ok && name != "" {
+		if name, ok := cut(label, MachinePrefix); ok && name != "" {
 			pins = append(pins, name)
 		}
 	}

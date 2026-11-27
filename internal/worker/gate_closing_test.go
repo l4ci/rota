@@ -21,6 +21,8 @@ type seamIssues struct {
 	removed map[int][]string
 }
 
+func (s *seamIssues) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
+
 func (s *seamIssues) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	n, _ := key.Number()
 	if s.getErr != nil {
@@ -182,4 +184,34 @@ func TestReleaseClaimLabelsDropsEveryWorkflowLabelOfAClosedIssue(t *testing.T) {
 			t.Fatalf("open issue lost %v", iss.removed[5])
 		}
 	})
+}
+
+func TestCheckClosesTrackerLabelCase(t *testing.T) {
+	for _, provider := range []string{"github", "linear", "itsaplan", "gitlab", "jira"} {
+		t.Run(provider, func(t *testing.T) {
+			issues := &caseClosingIssues{seamIssues: &seamIssues{labels: map[int][]string{5: {"Partial-Slice"}}}, provider: provider}
+			in := closesInput{Slot: "w1", PR: "https://example.test/pull/12", Keys: keys(5), Issues: issues,
+				Source: tracker.ClosingSource{Body: "Refs #5"}}
+			out := checkCloses(context.Background(), in)
+			fold := provider != "gitlab" && provider != "jira"
+			if out.Broke != "" || (out.Verdict == "") != fold {
+				t.Fatalf("Refs outcome = %+v, want partial-slice exemption=%v", out, fold)
+			}
+			in.Source.Body = "Closes #5"
+			in.Forge = &seamReporter{nums: []int{5}, known: true}
+			out = checkCloses(context.Background(), in)
+			if out.Broke != "" || (out.Verdict == landing.GateNotClosing) != fold {
+				t.Fatalf("Closes outcome = %+v, want partial-slice refusal=%v", out, fold)
+			}
+		})
+	}
+}
+
+type caseClosingIssues struct {
+	*seamIssues
+	provider string
+}
+
+func (s *caseClosingIssues) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: s.provider}).LabelMatcher()
 }

@@ -13,32 +13,28 @@ func TestLabelRulePerForge(t *testing.T) {
 		forge    string
 		rule     labelRule
 		foldCase bool
+		adapter  LabelSource
 	}{
-		{"github", githubLabelRule, true},
-		{"gitlab", gitlabLabelRule, false},
-		{"linear", linearLabelRule, true},
-		{"itsaplan", itsaplanLabelRule, true},
-		{"jira", jiraLabelRule, false},
+		{"github", githubLabelRule, true, &GitHub{}},
+		{"gitlab", gitlabLabelRule, false, &GitLab{}},
+		{"linear", linearLabelRule, true, &Linear{}},
+		{"itsaplan", itsaplanLabelRule, true, &Itsaplan{}},
+		{"jira", jiraLabelRule, false, &Jira{}},
 	} {
 		t.Run(tc.forge, func(t *testing.T) {
 			if r, ok := sourceLabelRule(tc.forge); !ok || r != tc.rule {
 				t.Errorf("sourceLabelRule(%s) is not the forge's rule", tc.forge)
 			}
-			if got := sameLabelName(tc.rule, "Bug", "bug"); got != tc.foldCase {
-				t.Errorf("sameLabelName(Bug, bug) = %v, want %v", got, tc.foldCase)
+			if got := HasLabel(tc.adapter, []string{"Bug"}, "bug"); got != tc.foldCase {
+				t.Errorf("HasLabel(Bug, bug) = %v, want %v", got, tc.foldCase)
 			}
-			if !sameLabelName(tc.rule, "bug", "bug") || sameLabelName(tc.rule, "bug", "bugs") {
+			if !HasLabel(tc.adapter, []string{"bug"}, "bug") || HasLabel(tc.adapter, []string{"bug"}, "bugs") {
 				t.Error("identical names must match and different names must not")
 			}
 			if got := labelKey(tc.rule, "Bug") == labelKey(tc.rule, "bug"); got != tc.foldCase {
 				t.Errorf("labelKey equal for Bug/bug = %v, want %v", got, tc.foldCase)
 			}
-			if got := hasLabel(tc.rule, []string{"p1", "Bug"}, "bug"); got != tc.foldCase {
-				t.Errorf("hasLabel = %v, want %v", got, tc.foldCase)
-			}
-			if hasLabel(tc.rule, []string{"p1"}, "bug") {
-				t.Error("hasLabel matched an absent name")
-			}
+
 		})
 	}
 }

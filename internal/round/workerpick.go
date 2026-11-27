@@ -57,7 +57,7 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		}
 		return p, nil
 	}
-	hs, ms := labelsWith(it.Labels, harness.LabelPrefix), labelsWith(it.Labels, labels.ModelPrefix)
+	hs, ms := it.LabelsWithPrefix(harness.LabelPrefix), it.LabelsWithPrefix(labels.ModelPrefix)
 	if len(hs) > 1 {
 		return p, blocked(blockedby.HarnessLabel, "%s has more than one harness: label (%s): keep one", it.ID, strings.Join(hs, ", "))
 	}
@@ -65,14 +65,20 @@ func PickOf(caps backlog.Capabilities, it backlog.Item) (Pick, error) {
 		return p, blocked(blockedby.ModelLabel, "%s has more than one model: label (%s): keep one", it.ID, strings.Join(ms, ", "))
 	}
 	if len(hs) == 1 {
-		v := harness.FromLabels(hs)
+		v := ""
+		for _, kind := range harness.Kinds() {
+			if it.HasLabel(harness.LabelPrefix + kind) {
+				v = kind
+				break
+			}
+		}
 		if v == "" {
 			return p, blocked(blockedby.HarnessLabel, "%s has label %s: harness must be one of %s", it.ID, hs[0], strings.Join(harness.Kinds(), ", "))
 		}
 		p.Harness = v
 	}
 	if len(ms) == 1 {
-		v := strings.TrimPrefix(ms[0], labels.ModelPrefix)
+		v, _ := it.CutLabelPrefix(ms[0], labels.ModelPrefix)
 		if !ValidModel(v) {
 			return p, blocked(blockedby.ModelLabel, "%s has label %s: not a valid model id (letters, digits, . _ : / @ -)", it.ID, ms[0])
 		}
@@ -93,12 +99,18 @@ func DecisionOf(caps backlog.Capabilities, it backlog.Item) (string, error) {
 		}
 		v = m[1]
 	} else {
-		ds := labelsWith(it.Labels, labels.DecisionPrefix)
+		ds := it.LabelsWithPrefix(labels.DecisionPrefix)
 		switch len(ds) {
 		case 0:
 			return "", nil
 		case 1:
-			v = strings.TrimPrefix(ds[0], labels.DecisionPrefix)
+			v, _ = it.CutLabelPrefix(ds[0], labels.DecisionPrefix)
+			for _, kind := range []string{DecisionResearch, DecisionGrilling} {
+				if it.HasLabel(labels.DecisionPrefix + kind) {
+					v = kind
+					break
+				}
+			}
 		default:
 			return "", blocked(blockedby.DecisionLabel, "%s has more than one decision: label (%s): keep one", it.ID, strings.Join(ds, ", "))
 		}
@@ -107,16 +119,6 @@ func DecisionOf(caps backlog.Capabilities, it backlog.Item) (string, error) {
 		return "", blocked(blockedby.DecisionLabel, "%s has decision %s: must be %s or %s", it.ID, v, DecisionResearch, DecisionGrilling)
 	}
 	return v, nil
-}
-
-func labelsWith(labels []string, prefix string) []string {
-	var out []string
-	for _, l := range labels {
-		if strings.HasPrefix(l, prefix) {
-			out = append(out, l)
-		}
-	}
-	return out
 }
 
 // String lists the pick as labels, for messages.

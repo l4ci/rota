@@ -5,7 +5,6 @@ import (
 	"fmt"
 	gitx "github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/itemid"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -596,7 +595,7 @@ func (u *Umbrella) createSubMilestone(sub *Issues, mid string) (string, bool, er
 	for i := range all {
 		is := all[i]
 		id, _, ok := ms.ParseTitle(is.Title)
-		if !slices.Contains(is.Labels, config.Label(u.Cfg, "milestoneTracker")) || !ok || id != mid {
+		if !tracker.HasLabel(tr, is.Labels, config.Label(u.Cfg, "milestoneTracker")) || !ok || id != mid {
 			continue
 		}
 		// Lowest open number wins; the lowest closed one when none is open.

@@ -543,7 +543,7 @@ func (g *gateRun) supportApprovals() (relays []any, offered, support bool, err e
 	if err != nil {
 		return nil, false, false, err
 	}
-	if !slices.Contains(is.Labels, cfg.SupportLabel) {
+	if !tracker.HasLabel(g.issues, is.Labels, cfg.SupportLabel) {
 		return relays, false, false, nil
 	}
 	trust := NewMarkerTrust(g.ctx, g.issues)

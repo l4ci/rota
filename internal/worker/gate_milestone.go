@@ -33,7 +33,7 @@ func (g *gateRun) closeOnMilestone(src tracker.ClosingSource, label string) bool
 			continue
 		}
 		is, err := g.issues.Get(g.ctx, key, false)
-		if err == nil && slices.Contains(is.Labels, PartialSliceLabel) && !g.o.FinalSlice {
+		if err == nil && tracker.HasLabel(g.issues, is.Labels, PartialSliceLabel) && !g.o.FinalSlice {
 			continue
 		}
 		if err == nil {
@@ -41,7 +41,7 @@ func (g *gateRun) closeOnMilestone(src tracker.ClosingSource, label string) bool
 			if !ok {
 				err = fmt.Errorf("issue tracker cannot label and close milestone issues")
 			} else {
-				if !slices.Contains(is.Labels, label) {
+				if !tracker.HasLabel(g.issues, is.Labels, label) {
 					err = mc.AddLabels(g.ctx, key, []string{label}, true)
 				}
 				if err == nil && is.State != "closed" {

@@ -36,8 +36,10 @@ const (
 // IssueBody is the body of the branch's issue ("" when there is none). Tier
 // is the change tier of the diff ("" when tiers do not apply).
 type Input struct {
-	Changed   int
-	Labels    []string
+	Changed int
+	Labels  []string
+	// HasLabel is supplied for tracker-read labels; nil keeps policy-only inputs exact.
+	HasLabel  func([]string, string) bool `json:"-"`
 	Files     []string
 	Door      bool
 	IssueBody string
@@ -69,7 +71,7 @@ type Decision struct {
 // still decides the base, a docs-tier diff never counts as drift, and the Door
 // line and the paths globs still raise any tier.
 func Decide(p config.ReviewPolicy, in Input) Decision {
-	base := baseDecision(p, in.Changed, in.Labels)
+	base := baseDecision(p, in.Changed, in.Labels, in.HasLabel)
 	if base.Signal == SignalLabel && base.Depth == config.DepthNone {
 		return base
 	}
@@ -140,11 +142,11 @@ func driftApplies(p config.ReviewPolicy, tier change.Tier) bool {
 }
 
 // baseDecision is the depth from labels, then the size rule, then the default.
-func baseDecision(p config.ReviewPolicy, changed int, labels []string) Decision {
+func baseDecision(p config.ReviewPolicy, changed int, labels []string, match func([]string, string) bool) Decision {
 	var hit []string
-	for _, l := range labels {
-		if _, ok := p.Labels[l]; ok {
-			hit = append(hit, l)
+	for label := range p.Labels {
+		if labelPresent(match, labels, label) {
+			hit = append(hit, label)
 		}
 	}
 	if len(hit) > 0 {
@@ -214,7 +216,11 @@ func scopeDrift(issueBody string, files, support []string) []string {
 
 // MatchLenses lists the lenses files or labels trigger, in LensNames order, each
 // with the first path (else label) that did it.
-func MatchLenses(l config.Lenses, files, labels []string) []config.LensHit {
+func MatchLenses(l config.Lenses, files, labels []string, matchers ...func([]string, string) bool) []config.LensHit {
+	var match func([]string, string) bool
+	if len(matchers) > 0 {
+		match = matchers[0]
+	}
 	var hits []config.LensHit
 	for _, name := range config.LensNames {
 		lens, ok := l[name]
@@ -233,7 +239,7 @@ func MatchLenses(l config.Lenses, files, labels []string) []config.LensHit {
 		}
 		if why == "" {
 			for _, lb := range labels {
-				if slices.Contains(lens.Labels, lb) {
+				if labelPresent(match, lens.Labels, lb) {
 					why = "label " + lb
 					break
 				}
@@ -244,4 +250,12 @@ func MatchLenses(l config.Lenses, files, labels []string) []config.LensHit {
 		}
 	}
 	return hits
+}
+
+// Policy lists without tracker provenance retain their exact matching behavior.
+func labelPresent(match func([]string, string) bool, names []string, want string) bool {
+	if match != nil {
+		return match(names, want)
+	}
+	return slices.Contains(names, want)
 }

@@ -27,8 +27,8 @@ func (e Env) offSite(support, role, legacy string, it backlog.Item) string {
 	if why := legacySupportWarning(support, legacy, it); why != "" {
 		return why
 	}
-	pins := roundcfg.PinsOf(it.Labels)
-	if len(pins) > 0 && !slices.Contains(pins, roundcfg.MachineName(support, role)) {
+	pins := roundcfg.PinsOf(it.Labels, it.CutLabelPrefix)
+	if len(pins) > 0 && !it.HasLabel(roundcfg.MachineLabel(roundcfg.MachineName(support, role))) {
 		return fmt.Sprintf("%s is pinned %s elsewhere: remove the pin to move it; on main, rota round support offer --withdraw %s takes a %s issue back", it.ID, strings.Join(pinLabels(pins), ", "), it.ID, roundcfg.MachineLabel(support))
 	}
 	return ""
@@ -43,7 +43,7 @@ func (e Env) supportPinStep(ctx context.Context, be Board, it *backlog.Item) ste
 	return step{
 		name: "pin to support " + it.ID,
 		skip: func() bool {
-			return e.Round.Role != roundcfg.RoleSupport || e.Round.Support == "" || slices.Contains(it.Labels, label)
+			return e.Round.Role != roundcfg.RoleSupport || e.Round.Support == "" || it.HasLabel(label)
 		},
 		do: func() error {
 			if !e.forgeOn(be) {
@@ -69,7 +69,7 @@ func legacySupportWarning(support, legacy string, it backlog.Item) string {
 	if legacy == "" {
 		legacy = "site:support"
 	}
-	if support != "" && slices.Contains(it.Labels, legacy) {
+	if support != "" && it.HasLabel(legacy) {
 		return fmt.Sprintf("%s still carries retired label %s: run rota migrate labels --apply before assigning it", it.ID, legacy)
 	}
 	return ""
@@ -107,7 +107,7 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 		if it.Closed {
 			return nil, fmt.Errorf("%w: %s is closed", backlog.ErrNotFound, id)
 		}
-		if pins := roundcfg.PinsOf(it.Labels); !withdraw && len(pins) > 0 && !slices.Contains(pins, support) {
+		if pins := roundcfg.PinsOf(it.Labels, it.CutLabelPrefix); !withdraw && len(pins) > 0 && !it.HasLabel(roundcfg.MachineLabel(support)) {
 			return nil, blocked(blockedby.Site, "%s is pinned %s: remove that label before offering it to %s", it.ID, strings.Join(pinLabels(pins), ", "), roundcfg.MachineLabel(support))
 		}
 		st, err := statusOf(be, it.ID)
@@ -130,7 +130,7 @@ func (e Env) OfferSupport(ctx context.Context, root string, be Board, ids []stri
 	}
 	var changed []string
 	for _, it := range items {
-		has := slices.Contains(it.Labels, e.SupportLabel)
+		has := it.HasLabel(e.SupportLabel)
 		if has != withdraw {
 			continue
 		}
@@ -238,7 +238,7 @@ func (e Env) ReturnSupport(ctx context.Context, root string, be Board, id, reaso
 		return SupportReturned{}, blocked(blockedby.Claimed, "%s is held by a slot of this round: return or reclaim that slot first", it.ID)
 	}
 	out := SupportReturned{ID: it.ID}
-	if !slices.Contains(it.Labels, e.SupportLabel) {
+	if !it.HasLabel(e.SupportLabel) {
 		return out, nil
 	}
 	st, err := statusOf(be, it.ID)

@@ -315,10 +315,8 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 	}
 	if in.Reason == "blocked" {
 		label := config.Label(b.Cfg, "blocked")
-		for _, l := range is.Labels {
-			if l == label {
-				return false, nil
-			}
+		if tracker.HasLabel(b.Tracker, is.Labels, label) {
+			return false, nil
 		}
 		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return false, err
@@ -337,12 +335,12 @@ func (b *Issues) Complete(ref string, in CompleteInput) (bool, error) {
 	}
 	var stale []string
 	for _, l := range b.stateLabels() {
-		if slices.Contains(is.Labels, l) {
+		if tracker.HasLabel(b.Tracker, is.Labels, l) {
 			stale = append(stale, l)
 		}
 	}
 	for _, l := range is.Labels {
-		if IsClaimLabel(l) {
+		if IsClaimLabel(l, tracker.LabelsFor(b.Tracker)) {
 			stale = append(stale, l)
 		}
 	}
@@ -370,7 +368,7 @@ func (b *Issues) Reopen(ref string) (bool, error) {
 	}
 	var stale []string
 	for _, l := range b.stateLabels("notPlanned", "blocked") {
-		if slices.Contains(is.Labels, l) {
+		if tracker.HasLabel(b.Tracker, is.Labels, l) {
 			stale = append(stale, l)
 		}
 	}
@@ -656,11 +654,11 @@ func (b *Issues) applyState(is Issue, want string) (bool, error) {
 	}
 	var drop, add []string
 	for _, l := range b.stateLabels("inProgress", "needsReview", "changesRequested") {
-		if l != keep && slices.Contains(is.Labels, l) {
+		if l != keep && tracker.HasLabel(b.Tracker, is.Labels, l) {
 			drop = append(drop, l)
 		}
 	}
-	if keep != "" && !slices.Contains(is.Labels, keep) {
+	if keep != "" && !tracker.HasLabel(b.Tracker, is.Labels, keep) {
 		add = []string{keep}
 	}
 	if len(drop) == 0 && len(add) == 0 {
@@ -733,7 +731,7 @@ func (b *Issues) ClaimShared(ref, claimID string, holders int) (won bool, holder
 			return false, "", b.undoPostedClaim(ref, claimID, posted, err)
 		}
 	}
-	if label, ok := ClaimLabel(b.Cfg, claimID); ok && !slices.Contains(is.Labels, label) {
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && !tracker.HasLabel(b.Tracker, is.Labels, label) {
 		if err := tr.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			b.warn("claim label for " + claimID + ": " + err.Error())
 		}
@@ -806,7 +804,7 @@ func (b *Issues) release(ref, claimID string, byHand bool) (bool, error) {
 	if err := b.dropClaim(is.Key, claimID, byHand); err != nil {
 		return false, err
 	}
-	if label, ok := ClaimLabel(b.Cfg, claimID); ok && slices.Contains(is.Labels, label) {
+	if label, ok := ClaimLabel(b.Cfg, claimID); ok && tracker.HasLabel(b.Tracker, is.Labels, label) {
 		shared := slices.ContainsFunc(held, func(other string) bool {
 			otherLabel, ok := ClaimLabel(b.Cfg, other)
 			return other != claimID && ok && otherLabel == label
@@ -818,7 +816,7 @@ func (b *Issues) release(ref, claimID string, byHand bool) (bool, error) {
 		}
 	}
 	if len(held) == 1 {
-		if label := config.Label(b.Cfg, "inProgress"); slices.Contains(is.Labels, label) {
+		if label := config.Label(b.Cfg, "inProgress"); tracker.HasLabel(b.Tracker, is.Labels, label) {
 			if err := tr.RemoveLabels(b.ctx(), is.Key, []string{label}); err != nil {
 				return true, err
 			}
@@ -947,7 +945,7 @@ func (b *Issues) Status(ref string) (*Status, error) {
 	_, block, _ := ParseFieldsBlock(is.Body)
 	var state []string
 	for _, l := range b.stateLabels() {
-		if slices.Contains(is.Labels, l) {
+		if tracker.HasLabel(b.Tracker, is.Labels, l) {
 			state = append(state, l)
 		}
 	}

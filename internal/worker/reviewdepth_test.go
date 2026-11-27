@@ -25,6 +25,8 @@ type fakeIssueGet struct {
 	err error
 }
 
+func (f fakeIssueGet) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
+
 func (f fakeIssueGet) Get(context.Context, tracker.IssueKey, bool) (tracker.Issue, error) {
 	return f.is, f.err
 }
@@ -144,6 +146,8 @@ func TestDoorNote(t *testing.T) {
 // byKeyIssues serves a different issue per key.
 type byKeyIssues map[tracker.IssueKey]tracker.Issue
 
+func (m byKeyIssues) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
+
 func (m byKeyIssues) Get(_ context.Context, k tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	is, ok := m[k]
 	if !ok {
@@ -249,6 +253,8 @@ func TestReviewDepthCrossBundle(t *testing.T) {
 }
 
 type issueMap map[int]tracker.Issue
+
+func (m issueMap) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
 
 func (m issueMap) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	n, _ := strconv.Atoi(strings.TrimPrefix(key.Ref(), "#"))
@@ -448,4 +454,33 @@ func TestResolveReviewDepthUnknownIssueBody(t *testing.T) {
 	if got, err = ResolveReviewDepth(context.Background(), src); err != nil || got.DriftUnchecked != "" {
 		t.Fatalf("empty body read: %+v %v", got, err)
 	}
+}
+
+func TestReviewDepthTrackerLabelCase(t *testing.T) {
+	for _, provider := range []string{"github", "linear", "itsaplan", "gitlab", "jira"} {
+		t.Run(provider, func(t *testing.T) {
+			src := ReviewSources{Policy: config.ReviewPolicy{Default: config.DepthLight, Labels: map[string]config.ReviewDepth{"risk:high": config.DepthFull}},
+				Git: git.Exec, Dir: depthRepo(t), Span: "main...feat", Issue: tracker.NumKey(5),
+				Issues: caseReviewIssues{fakeIssueGet: fakeIssueGet{is: tracker.Issue{Labels: []string{"Risk:High", "Area:Security", "Review:Codex"}}}, provider: provider},
+				Lenses: config.Lenses{"security": {Labels: []string{"area:security"}}},
+				Cross:  roundcfg.CrossReview{Labels: []string{"risk:high"}, Harnesses: []string{"claude", "codex"}}, Author: "claude"}
+			got, err := ResolveReviewDepth(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fold := provider != "gitlab" && provider != "jira"
+			if (got.Depth == config.DepthFull) != fold || (len(got.Lenses) == 1) != fold || (got.Cross == "codex") != fold {
+				t.Fatalf("review = %+v, want tracker case folding=%v", got, fold)
+			}
+		})
+	}
+}
+
+type caseReviewIssues struct {
+	fakeIssueGet
+	provider string
+}
+
+func (f caseReviewIssues) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: f.provider}).LabelMatcher()
 }

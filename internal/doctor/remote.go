@@ -70,6 +70,8 @@ type scanForge struct {
 	Tracker
 }
 
+func (f scanForge) LabelMatcher() tracker.LabelMatcher { return f.Tracker.LabelMatcher() }
+
 func (s RemoteScanner) staleClaims(ctx context.Context, root string, cfg any, get func(context.Context, string) (Tracker, error)) ([]StaleClaim, []string) {
 	env := s.RoundEnv(ctx)
 	if env.RoundErr != nil {
@@ -145,6 +147,11 @@ func scanLabels(ctx context.Context, cfg any, get func() (Tracker, error)) *Labe
 	for _, issue := range open {
 		for _, label := range issue.Labels {
 			state.Used[label] = true
+		}
+		for _, label := range state.Existing {
+			if tracker.HasLabel(tr, issue.Labels, label.Name) {
+				state.Used[label.Name] = true
+			}
 		}
 	}
 	if err := ctx.Err(); err != nil {

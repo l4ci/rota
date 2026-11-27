@@ -72,7 +72,7 @@ func checkCloses(ctx context.Context, in closesInput) stepOutcome {
 		if is.State == "closed" {
 			continue
 		}
-		if !slices.Contains(is.Labels, PartialSliceLabel) {
+		if !tracker.HasLabel(in.Issues, is.Labels, PartialSliceLabel) {
 			open = append(open, key)
 		}
 	}
@@ -162,7 +162,7 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 				return stepOutcome{Verdict: landing.GateUnmetAcceptance, Msg: fmt.Sprintf("GATE %s refused — %s; nothing landed", in.Slot, refusal.Msg), Hint: refusal.Hint}
 			}
 		}
-		if numbered && (!known || forgeCloses) && !in.FinalSlice && slices.Contains(is.Labels, PartialSliceLabel) {
+		if numbered && (!known || forgeCloses) && !in.FinalSlice && tracker.HasLabel(in.Issues, is.Labels, PartialSliceLabel) {
 			partial = true
 			leaks = append(leaks, key)
 		}

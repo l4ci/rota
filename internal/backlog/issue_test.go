@@ -6,6 +6,7 @@ import (
 	"github.com/l4ci/rota/internal/tracker"
 	"math/rand"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -351,5 +352,29 @@ func TestIssuesClaimByTheHolderResumes(t *testing.T) {
 	held, err := b.heldClaims(tr.Issues[0].Key)
 	if err != nil || len(held) != 1 {
 		t.Fatalf("held claims %v %v, want one", held, err)
+	}
+}
+
+func TestIssueItemRetainsTrackerLabelRule(t *testing.T) {
+	for _, provider := range []string{"github", "linear", "itsaplan", "gitlab", "jira"} {
+		t.Run(provider, func(t *testing.T) {
+			tr := &fakeTracker{ProviderName: provider, Issues: []tracker.Issue{{Key: tracker.NumKey(1), Title: "Work", State: "open",
+				Labels: []string{"Type:Feature", "SIZE:major", "Best-Of:2", "Machine:Mac", "Keep"}}}}
+			b := &Issues{Tracker: tr}
+			it, err := b.Get("1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			fold := provider != "gitlab" && provider != "jira"
+			if (it.Type == "F") != fold || it.HasLabel("best-of:2") != fold || (len(it.LabelsWithPrefix("machine:")) == 1) != fold {
+				t.Fatalf("item = %+v, want tracker case folding=%v", it, fold)
+			}
+			if fold && it.Tag != "Major" {
+				t.Fatalf("feature tag=%q, want Major", it.Tag)
+			}
+			if !slices.Equal(it.Labels, []string{"Type:Feature", "SIZE:major", "Best-Of:2", "Machine:Mac", "Keep"}) {
+				t.Fatal("tracker label spelling changed")
+			}
+		})
 	}
 }

@@ -114,6 +114,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	}
 	// The body stays unknown until an issue read fills it: "" must never stand
 	// for "unread" in the policy (#3555).
+	hasLabel := func(names []string, want string) bool { return slices.Contains(names, want) }
 	in := reviewpolicy.Input{Changed: changed, Files: files, Labels: slices.Clone(s.Labels), IssueBodyUnknown: true}
 	// The PR body is read and parsed at most once, for the tier's Door line and
 	// the policy's (#3927).
@@ -134,6 +135,8 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	// depth: one issue's review:none must not skip another's.
 	labelSets := [][]string{in.Labels}
 	if s.Issues != nil && s.Issue != "" && (needsIssue || s.Cross.Active() || s.Lenses.UsesLabels()) {
+		hasLabel = func(names []string, want string) bool { return tracker.HasLabel(s.Issues, names, want) }
+		in.HasLabel = hasLabel
 		keys := append([]tracker.IssueKey{s.Issue}, s.Members...)
 		var got []tracker.Issue
 		var bodies []string
@@ -145,7 +148,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			got = append(got, is)
 			bodies = append(bodies, is.Body)
 			for _, l := range is.Labels {
-				if !slices.Contains(in.Labels, l) {
+				if !hasLabel(in.Labels, l) {
 					in.Labels = append(in.Labels, l)
 				}
 			}
@@ -165,7 +168,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 					one := in
 					one.Labels = slices.Clone(s.Labels)
 					for _, l := range is.Labels {
-						if !slices.Contains(one.Labels, l) {
+						if !hasLabel(one.Labels, l) {
 							one.Labels = append(one.Labels, l)
 						}
 					}
@@ -195,10 +198,20 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 	// A depth of none reviews nothing, so no lens runs either. in.Labels is the
 	// union of the lead's and every member's, so any bundled issue can trigger.
 	if out.Depth != config.DepthNone {
-		out.Lenses = reviewpolicy.MatchLenses(s.Lenses, files, in.Labels)
+		out.Lenses = reviewpolicy.MatchLenses(s.Lenses, files, in.Labels, in.HasLabel)
+	}
+	authorLabels := slices.Clone(labelSets[0])
+	for i, name := range authorLabels {
+		for _, kind := range harness.Kinds() {
+			known := harness.LabelPrefix + kind
+			if hasLabel([]string{name}, known) {
+				authorLabels[i] = known
+				break
+			}
+		}
 	}
 	author, _ := harness.ResolveAuthor(harness.AuthorSources{
-		Slot: s.Author, Labels: labelSets[0], Project: s.Cross.DefaultKind,
+		Slot: s.Author, Labels: authorLabels, Project: s.Cross.DefaultKind,
 	})
 	var pools *CrossPools
 	for _, labels := range labelSets {
@@ -209,7 +222,7 @@ func ResolveReviewDepth(ctx context.Context, s ReviewSources) (ReviewDepth, erro
 			}
 			pools = &p
 		}
-		if r := resolveCross(s.Cross, labels, author, pools); crossRank(r.Harness) > crossRank(out.Cross) {
+		if r := resolveCross(s.Cross, labels, author, pools, hasLabel); crossRank(r.Harness) > crossRank(out.Cross) {
 			out.Cross, out.CrossWhy, out.CrossAccount, out.CrossAccepts = r.Harness, r.Why, r.Account, r.Accepts
 		}
 	}
@@ -316,17 +329,23 @@ type crossResult struct {
 // the author's harness. A review:<x> naming no reviewer is not a routing label.
 // With review.accounts set (#3315, pools non-nil) the account list decides
 // instead: see crossByAccount.
-func resolveCross(c roundcfg.CrossReview, labels []string, author string, pools *CrossPools) crossResult {
+func resolveCross(c roundcfg.CrossReview, labels []string, author string, pools *CrossPools, matchers ...func([]string, string) bool) crossResult {
+	hasLabel := func(names []string, want string) bool { return slices.Contains(names, want) }
+	if len(matchers) > 0 && matchers[0] != nil {
+		hasLabel = matchers[0]
+	}
 	if !c.Active() {
 		return crossResult{}
 	}
 	var trigger, route string
 	for _, l := range labels {
-		if trigger == "" && slices.Contains(c.Labels, l) {
+		if trigger == "" && hasLabel(c.Labels, l) {
 			trigger = l
 		}
-		if v, ok := strings.CutPrefix(l, labeldefs.ReviewPrefix); ok && route != CrossNone && (v == CrossNone || crossReviewer(v)) {
-			route = v
+		for _, reviewer := range []string{CrossNone, harness.Claude, harness.Codex} {
+			if route != CrossNone && hasLabel([]string{l}, labeldefs.ReviewPrefix+reviewer) {
+				route = reviewer
+			}
 		}
 	}
 	switch {

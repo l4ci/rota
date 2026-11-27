@@ -278,6 +278,10 @@ func (f *fakeForge) ClosingRefs(context.Context, int) ([]int, bool, error) {
 }
 
 // ClosesIssue is the keyword convention of the forge's own tracker.
+func (f *fakeForge) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: "github"}).LabelMatcher()
+}
+
 func (f *fakeForge) ClosesIssue(key tracker.IssueKey, c tracker.ClosingSource) bool {
 	n, ok := key.Number()
 	return ok && slices.Contains(f.ClosedNumbers(c.Body), n)

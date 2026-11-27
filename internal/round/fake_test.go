@@ -101,6 +101,10 @@ type remoteForge struct{ *fakeRemote }
 // asForge is the Forge side, for Env.Forge.
 func (f *fakeRemote) asForge() Forge { return remoteForge{f} }
 
+func (f remoteForge) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: "github"}).LabelMatcher()
+}
+
 func (f remoteForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	f.openPRCalls++
 	return f.prs, f.prsErr

@@ -129,6 +129,8 @@ type issueStub struct {
 	keyed  bool // closes by key in the branch or title (Jira, Linear), not by keyword
 }
 
+func (s *issueStub) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
+
 func (s *issueStub) Get(_ context.Context, n tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	s.gets = append(s.gets, n)
 	return tracker.Issue{Key: n, State: "open", Labels: s.labels}, nil

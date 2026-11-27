@@ -28,11 +28,11 @@ func BestOfOf(caps backlog.Capabilities, it backlog.Item) (bool, error) {
 	if !caps.IssueIDs {
 		return false, nil
 	}
-	ls := labelsWith(it.Labels, labels.BestOfPrefix)
+	ls := it.LabelsWithPrefix(labels.BestOfPrefix)
 	switch {
 	case len(ls) == 0:
 		return false, nil
-	case len(ls) == 1 && ls[0] == BestOfLabel:
+	case len(ls) == 1 && it.HasLabel(BestOfLabel):
 		return true, nil
 	case len(ls) == 1:
 		return false, blocked(blockedby.BestOfLabel, "%s has label %s: only %s is supported", it.ID, ls[0], BestOfLabel)

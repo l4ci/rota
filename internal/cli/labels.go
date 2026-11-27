@@ -66,6 +66,11 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 			for _, label := range issue.Labels {
 				used[label] = true
 			}
+			for _, label := range have {
+				if tracker.HasLabel(tr, issue.Labels, label.Name) {
+					used[label.Name] = true
+				}
+			}
 		}
 		manager, writable := tr.(tracker.LabelManager)
 		changes := labels.Diff(entries, have, used, writable)

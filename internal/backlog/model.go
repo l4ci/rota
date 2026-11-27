@@ -22,12 +22,32 @@ type Item struct {
 	Reason string // closed only: done|handed-off|blocked|dropped ("" when open)
 	// ClosedAt is the close date, YYYY-MM-DD ("" when open): the done line's
 	// date in file mode, the tracker's closed_at in issue mode.
-	ClosedAt string
-	Note     string   // closure note (file backend)
-	Line     string   // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
-	Number   int      // issue mode: the issue number; 0 in file mode
-	URL      string   // issue mode
-	Labels   []string // issue mode: the issue's labels
+	ClosedAt     string
+	Note         string   // closure note (file backend)
+	Line         string   // the bullet: file = origin line as FindOrigin returns it; issue = rendered "- **[F12] ...**" line
+	Number       int      // issue mode: the issue number; 0 in file mode
+	URL          string   // issue mode
+	Labels       []string // issue mode: the issue's labels
+	labelMatcher tracker.LabelMatcher
+}
+
+// HasLabel uses the rule of the tracker that supplied this item's labels.
+func (it Item) HasLabel(want string) bool { return it.labelMatcher.HasLabel(it.Labels, want) }
+
+// CutLabelPrefix parses an issue label namespace using its tracker's rule.
+func (it Item) CutLabelPrefix(name, prefix string) (string, bool) {
+	return it.labelMatcher.CutPrefix(name, prefix)
+}
+
+// LabelsWithPrefix returns the original names in an issue label namespace.
+func (it Item) LabelsWithPrefix(prefix string) []string {
+	var names []string
+	for _, name := range it.Labels {
+		if _, ok := it.CutLabelPrefix(name, prefix); ok {
+			names = append(names, name)
+		}
+	}
+	return names
 }
 
 // Key is how an item is spelled inside bullets and Related cells: the type

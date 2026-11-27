@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -46,7 +45,7 @@ func releaseLandedSlice(c *Ctx) func(root, issue, slot string) error {
 			return nil
 		}
 		it, err := raw.Get(issue)
-		if err != nil || it.Closed || !slices.Contains(it.Labels, labels.PartialSlice) {
+		if err != nil || it.Closed || !it.HasLabel(labels.PartialSlice) {
 			return nil
 		}
 		tr, ok := backlog.ItemTrackerFor(raw)

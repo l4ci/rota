@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/labels"
@@ -98,13 +99,71 @@ func sourceLabelRule(source string) (labelRule, bool) {
 	return labelsExact, false
 }
 
+// LabelSource exposes the issue tracker's name rule. A combined PR/issue
+// adapter forwards this from its issue side, independently of its Provider.
+type LabelSource interface{ LabelMatcher() LabelMatcher }
+
+// LabelMatcher retains a tracker's rule when its issues become backlog items.
+// The zero value matches exactly, as file and unknown sources do.
+type LabelMatcher struct{ rule labelRule }
+
+// LabelsFor returns the matching rule of the tracker that supplied the labels.
+func LabelsFor(t LabelSource) LabelMatcher {
+	if t == nil {
+		return LabelMatcher{}
+	}
+	return t.LabelMatcher()
+}
+
+// HasLabel reports whether names holds want under the supplying tracker's rule.
+func HasLabel(t LabelSource, names []string, want string) bool {
+	return LabelsFor(t).HasLabel(names, want)
+}
+
+// HasLabel matches names without changing the spelling returned by the tracker.
+func (m LabelMatcher) HasLabel(names []string, want string) bool {
+	return hasLabel(m.rule, names, want)
+}
+
+// CutPrefix parses a label namespace with the same name rule, preserving the
+// value's spelling. EqualFold pairs runes, so byte offsets cannot delimit it.
+func (m LabelMatcher) CutPrefix(name, prefix string) (string, bool) {
+	if m.rule == labelsExact {
+		return strings.CutPrefix(name, prefix)
+	}
+	end := 0
+	for range prefix {
+		if end == len(name) {
+			return name, false
+		}
+		_, width := utf8.DecodeRuneInString(name[end:])
+		end += width
+	}
+	if sameLabelName(m.rule, name[:end], prefix) {
+		return name[end:], true
+	}
+	return name, false
+}
+
 // HasLabel reports whether names holds want under the label rule of the
 // tracker the actor resolved, so a caller outside this package never compares
 // label names itself. An unlisted source matches exactly.
 func (a IssueActor) HasLabel(names []string, want string) bool {
-	r, _ := sourceLabelRule(a.Source)
-	return hasLabel(r, names, want)
+	return a.LabelMatcher().HasLabel(names, want)
 }
+
+// LabelMatcher retains the rule chosen by the resolved issue actor.
+func (a IssueActor) LabelMatcher() LabelMatcher {
+	r, _ := sourceLabelRule(a.Source)
+	return LabelMatcher{rule: r}
+}
+
+func (*GitHub) LabelMatcher() LabelMatcher   { return LabelMatcher{rule: githubLabelRule} }
+func (*GitLab) LabelMatcher() LabelMatcher   { return LabelMatcher{rule: gitlabLabelRule} }
+func (*Linear) LabelMatcher() LabelMatcher   { return LabelMatcher{rule: linearLabelRule} }
+func (*Itsaplan) LabelMatcher() LabelMatcher { return LabelMatcher{rule: itsaplanLabelRule} }
+func (*Jira) LabelMatcher() LabelMatcher     { return LabelMatcher{rule: jiraLabelRule} }
+func (NoIssues) LabelMatcher() LabelMatcher  { return LabelMatcher{} }
 
 func orderedLabels(ls []Label) []Label {
 	for i := range ls {

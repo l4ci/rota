@@ -486,6 +486,9 @@ type bothSides struct {
 	tracker.IssueTracker
 }
 
+// LabelMatcher belongs to issue reads even though Provider identifies the PR forge.
+func (b bothSides) LabelMatcher() tracker.LabelMatcher { return b.IssueTracker.LabelMatcher() }
+
 func (b bothSides) Provider() string                    { return b.Forge.Provider() }
 func (b bothSides) CheckAuth(ctx context.Context) error { return b.Forge.CheckAuth(ctx) }
 
