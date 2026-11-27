@@ -58,3 +58,19 @@ func TestVariantsSideBySide(t *testing.T) {
 		})
 	}
 }
+
+// An exact name wins over a slug match on an entry listed before it, for reads
+// and writes alike, so a write changes what a query of that name prints.
+func TestExactNameBeatsEarlierSlugMatch(t *testing.T) {
+	for want, entries := range map[string][]Entry{
+		"Go: Tests": {{"Go Tests", "go-tests"}, {"Go: Tests", "go-tests"}},
+		"godot":     {{"Engine", "godot"}, {"Godot", "gd"}},
+	} {
+		if i, ok := WriteIndex(want, entries); !ok || i != 1 {
+			t.Errorf("WriteIndex(%q) = %d %v, want 1", want, i, ok)
+		}
+		if got := ReadIndex(want, entries); !reflect.DeepEqual(got, []int{1}) {
+			t.Errorf("ReadIndex(%q) = %v, want [1]", want, got)
+		}
+	}
+}
