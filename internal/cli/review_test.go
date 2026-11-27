@@ -556,6 +556,16 @@ func TestReviewQueueUmbrella(t *testing.T) {
 	}
 }
 
+// reviewIssueDeps supplies both tracker boundaries: item intents and PR bases.
+func reviewIssueDeps(t *testing.T) *Deps {
+	t.Helper()
+	deps := withTracker(t, issueFixture())
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _ proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: "[]"}, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	return deps
+}
+
 // Issue mode: refs come from closing keywords and the branch name, resolved
 // through the tracker; an unknown ref stays listed with no intent.
 func TestReviewScopeIssueMode(t *testing.T) {
@@ -568,7 +578,7 @@ func TestReviewScopeIssueMode(t *testing.T) {
 	write(t, filepath.Join(root, "a.txt"), "b\n")
 	gittest.Run(t, root, "add", "a.txt")
 	gittest.Run(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
-	deps := withTracker(t, issueFixture())
+	deps := reviewIssueDeps(t)
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
 	if o.code != 0 {
@@ -650,6 +660,71 @@ func TestReviewPackage(t *testing.T) {
 	}
 	if o := trRun(t, umb, "", "review", "package", "feat/x"); o.code != 2 {
 		t.Errorf("umbrella no repo: exit %d", o.code)
+	}
+}
+
+// Empty ranges keep each verb's established exit contract. An explicit
+// package base equal to its feature tip is a resolution failure, not a
+// refusal to review the project's base branch.
+func TestReviewEmptyRangeExitCodes(t *testing.T) {
+	plain, _ := reviewProject(t)
+	gittest.Run(t, plain, "branch", "older", "main~1")
+	gittest.Run(t, plain, "update-ref", "refs/remotes/origin/main", "main")
+	gittest.Run(t, plain, "checkout", "-q", "main")
+	for _, tc := range []struct {
+		name string
+		args []string
+		want int
+	}{
+		{"scope base", []string{"review", "scope", "main"}, 1},
+		{"scope empty", []string{"review", "scope", "empty"}, 0},
+		{"brief base", []string{"review", "brief", "main"}, 1},
+		{"brief empty", []string{"review", "brief", "empty"}, 1},
+		{"scaffolding base", []string{"review", "scaffolding", "main", "--base", "main"}, 0},
+		{"scaffolding empty", []string{"review", "scaffolding", "empty"}, 0},
+		{"classify base", []string{"change", "classify", "main"}, 1},
+		{"classify base explicit self", []string{"change", "classify", "main", "--base", "main"}, 1},
+		{"classify base explicit feature", []string{"change", "classify", "main", "--base", "feat/x"}, 0},
+		{"classify base explicit older", []string{"change", "classify", "main", "--base", "older"}, 0},
+		{"classify empty", []string{"change", "classify", "empty"}, 0},
+		{"classify explicit self", []string{"change", "classify", "feat/x", "--base", "feat/x"}, 1},
+		{"package base", []string{"review", "package", "main"}, 1},
+		{"package base explicit self", []string{"review", "package", "main", "--base", "main"}, 1},
+		{"package base explicit feature", []string{"review", "package", "main", "--base", "feat/x"}, 1},
+		{"package base explicit remote", []string{"review", "package", "main", "--base", "origin/main"}, 1},
+		{"package base explicit older", []string{"review", "package", "main", "--base", "older"}, 1},
+		{"package base explicit missing", []string{"review", "package", "main", "--base", "missing"}, 1},
+		{"package base with since", []string{"review", "package", "main", "--base", "main", "--since", "older"}, 1},
+		{"package current base explicit self", []string{"review", "package", "--base", "main"}, 1},
+		{"package current base explicit older", []string{"review", "package", "--base", "older"}, 1},
+		{"package empty", []string{"review", "package", "empty"}, 3},
+		{"package explicit self", []string{"review", "package", "feat/x", "--base", "feat/x"}, 3},
+		{"package since tip", []string{"review", "package", "feat/x", "--since", "feat/x"}, 3},
+		{"package explicit self with since", []string{"review", "package", "feat/x", "--base", "feat/x", "--since", "main"}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			o := trRun(t, plain, "", tc.args...)
+			if o.code != tc.want {
+				t.Errorf("%v: exit %d, want %d: %s", tc.args, o.code, tc.want, o.stderr)
+			}
+		})
+	}
+}
+
+// A PR base changes the review span, not the identity of the resolved base
+// branch that review commands refuse to review.
+func TestReviewResolvedBaseBranchRefusal(t *testing.T) {
+	plain, _ := reviewProject(t)
+	write(t, filepath.Join(plain, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _ proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: `[{"number":10,"headRefName":"main","baseRefName":"feat/x","isCrossRepository":false}]`}, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	for _, verb := range [][]string{{"review", "scope"}, {"review", "brief"}, {"review", "depth"}, {"review", "package"}, {"change", "classify"}} {
+		o := trRunWith(t, deps, plain, "", append(verb, "main")...)
+		if o.code != 1 {
+			t.Errorf("%v main: exit %d, want 1: %s", verb, o.code, o.stderr)
+		}
 	}
 }
 
@@ -858,7 +933,7 @@ func TestReviewScopeManualCommits(t *testing.T) {
 	write(t, filepath.Join(root, "a.txt"), "b\n")
 	gittest.Run(t, root, "add", "a.txt")
 	gittest.Run(t, root, "commit", "-q", "-m", "Tidy a by hand")
-	deps := withTracker(t, issueFixture())
+	deps := reviewIssueDeps(t)
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
 	if o.code != 0 {
@@ -997,11 +1072,11 @@ func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
 
 // #4242: a PR into a milestone branch is measured against that branch, not
 // against main, so the milestone's own commits do not count toward its depth.
-func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
+func TestReviewVerbsUseTheOpenPRBase(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	gittest.Run(t, root, "checkout", "-q", "-b", "m/x")
 	for _, f := range []string{"m1.txt", "m2.txt"} {
-		write(t, filepath.Join(root, f), "milestone\n")
+		write(t, filepath.Join(root, f), "place"+"holder\n")
 		gittest.Run(t, root, "add", f)
 		gittest.Run(t, root, "commit", "-q", "-m", "milestone "+f)
 	}
@@ -1031,6 +1106,58 @@ func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
 	d, _ := run()
 	if d["base"] != "m/x" || d["changedLines"].(float64) != 1 || d["baseSource"] != "pr" {
 		t.Errorf("open PR base must be the span base: %v", d)
+	}
+
+	// Run from the orchestrator's default branch, rather than the PR checkout.
+	gittest.Run(t, root, "checkout", "-q", "main")
+	for _, verb := range [][]string{{"review", "scope"}, {"review", "brief"}, {"change", "classify"}} {
+		o := trRunWith(t, deps, root, "", append(verb, "nia/6-small", "--json")...)
+		if o.code != 0 {
+			t.Fatalf("%v: %s", verb, o.stderr)
+		}
+		d := envelope(t, o.stdout)["data"].(map[string]any)
+		if d["base"] != "m/x" {
+			t.Errorf("%v base = %v, want m/x", verb, d["base"])
+		}
+	}
+	for _, explicit := range []bool{false, true} {
+		flags := []string{}
+		if explicit {
+			flags = append(flags, "--base", "main")
+		}
+		o := trRunWith(t, deps, root, "", append([]string{"review", "scaffolding", "nia/6-small", "--json"}, flags...)...)
+		if o.code != 0 {
+			t.Fatal(o.stderr)
+		}
+		findings := envelope(t, o.stdout)["data"].(map[string]any)["findings"].([]any)
+		want := 0
+		if explicit {
+			want = 2
+		}
+		if len(findings) != want {
+			t.Errorf("scaffolding explicit=%v: got %d findings, want %d", explicit, len(findings), want)
+		}
+		o = trRunWith(t, deps, root, "", append([]string{"review", "package", "nia/6-small", "--json"}, flags...)...)
+		if o.code != 0 {
+			t.Fatal(o.stderr)
+		}
+		d := envelope(t, o.stdout)["data"].(map[string]any)
+		body, err := os.ReadFile(d["path"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "m1.txt") != explicit {
+			t.Errorf("package explicit=%v: %s", explicit, body)
+		}
+		if explicit {
+			o = trRunWith(t, deps, root, "", "change", "classify", "nia/6-small", "--base", "main", "--json")
+			if o.code != 0 {
+				t.Fatal(o.stderr)
+			}
+			if d := envelope(t, o.stdout)["data"].(map[string]any); d["base"] != "main" || d["changedLines"] != float64(3) {
+				t.Errorf("explicit classify: %v", d)
+			}
+		}
 	}
 	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small")
 	if !strings.Contains(o.stdout, "REVIEW-BASE nia/6-small — m/x (open PR #9)") {

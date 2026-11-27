@@ -22,6 +22,11 @@ type branchTarget struct {
 // not exist. Comparing the branch with the base is left to the verb, whose
 // message differs.
 func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
+	return resolveBranchBase(c, args, "")
+}
+
+// resolveBranchBase preserves an explicit base even when no default resolves.
+func resolveBranchBase(c *Ctx, args []string, explicitBase string) (branchTarget, error) {
 	if len(args) > 1 {
 		return branchTarget{}, Usage("unexpected argument %q", args[1])
 	}
@@ -54,7 +59,10 @@ func resolveBranch(c *Ctx, args []string) (branchTarget, error) {
 			return branchTarget{}, Resolution("no branch given and HEAD is not on a branch")
 		}
 	}
-	base, ok, err := resolveBaseFor(c, t.Dir)
+	base, ok := explicitBase, explicitBase != ""
+	if !ok {
+		base, ok, err = resolveBaseFor(c, t.Dir)
+	}
 	if err != nil {
 		return branchTarget{}, err
 	}

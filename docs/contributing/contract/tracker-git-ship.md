@@ -4,6 +4,7 @@ refs:
   - internal/ship
   - internal/config
   - internal/cli/git.go
+  - internal/cli/review_span.go
 ---
 
 ## A8: tracker, git, review, ship, release
@@ -88,6 +89,8 @@ exit: 2 at an umbrella root without --repo; 3 when the branch does not exist; 1 
 old: hv-review-scope [--repo <repo>] [<branch>]
 shim: the old JSON is passed through as `data` (already camelCase). Old exit 1 is split by message (`umbrella` becomes 2, unknown branch becomes 3, branch equals base becomes 1, other git errors become 5). `branch` defaults to the current branch.
 
+note: (#4317) scope, brief, scaffolding, package, depth and change classification share the review span: an explicit `--base` wins where accepted, else the same-repository open PR's resolvable base, else the calling slot's base or the project default. An open integration branch narrows the span to its fix commits using the same `ReviewSince` boundary as the gate; the reported base remains the target branch. Package's explicit `--since` overrides that boundary.
+
 ### rota review brief
 rota review brief [<branch>]
 repo: scoped
@@ -135,9 +138,10 @@ data: {"path": string, "files": number, "bytes": number, "head": string}
 exit: 2 at an umbrella root without --repo; 3 when the branch, base or `--since` commit does not exist, when the range is empty, when `--since` is not an ancestor of the branch, when the branch and base share no history, or when a local `<branch>` head differs from `origin/<branch>` (push, or fetch if origin is ahead; a branch with no origin copy passes); 1 when the branch is the resolved base; 5 when git fails
 old: none (new verb)
 note: writes `<project root>/.rota/review/<branch>.md` (gitignored; `/` in the branch becomes `-`) with the commits, `git diff --stat` and `git diff -U10`, and prints the absolute path. The file is rewritten on every call. `data.head` is the branch sha resolved once and diffed; pass it to `rota verdict add --sha`.
+note: packaging the resolved slot/project base branch exits 1 with or without `--base` or `--since`; overrides do not bypass that refusal. For other branches, a range made empty by `--base` or `--since` exits 3; an earlier `--since` may select a nonempty range even when the explicit base equals the feature branch.
 note: the base need not be an ancestor of the branch tip: the diff is `base...branch`, so a base that moved on since the fork is fine. Only unrelated histories fail. `--since` is a point on the branch and must be an ancestor; the range is then `since..branch`. (#4014) When `since..branch` holds merges and every one only brings in the base (its other parents are reachable from the base or `origin/<base>`), the file packages the branch's own commits only: `git log --first-parent` with each commit's patch after its `commit <sha> <subject>` line, a merge showing only its conflict resolution, and `files` counting those paths. Any other merge keeps the plain `since..branch` diff.
 
-note: (#3096) with no `--since`, the branch of an open (not landed) integration record in `workers.json` is packaged on its fix commits only: `--since` defaults to the parent of the oldest fix commit, or the assembled tip when there is none. Any other branch, or an unreadable registry, keeps the whole-branch range. A failure resolving that parent exits 3.
+note: (#3096) with no `--since`, the branch of an open (not landed) integration record in `workers.json` is packaged on its fix commits only: `--since` defaults to the parent of the oldest fix commit, or the assembled tip when there is none. The other review verbs and change classification use the same boundary. Any other branch, or an unreadable registry, keeps the whole-branch range. A failure resolving that parent exits 3.
 
 ### rota review prepare
 rota review prepare <commit>

@@ -581,6 +581,8 @@ If `.rota/verdicts.json` does not parse, `verdict add` exits 4 with a repair hin
 | `rota review depth [<branch>] [--labels <a,b>]` | review depth `ship.review` picks for a branch (`full`, `light`, `none`) from its diff size, change tier and the labels given, and why; the diff is against the open PR's base when there is one (`REVIEW-BASE` line; `--json` adds `baseSource`, `pr` or `default`) |
 | `rota review queue` | open issues waiting for review |
 
+Scope, brief, scaffolding, package, depth and change classification use the open PR's base when it resolves here, then fall back to the slot or project base. An explicit `--base` wins where accepted. For an open integration branch, all use its fix range; package's `--since` can override it.
+
 ## `rota ship`
 
 | Usage | What it does |

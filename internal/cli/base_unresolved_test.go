@@ -129,3 +129,26 @@ func TestKeepaliveWarnsNamingMissingConfiguredBase(t *testing.T) {
 		t.Errorf("err=%q; want the empty-handoff warning naming the set key", errOut)
 	}
 }
+
+// Package and classification require the resolved base even with an explicit
+// comparison ref; scaffolding has always allowed that override without one.
+func TestReviewExplicitBasePreconditions(t *testing.T) {
+	repo := noBaseRepo(t)
+	gittest.Run(t, repo, "checkout", "-q", "-b", "feat")
+	write(t, filepath.Join(repo, "feature.txt"), "change\n")
+	gittest.Run(t, repo, "add", "feature.txt")
+	gittest.Run(t, repo, "commit", "-q", "-m", "feature")
+	for _, tc := range []struct {
+		args []string
+		want int
+	}{
+		{[]string{"review", "package", "feat", "--base", "work"}, 3},
+		{[]string{"change", "classify", "feat", "--base", "work"}, 3},
+		{[]string{"review", "scaffolding", "feat", "--base", "work"}, 0},
+	} {
+		o := trRun(t, repo, "", tc.args...)
+		if o.code != tc.want {
+			t.Errorf("%v: exit %d, want %d: %s", tc.args, o.code, tc.want, o.stderr)
+		}
+	}
+}
