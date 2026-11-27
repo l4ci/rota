@@ -76,3 +76,44 @@ func TestGitLabPRFiles(t *testing.T) {
 		})
 	}
 }
+
+// githubDiff answers a PR that renames secret/key.go to public/key.go the way
+// gh does: `pr diff --name-only` prints the new name only, the files API
+// carries both.
+func githubDiff(_ string, args []string) (string, string, int) {
+	if args[0] == "api" {
+		return `[{"filename":"public/key.go","previous_filename":"secret/key.go","status":"renamed"}]` + "\n" +
+			`[{"filename":"added.go"},{"filename":"public/key.go"}]`, "", 0
+	}
+	return "public/key.go\nadded.go\n", "", 0
+}
+
+func TestGitHubPRFilesCountsBothRenameNames(t *testing.T) {
+	s := &scripted{answer: githubDiff}
+	got, err := newAdapter(t, "github", s).PRFiles(context.Background(), 12)
+	want := []string{"public/key.go", "secret/key.go", "added.go"}
+	if err != nil || !slices.Equal(got, want) {
+		t.Fatalf("files %v, error %v; want %v", got, err, want)
+	}
+	if want := []string{"gh api repos/{owner}/{repo}/pulls/12/files?per_page=100 --paginate"}; !slices.Equal(s.calls, want) {
+		t.Errorf("calls %q, want %q", s.calls, want)
+	}
+}
+
+// The files API stops at 3000 entries without saying so; a list that long
+// cannot be trusted to be whole.
+func TestGitHubPRFilesRefusesACappedList(t *testing.T) {
+	for _, n := range []int{2999, 3000} {
+		entries := make([]string, n)
+		for i := range entries {
+			entries[i] = fmt.Sprintf(`{"filename":"f%d.go"}`, i)
+		}
+		s := &scripted{answer: func(string, []string) (string, string, int) {
+			return "[" + strings.Join(entries, ",") + "]", "", 0
+		}}
+		got, err := newAdapter(t, "github", s).PRFiles(context.Background(), 12)
+		if capped := n == 3000; capped != IsKind(err, KindFailed) || capped != (got == nil) {
+			t.Errorf("%d entries: %d files, error %v", n, len(got), err)
+		}
+	}
+}

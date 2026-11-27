@@ -586,7 +586,7 @@ func movedPaneIn(t *testing.T, n int) (string, Env, *[]string) {
 		all, err := snap(ctx)
 		for i := range all {
 			if all[i].Name == "kit" {
-				all[i].Name, all[i].Tab, all[i].Pane, all[i].TabPanes = host.AgentName("kit", "w1:t3"), "w4:t9", "w4:p57", n
+				all[i].Name, all[i].Tab, all[i].Pane, all[i].TabPanes = "rota-kit-w1-t3", "w4:t9", "w4:p57", n
 			}
 		}
 		return all, err
@@ -636,7 +636,7 @@ func TestReconcileApplyRecordsTheMovedPanesTab(t *testing.T) {
 		all, err := snap(ctx)
 		for i := range all {
 			if all[i].Tab == "w4:t9" {
-				all[i].Name = host.AgentName("kit", "w4:p57")
+				all[i].Name = "rota-kit-w4-p57"
 			}
 		}
 		return all, err
@@ -690,9 +690,9 @@ func TestAgentsSharingATabAreMatchedByNameInEitherOrder(t *testing.T) {
 			// kit, finn and nia all sit in kit's recorded tab w1:t3, beside the orchestrator.
 			shared := []host.Agent{
 				{Tab: "w1:t3", Pane: "w1:p1", TabPanes: 4, Name: "orchestrator-pane", Cwd: root, Status: host.AgentStatus{State: "working"}},
-				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: host.AgentName("kit", "w1:t3"), Cwd: filepath.Join(root, ".worktrees", "kit"), Status: host.AgentStatus{State: "working"}},
-				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: host.AgentName("finn", "w1:t4"), Cwd: filepath.Join(root, ".worktrees", "finn"), Status: host.AgentStatus{State: "done"}},
-				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: host.AgentName("nia", "w1:t5"), Cwd: filepath.Join(root, ".worktrees", "nia"), Status: host.AgentStatus{State: "idle"}},
+				{Tab: "w1:t3", Pane: "w1:p2", TabPanes: 4, Name: "rota-kit-w1-t3", Cwd: filepath.Join(root, ".worktrees", "kit"), Status: host.AgentStatus{State: "working"}},
+				{Tab: "w1:t3", Pane: "w1:p3", TabPanes: 4, Name: "rota-finn-w1-t4", Cwd: filepath.Join(root, ".worktrees", "finn"), Status: host.AgentStatus{State: "done"}},
+				{Tab: "w1:t3", Pane: "w1:p4", TabPanes: 4, Name: "rota-nia-w1-t5", Cwd: filepath.Join(root, ".worktrees", "nia"), Status: host.AgentStatus{State: "idle"}},
 			}
 			if reversed {
 				slices.Reverse(shared)

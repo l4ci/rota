@@ -426,7 +426,7 @@ func (e Env) Health(ctx context.Context, root string, s *worker.Slot, now time.T
 	if e.Snapshot != nil {
 		if agents, err := e.Snapshot(ctx); err == nil {
 			h.Known = true
-			if i := matchAgent(agents, name, tab, wt); i >= 0 {
+			if i, _ := e.matchAgent(agents, name, tab, wt); i >= 0 {
 				h.Alive, native = true, agents[i].Status
 			}
 		}
