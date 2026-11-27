@@ -875,10 +875,10 @@ func (g *GitHub) PRMerge(ctx context.Context, pr int, o MergeOpts) (string, erro
 		MergeCommit *struct{ Oid string } `json:"mergeCommit"`
 	}
 	if err := g.json(ctx, []string{"pr", "view", strconv.Itoa(pr), "--json", "mergeCommit"}, &d); err != nil {
-		return "", err
+		return "", &UnconfirmedError{PR: pr, Err: err}
 	}
 	if d.MergeCommit == nil || d.MergeCommit.Oid == "" {
-		return "", failed("cannot read the merge commit of PR %d", pr)
+		return "", &UnconfirmedError{PR: pr, Err: failed("cannot read the merge commit of PR %d", pr)}
 	}
 	return d.MergeCommit.Oid, nil
 }
