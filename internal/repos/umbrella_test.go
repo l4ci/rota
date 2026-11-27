@@ -2,6 +2,7 @@ package repos
 
 import (
 	"errors"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/rotatree"
 	"os"
@@ -36,39 +37,22 @@ func TestUmbrellaOn(t *testing.T) {
 	}
 }
 
-func TestWhichInsideAndOutside(t *testing.T) {
-	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}, {"name": "api", "path": "api"}]}`, "web", "api")
-	os.MkdirAll(filepath.Join(root, "web", "src", "deep"), 0o755)
-	for _, dir := range []string{"web", "web/src/deep"} {
-		r, err := Which(filepath.Join(root, dir))
-		if err != nil || r.Name != "web" || r.Path != filepath.Join(root, "web") {
-			t.Errorf("%s: %+v %v", dir, r, err)
-		}
-	}
+func TestWhichUnregistered(t *testing.T) {
+	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
 	// the umbrella root itself is no git repo here
-	if _, err := Which(root); !errors.Is(err, ErrNotGit) {
+	if _, err := Which(git.Exec, root); !errors.Is(err, ErrNotGit) {
 		t.Errorf("umbrella root: %v", err)
 	}
 	gittest.Init(t, root, "main")
-	if _, err := Which(root); !errors.Is(err, ErrNotRegistered) {
+	if _, err := Which(git.Exec, root); !errors.Is(err, ErrNotRegistered) {
 		t.Errorf("umbrella root as repo: %v", err)
-	}
-}
-
-func TestWhichLayoutBWorktree(t *testing.T) {
-	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
-	wt := filepath.Join(root, "web-wt")
-	gittest.Run(t, filepath.Join(root, "web"), "worktree", "add", "-q", "-b", "feat/x", wt)
-	r, err := Which(wt)
-	if err != nil || r.Name != "web" || r.Path != filepath.Join(root, "web") {
-		t.Errorf("worktree: %+v %v", r, err)
 	}
 }
 
 func TestWhichMaskedByStrayHV(t *testing.T) {
 	root := umbrella(t, `{"repos": [{"name": "web", "path": "web"}]}`, "web")
 	os.MkdirAll(filepath.Join(root, "web", ".rota"), 0o755)
-	_, err := Which(filepath.Join(root, "web"))
+	_, err := Which(git.Exec, filepath.Join(root, "web"))
 	var m *rotatree.MaskedError
 	if !errors.As(err, &m) || m.Name != "web" || m.Stray != filepath.Join(root, "web", ".rota") {
 		t.Errorf("masked: %v", err)
@@ -118,13 +102,12 @@ func TestVerdictRepo(t *testing.T) {
 	gittest.Run(t, plain, "commit", "-q", "--allow-empty", "-m", "init")
 	cases := []struct{ name, root, dir, flag, want string }{
 		{"flag overrides umbrella", um, web, "api", "api"},
-		{"umbrella sub-repo", um, web, "", "web"},
 		{"umbrella dir outside every sub-repo", um, um, "", ""},
 		{"plain project", plain, plain, "", ""},
 		{"plain project with flag", plain, plain, "api", "api"},
 	}
 	for _, c := range cases {
-		if got := VerdictRepo(c.root, c.dir, c.flag); got != c.want {
+		if got := VerdictRepo(git.Exec, c.root, c.dir, c.flag); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}

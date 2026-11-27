@@ -22,7 +22,7 @@ func workerRefs(fs *flag.FlagSet) RunFunc {
 		}
 		ctx, stop := c.workerContext()
 		defer stop()
-		res, err := workerEnvCtx(c, ctx).Refs(ctx, root, worker.RefsOpts{Branch: args[0], VerdictRepo: repos.VerdictRepo(root, root, c.Repo)})
+		res, err := workerEnvCtx(c, ctx).Refs(ctx, root, worker.RefsOpts{Branch: args[0], VerdictRepo: repos.VerdictRepo(c.deps().Git, root, root, c.Repo)})
 		if err != nil {
 			return Result{}, err
 		}

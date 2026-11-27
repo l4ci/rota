@@ -109,7 +109,7 @@ func resolveVerdictBranch(c *Ctx, args []string) (verdictBranch, error) {
 	if err != nil {
 		return verdictBranch{}, err
 	}
-	v := verdictBranch{root: root, repo: repos.VerdictRepo(root, t.Dir, c.Repo), branch: bare, ref: t.Branch, dir: t.Dir, remote: remote}
+	v := verdictBranch{root: root, repo: repos.VerdictRepo(c.deps().Git, root, t.Dir, c.Repo), branch: bare, ref: t.Branch, dir: t.Dir, remote: remote}
 	v.key = verdict.BranchKey(v.repo, v.branch)
 	out, err := verdictHead(c, t.Dir, t.Branch)
 	if err != nil {
