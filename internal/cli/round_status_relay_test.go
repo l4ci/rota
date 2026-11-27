@@ -94,7 +94,9 @@ func (h *statusRelayHost) ReadPane(context.Context, string, string, int) (string
 	}
 	return h.pane, nil
 }
-func (h *statusRelayHost) Status(context.Context, string, string) string { return h.native }
+func (h *statusRelayHost) Status(context.Context, string, string) host.AgentStatus {
+	return host.AgentStatus{State: h.native}
+}
 func (h *statusRelayHost) Send(ctx context.Context, slot, handle, file string) error {
 	b, err := os.ReadFile(file)
 	if err != nil {
@@ -104,7 +106,7 @@ func (h *statusRelayHost) Send(ctx context.Context, slot, handle, file string) e
 	return h.cliHost.Send(ctx, slot, handle, file)
 }
 func (h *statusRelayHost) Snapshot(context.Context) ([]host.Agent, error) {
-	return []host.Agent{{Tab: "rota:dana", Name: "dana", Cwd: h.spawnOpts.Cwd, Status: h.native}}, nil
+	return []host.Agent{{Tab: "rota:dana", Name: "dana", Cwd: h.spawnOpts.Cwd, Status: host.AgentStatus{State: h.native}}}, nil
 }
 
 func TestRoundStatusRelayCompletionAndNextAssignment(t *testing.T) {

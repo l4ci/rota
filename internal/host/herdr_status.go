@@ -40,34 +40,34 @@ func paneText(r Result) string {
 
 // Status is herdr's native agent state, or `gone` when the slot has a tab but
 // no agent in it (the session exited back to a shell). A never-dispatched
-// slot yields "".
-func (h *herdr) Status(ctx context.Context, slot, handle string) string {
+// slot yields the zero status.
+func (h *herdr) Status(ctx context.Context, slot, handle string) AgentStatus {
 	if handle == "" {
-		return ""
+		return AgentStatus{}
 	}
 	return h.statusOf(ctx, AgentName(slot, handle))
 }
 
-func (h *herdr) statusOf(ctx context.Context, name string) string {
+func (h *herdr) statusOf(ctx context.Context, name string) AgentStatus {
 	r := h.herdr(ctx, "agent", "get", name)
 	if r.ExitCode != 0 {
 		return failedStatus(r)
 	}
-	return jget(r.Stdout, "result.agent.agent_status")
+	return AgentStatus{State: jget(r.Stdout, "result.agent.agent_status")}
 }
 
 // failedStatus reads a failed `agent get`. herdr's own agent_not_found is the
 // one positive proof the session is gone. A tab or pane the handle no longer
 // names is a stale handle, and anything else (no server, a socket error, a
 // binary that cannot run) is no answer at all: neither says the agent died.
-func failedStatus(r Result) string {
+func failedStatus(r Result) AgentStatus {
 	switch jget(r.Stderr, "error.code") {
 	case "agent_not_found":
-		return "gone"
+		return AgentStatus{State: StatusGone}
 	case "tab_not_found", "pane_not_found", "agent_pane_not_found":
-		return UnverifiablePrefix + ReasonStaleHandle
+		return AgentStatus{State: StatusUnverifiable, Reason: ReasonStaleHandle}
 	}
-	return UnverifiablePrefix + ReasonHostUnreachable
+	return AgentStatus{State: StatusUnverifiable, Reason: ReasonHostUnreachable}
 }
 
 // Turn reads the slot's agent from `agent get`: agent_status, state_change_seq

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/host"
 	"strings"
 	"testing"
 
@@ -42,7 +43,7 @@ func TestDispatchTaskSendsWhenUnknownStatusButPaneBooted(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
-	h.status = map[string]string{"w1": "unknown"}
+	h.status = map[string]host.AgentStatus{"w1": {State: "unknown"}}
 	h.panes = map[string][]string{"w1": {"? for shortcuts\n", "? for shortcuts\n", "? for shortcuts\n"}}
 	res, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", BootTimeout: 3})
 	if err != nil {
@@ -59,7 +60,7 @@ func TestDispatchTaskSendsWhenStatusStaysUnknownFromStart(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
-	h.status = map[string]string{"w1": "unknown"}
+	h.status = map[string]host.AgentStatus{"w1": {State: "unknown"}}
 	if _, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", BootTimeout: 3}); err != nil {
 		t.Fatalf("unknown from the start still gets its brief: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestDispatchTaskFailsWhenSessionNeverAcceptsInput(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	h := tmuxFake()
-	h.status = map[string]string{"w1": "working"}
+	h.status = map[string]host.AgentStatus{"w1": {State: "working"}}
 	_, err := envWith(h).DispatchTask(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "task\n"), Task: "T1", BootTimeout: 3})
 	if err == nil || exitOf(err) != exitcode.ExitRetry {
 		t.Fatalf("want a retryable dispatch failure, got %v (exit %d)", err, exitOf(err))

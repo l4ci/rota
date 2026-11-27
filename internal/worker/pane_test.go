@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/host"
 	"github.com/l4ci/rota/internal/usagelimit"
 	"os"
 	"strings"
@@ -49,7 +50,7 @@ func TestClassify(t *testing.T) {
 	got := map[string][2]string{} // "<pane>/<status>" -> state, evidence
 	for name, text := range paneFixtures {
 		for _, status := range statuses {
-			state, evidence := Classify(text, false, 60, status)
+			state, evidence := Classify(text, false, 60, host.AgentStatus{State: status})
 			got[name+"/"+status] = [2]string{state, evidence}
 		}
 	}
@@ -57,23 +58,23 @@ func TestClassify(t *testing.T) {
 }
 
 func TestClassifyMovementAndTailWindow(t *testing.T) {
-	if st, ev := Classify("anything\n", true, 60, ""); st != StateBusy || ev != "pane changed between captures" {
+	if st, ev := Classify("anything\n", true, 60, host.AgentStatus{}); st != StateBusy || ev != "pane changed between captures" {
 		t.Errorf("moved: %s %q", st, ev)
 	}
 	// a sentinel outranks movement
-	if st, _ := Classify("ROTA-DONE w1 rota-worker/w1\n", true, 60, "working"); st != StateDone {
+	if st, _ := Classify("ROTA-DONE w1 rota-worker/w1\n", true, 60, host.AgentStatus{State: "working"}); st != StateDone {
 		t.Errorf("sentinel vs movement: %s", st)
 	}
 	// LIMITED outranks movement
-	if st, _ := Classify("usage limit reached\n", true, 60, ""); st != StateLimited {
+	if st, _ := Classify("usage limit reached\n", true, 60, host.AgentStatus{}); st != StateLimited {
 		t.Errorf("limit vs movement: %s", st)
 	}
 	// only the last N lines count
 	text := "ROTA-DONE w1 old\n" + strings.Repeat("noise\n", 80)
-	if st, _ := Classify(text, false, 60, ""); st != StateIdle {
+	if st, _ := Classify(text, false, 60, host.AgentStatus{}); st != StateIdle {
 		t.Errorf("a sentinel scrolled out of the window still counted: %s", st)
 	}
-	if st, _ := Classify(text, false, 100, ""); st != StateDone {
+	if st, _ := Classify(text, false, 100, host.AgentStatus{}); st != StateDone {
 		t.Errorf("a sentinel inside the window was missed: %s", st)
 	}
 }
@@ -88,19 +89,19 @@ func TestClassifySentinelAfterReplyBullet(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := string(b)
-	if state, ev := Classify(done, false, 60, "idle"); state != "DONE" || !strings.Contains(ev, "lr1/f01-add-a-hello-line-to") {
+	if state, ev := Classify(done, false, 60, host.AgentStatus{State: "idle"}); state != "DONE" || !strings.Contains(ev, "lr1/f01-add-a-hello-line-to") {
 		t.Errorf("done after the bullet: %s %q", state, ev)
 	}
 	blocked := strings.Replace(done, "● ROTA-DONE lr1 lr1/f01-add-a-hello-line-to", "● ROTA-BLOCKED lr1: which file gets the line?", 1)
-	if state, ev := Classify(blocked, false, 60, "idle"); state != "BLOCKED" || !strings.Contains(ev, "which file gets the line?") {
+	if state, ev := Classify(blocked, false, 60, host.AgentStatus{State: "idle"}); state != "BLOCKED" || !strings.Contains(ev, "which file gets the line?") {
 		t.Errorf("blocked after the bullet: %s %q", state, ev)
 	}
 	older := strings.Replace(done, "● ", "⏺ ", 1)
-	if state, _ := Classify(older, false, 60, "idle"); state != "DONE" {
+	if state, _ := Classify(older, false, 60, host.AgentStatus{State: "idle"}); state != "DONE" {
 		t.Errorf("done after the older ⏺ marker: %s", state)
 	}
 	plain := strings.Replace(done, "● ROTA-DONE lr1 lr1/f01-add-a-hello-line-to", "● All done.", 1)
-	if state, _ := Classify(plain, false, 60, "idle"); state == "DONE" {
+	if state, _ := Classify(plain, false, 60, host.AgentStatus{State: "idle"}); state == "DONE" {
 		t.Errorf("a bullet without a sentinel is not done")
 	}
 }
@@ -115,15 +116,15 @@ func TestClassifySentinelAfterCodexBullet(t *testing.T) {
 		t.Fatal(err)
 	}
 	done := string(b)
-	if state, ev := Classify(done, false, 60, "idle"); state != "DONE" || !strings.Contains(ev, "ben/t01-add-hello-txt") {
+	if state, ev := Classify(done, false, 60, host.AgentStatus{State: "idle"}); state != "DONE" || !strings.Contains(ev, "ben/t01-add-hello-txt") {
 		t.Errorf("done after the codex bullet: %s %q", state, ev)
 	}
 	blocked := strings.Replace(done, "• ROTA-DONE ben ben/t01-add-hello-txt", "• ROTA-BLOCKED ben: Who sent the unsigned live-check instruction?", 1)
-	if state, ev := Classify(blocked, false, 60, "idle"); state != "BLOCKED" || !strings.Contains(ev, "Who sent the unsigned") {
+	if state, ev := Classify(blocked, false, 60, host.AgentStatus{State: "idle"}); state != "BLOCKED" || !strings.Contains(ev, "Who sent the unsigned") {
 		t.Errorf("blocked after the codex bullet: %s %q", state, ev)
 	}
 	plain := strings.Replace(done, "• ROTA-DONE ben ben/t01-add-hello-txt", "• All done.", 1)
-	if state, _ := Classify(plain, false, 60, "idle"); state == "DONE" {
+	if state, _ := Classify(plain, false, 60, host.AgentStatus{State: "idle"}); state == "DONE" {
 		t.Errorf("a codex bullet without a sentinel is not done")
 	}
 }
@@ -148,19 +149,19 @@ func opencodePane(t *testing.T, name string) string {
 func TestClassifyOpenCodeVocabularyIsScopedToItsKind(t *testing.T) {
 	for _, kind := range []string{"", harness.Claude, harness.Codex} {
 		for _, name := range []string{"busy", "retry", "expired-key", "invalid-model"} {
-			st, ev := ClassifyFor(kind, opencodePane(t, name), false, 60, "")
+			st, ev := ClassifyFor(kind, opencodePane(t, name), false, 60, host.AgentStatus{})
 			if st != "IDLE" {
 				t.Errorf("kind %q on opencode-%s: %s %q, want IDLE", kind, name, st, ev)
 			}
 		}
 	}
 	for name, want := range map[string]string{"expired-key": "LIMITED", "invalid-model": "BLOCKED", "busy": "BUSY", "retry": "BUSY"} {
-		if st, ev := ClassifyFor(harness.OpenCode, opencodePane(t, name), false, 60, ""); st != want {
+		if st, ev := ClassifyFor(harness.OpenCode, opencodePane(t, name), false, 60, host.AgentStatus{}); st != want {
 			t.Errorf("opencode on opencode-%s: %s %q, want %s", name, st, ev, want)
 		}
 	}
 	// The gutter is an opencode reading too.
-	if st, _ := ClassifyFor(harness.Claude, "  ┃  ROTA-DONE ben https://example.test/pr/1\n", false, 60, ""); st == "DONE" {
+	if st, _ := ClassifyFor(harness.Claude, "  ┃  ROTA-DONE ben https://example.test/pr/1\n", false, 60, host.AgentStatus{}); st == "DONE" {
 		t.Error("a guttered sentinel is not done on a claude pane")
 	}
 }
@@ -175,7 +176,7 @@ func TestClassifyOpenCodeGutteredPlaceholderIsNotDone(t *testing.T) {
 		{"  ┃ ROTA-DONE ben https://example.test/pr/1", "DONE"},
 		{"  ┃ ROTA-BLOCKED ben: which file?", "BLOCKED"},
 	} {
-		if st, ev := ClassifyFor(harness.OpenCode, "  Working.\n"+c.line+"\n\n  tab agents  ctrl+p commands\n", false, 60, ""); st != c.want {
+		if st, ev := ClassifyFor(harness.OpenCode, "  Working.\n"+c.line+"\n\n  tab agents  ctrl+p commands\n", false, 60, host.AgentStatus{}); st != c.want {
 			t.Errorf("%q: %s %q, want %s", c.line, st, ev, c.want)
 		}
 	}
@@ -184,35 +185,35 @@ func TestClassifyOpenCodeGutteredPlaceholderIsNotDone(t *testing.T) {
 func TestClassifyOpenCode(t *testing.T) {
 	// The echoed brief names ROTA-DONE ben <pr-url> and ROTA-BLOCKED ben:
 	// <one question ...> as placeholders; neither is a sentinel.
-	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "busy"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "esc interrupt") {
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "busy"), false, 60, host.AgentStatus{}); state != "BUSY" || !strings.Contains(ev, "esc interrupt") {
 		t.Errorf("busy pane: %s %q", state, ev)
 	}
 	// A real capture: a provider that cannot be reached, OpenCode retrying.
-	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "retry"), false, 60, ""); state != "BUSY" || !strings.Contains(ev, "retry") {
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "retry"), false, 60, host.AgentStatus{}); state != "BUSY" || !strings.Contains(ev, "retry") {
 		t.Errorf("retry pane: %s %q", state, ev)
 	}
-	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "expired-key"), false, 60, ""); state != "LIMITED" || !strings.Contains(ev, "needs a human") {
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "expired-key"), false, 60, host.AgentStatus{}); state != "LIMITED" || !strings.Contains(ev, "needs a human") {
 		t.Errorf("expired key: %s %q", state, ev)
 	}
-	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "invalid-model"), false, 60, ""); state != "BLOCKED" || !strings.Contains(ev, "opencode-go/qwen3.6-plus") {
+	if state, ev := ClassifyFor(harness.OpenCode, opencodePane(t, "invalid-model"), false, 60, host.AgentStatus{}); state != "BLOCKED" || !strings.Contains(ev, "opencode-go/qwen3.6-plus") {
 		t.Errorf("invalid model: %s %q", state, ev)
 	}
 	done := opencodePane(t, "done")
-	if state, ev := ClassifyFor(harness.OpenCode, done, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+	if state, ev := ClassifyFor(harness.OpenCode, done, false, 60, host.AgentStatus{}); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
 		t.Errorf("done: %s %q", state, ev)
 	}
 	// The worker's reply may carry the gutter too.
 	guttered := strings.Replace(done, "  ROTA-DONE ben https", "  ┃  ROTA-DONE ben https", 1)
-	if state, ev := ClassifyFor(harness.OpenCode, guttered, false, 60, ""); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
+	if state, ev := ClassifyFor(harness.OpenCode, guttered, false, 60, host.AgentStatus{}); state != "DONE" || ev != "https://github.com/l4ci/rota/pull/600" {
 		t.Errorf("guttered done: %s %q", state, ev)
 	}
 	// The echo alone is not done, with or without its header in the viewport.
 	echo := strings.Replace(done, "  ROTA-DONE ben https://github.com/l4ci/rota/pull/600\n", "  All finished.\n", 1)
-	if state, _ := ClassifyFor(harness.OpenCode, echo, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+	if state, _ := ClassifyFor(harness.OpenCode, echo, false, 60, host.AgentStatus{}); state == "DONE" || state == "BLOCKED" {
 		t.Errorf("an echoed brief is not a sentinel: %s", state)
 	}
 	scrolled := echo[strings.Index(echo, "  ┃  You are a worker"):]
-	if state, _ := ClassifyFor(harness.OpenCode, scrolled, false, 60, ""); state == "DONE" || state == "BLOCKED" {
+	if state, _ := ClassifyFor(harness.OpenCode, scrolled, false, 60, host.AgentStatus{}); state == "DONE" || state == "BLOCKED" {
 		t.Errorf("an echo scrolled past its header is not a sentinel: %s", state)
 	}
 }
@@ -246,17 +247,17 @@ func TestClassifyLastSentinelWins(t *testing.T) {
 	relay := "--- ORCHESTRATOR (round 5) ---\n[ORCHESTRATOR RELAY — forwarded.]\n\nPush is allowed now.\nROTA-BLOCKED ben: git push to origin is denied\n\n"
 	pane := "● ROTA-BLOCKED ben: git push to origin is denied\n\n" + relay +
 		"● pushing\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/314\n"
-	if st, ev := Classify(pane, false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/314" {
+	if st, ev := Classify(pane, false, 60, host.AgentStatus{State: "idle"}); st != StateDone || ev != "https://github.com/l4ci/rota/pull/314" {
 		t.Errorf("blocked, relay, done: %s %q", st, ev)
 	}
 	// A relay that quotes a blocked line, with no later worker output, is not blocked.
 	quoted := "● working\n" + relay
-	if st, _ := Classify(quoted, false, 60, "idle"); st == StateBlocked {
+	if st, _ := Classify(quoted, false, 60, host.AgentStatus{State: "idle"}); st == StateBlocked {
 		t.Errorf("relay-quoted sentinel counted as the worker's: %s", st)
 	}
 	// A done line followed by a fresh blocked line stays blocked.
 	again := "● ROTA-DONE ben x\n● ROTA-BLOCKED ben: new question\n"
-	if st, ev := Classify(again, false, 60, "idle"); st != StateBlocked || ev != "new question" {
+	if st, ev := Classify(again, false, 60, host.AgentStatus{State: "idle"}); st != StateBlocked || ev != "new question" {
 		t.Errorf("done then blocked: %s %q", st, ev)
 	}
 }
@@ -267,19 +268,19 @@ func TestClassifyLastSentinelWins(t *testing.T) {
 func TestClassifyDoneBeforeRelayIsNotDone(t *testing.T) {
 	relay := "--- ORCHESTRATOR (round 23) ---\n[ORCHESTRATOR RELAY — forwarded.]\n\nREVIEW https://github.com/l4ci/rota/pull/871 (2 items)\n\n"
 	pane := "● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n\n" + relay
-	st, ev := Classify(pane, false, 60, "idle")
+	st, ev := Classify(pane, false, 60, host.AgentStatus{State: "idle"})
 	if st == StateDone {
 		t.Fatalf("pre-relay sentinel read as done: %s %q", st, ev)
 	}
 	if st != StateIdle || ev != staleDoneEvidence {
 		t.Errorf("static pane under a relay: %s %q", st, ev)
 	}
-	if st, _ := Classify(pane, true, 60, ""); st != StateBusy {
+	if st, _ := Classify(pane, true, 60, host.AgentStatus{}); st != StateBusy {
 		t.Errorf("moving pane under a relay: %s", st)
 	}
 	// The worker's own sentinel after the relay is a fresh done.
 	again := pane + "● fixed\n● ROTA-DONE ben https://github.com/l4ci/rota/pull/871\n"
-	if st, ev := Classify(again, false, 60, "idle"); st != StateDone || ev != "https://github.com/l4ci/rota/pull/871" {
+	if st, ev := Classify(again, false, 60, host.AgentStatus{State: "idle"}); st != StateDone || ev != "https://github.com/l4ci/rota/pull/871" {
 		t.Errorf("done after the relay: %s %q", st, ev)
 	}
 	// The forge fallback must not turn the stale row back into done.
@@ -305,7 +306,7 @@ func TestFindLimitIsTheOneDefinitionOfAHitLimit(t *testing.T) {
 		{"add funds", "You've reached your usage limit\nAdd funds to continue\n", true, "Add funds"},
 	} {
 		_, _, found := usagelimit.FindLimit("", tc.pane)
-		state, ev := Classify(tc.pane, false, 40, "")
+		state, ev := Classify(tc.pane, false, 40, host.AgentStatus{})
 		if found != tc.limited || (state == StateLimited) != tc.limited {
 			t.Errorf("%s: usagelimit.FindLimit=%v Classify=%s, want limited=%v", tc.name, found, state, tc.limited)
 		}
@@ -317,7 +318,7 @@ func TestFindLimitIsTheOneDefinitionOfAHitLimit(t *testing.T) {
 
 // Another kind's pane that echoes the login phrase is not logged out.
 func TestClassifyOtherHarnessIsNotLoggedOut(t *testing.T) {
-	if st, _ := ClassifyFor("codex", "Login expired\n", false, 0, ""); st == StateBlocked {
+	if st, _ := ClassifyFor("codex", "Login expired\n", false, 0, host.AgentStatus{}); st == StateBlocked {
 		t.Errorf("codex pane read as %q", st)
 	}
 }
@@ -325,7 +326,7 @@ func TestClassifyOtherHarnessIsNotLoggedOut(t *testing.T) {
 // #1209: a pane that merely quotes "Please run /login" (a doc, a diff, a brief)
 // is not logged out; only the "Login expired" status line is.
 func TestClassifyQuotedLoginHintIsNotLoggedOut(t *testing.T) {
-	st, _ := ClassifyFor("claude", "the docs say: Please run /login to sign in\n", false, 0, "")
+	st, _ := ClassifyFor("claude", "the docs say: Please run /login to sign in\n", false, 0, host.AgentStatus{})
 	if st == StateBlocked {
 		t.Errorf("quoted /login hint read as %q", st)
 	}
@@ -334,17 +335,17 @@ func TestClassifyQuotedLoginHintIsNotLoggedOut(t *testing.T) {
 // #1255: a logged-out pane showing only the bare status line (no "Login
 // expired") reads BLOCKED, while the same words mid-line stay quoted text.
 func TestClassifyBareNotLoggedInStatusIsBlocked(t *testing.T) {
-	st, ev := ClassifyFor("claude", "Not logged in \u00b7 Please run /login\n", false, 0, "")
+	st, ev := ClassifyFor("claude", "Not logged in \u00b7 Please run /login\n", false, 0, host.AgentStatus{})
 	if st != StateBlocked || !strings.Contains(ev, "round.accounts") {
 		t.Errorf("bare status read as %q evidence %q", st, ev)
 	}
-	st, _ = ClassifyFor("claude", "the docs say: Not logged in \u00b7 Please run /login\n", false, 0, "")
+	st, _ = ClassifyFor("claude", "the docs say: Not logged in \u00b7 Please run /login\n", false, 0, host.AgentStatus{})
 	if st == StateBlocked {
 		t.Errorf("quoted status read as %q", st)
 	}
 	// An indented reply paragraph quoting the status is the session's own
 	// prose, not its dialog.
-	st, _ = ClassifyFor("claude", "\u23fa Here is the error text:\n\n  Not logged in \u00b7 Please run /login\n", false, 0, "")
+	st, _ = ClassifyFor("claude", "\u23fa Here is the error text:\n\n  Not logged in \u00b7 Please run /login\n", false, 0, host.AgentStatus{})
 	if st == StateBlocked {
 		t.Errorf("indented reply line read as %q", st)
 	}
@@ -354,7 +355,7 @@ func TestClassifyBareNotLoggedInStatusIsBlocked(t *testing.T) {
 // outcome, so a logged-out pane that carries it still reads BLOCKED.
 func TestClassifyLoggedOutWithTaskFooterStaysBlocked(t *testing.T) {
 	pane := "  ⎿  Login expired · Please run /login\n\n  ⏵⏵ bypass permissions on · 1 shell, 2 monitors\n"
-	st, ev := ClassifyFor("claude", pane, false, 0, "")
+	st, ev := ClassifyFor("claude", pane, false, 0, host.AgentStatus{})
 	if st != StateBlocked || !strings.Contains(ev, "round.accounts") {
 		t.Errorf("state %q evidence %q", st, ev)
 	}
@@ -365,15 +366,15 @@ func TestClassifyLoggedOutWithTaskFooterStaysBlocked(t *testing.T) {
 // reply marker counts (#883).
 func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 	brief := "--- ORCHESTRATOR (round 24) ---\nYou are nia.\nOut of scope: The Add funds escalation behaviour.\nThe session says: You've reached your usage limit\n\n"
-	st, ev := Classify(brief, false, 60, "idle")
+	st, ev := Classify(brief, false, 60, host.AgentStatus{State: "idle"})
 	if st == StateLimited {
 		t.Fatalf("echoed brief read as limited: %s %q", st, ev)
 	}
-	if st, _ := Classify(brief, true, 60, ""); st != StateBusy {
+	if st, _ := Classify(brief, true, 60, host.AgentStatus{}); st != StateBusy {
 		t.Errorf("moving pane under an echoed brief: %s", st)
 	}
 	own := brief + "● working\nYou've reached your usage limit\nAdd funds to continue\n"
-	st, ev = Classify(own, false, 60, "idle")
+	st, ev = Classify(own, false, 60, host.AgentStatus{State: "idle"})
 	if st != StateLimited || !strings.Contains(ev, "Add funds") {
 		t.Errorf("phrases after the worker's reply marker: %s %q", st, ev)
 	}
@@ -384,10 +385,10 @@ func TestClassifyLimitPhraseInEchoedBriefIsNotLimited(t *testing.T) {
 func TestClassifyBareBannerAfterSignedBriefIsLimited(t *testing.T) {
 	sig := "--- ROTA-SIG " + strings.Repeat("ab", 32) + " ---\n"
 	brief := "--- ORCHESTRATOR (round 25) ---\nYou are kit.\nThe session says: You've hit your usage limit\n" + sig
-	if st, ev := Classify(brief, false, 60, "idle"); st == StateLimited {
+	if st, ev := Classify(brief, false, 60, host.AgentStatus{State: "idle"}); st == StateLimited {
 		t.Fatalf("signed brief alone read as limited: %q", ev)
 	}
-	if st, ev := Classify(brief+"You've hit your usage limit\n", false, 60, "idle"); st != StateLimited {
+	if st, ev := Classify(brief+"You've hit your usage limit\n", false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 		t.Errorf("bare banner after the signature: %s %q", st, ev)
 	}
 }
@@ -396,7 +397,7 @@ func TestClassifyBareBannerAfterSignedBriefIsLimited(t *testing.T) {
 // line must not shift it.
 func TestClassifyLimitEvidenceAfterRelay(t *testing.T) {
 	pane := "--- ORCHESTRATOR (round 25) ---\n[relay] a long forwarded note that is dropped from the evidence offset\nmore relay text\n\n● working\nYou've reached your usage limit\n"
-	st, ev := Classify(pane, false, 60, "idle")
+	st, ev := Classify(pane, false, 60, host.AgentStatus{State: "idle"})
 	if st != StateLimited || !strings.Contains(ev, "usage limit") || strings.Contains(ev, "relay") {
 		t.Errorf("evidence after a relay: %s %q", st, ev)
 	}
@@ -408,7 +409,7 @@ func TestClassifyLimitEvidenceAfterRelay(t *testing.T) {
 func TestClassifyClaudeEchoedBrief(t *testing.T) {
 	brief := "❯ --- ORCHESTRATOR (round 25) ---\n  You are kit.\n  Out of scope: The Add funds escalation behaviour.\n\n  The session says: You've hit your usage limit\n"
 	classify := func(pane string) (string, string) {
-		return ClassifyFor("claude", pane, false, 60, "idle")
+		return ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: "idle"})
 	}
 	for name, pane := range map[string]string{
 		"no reply yet": brief,
@@ -463,12 +464,12 @@ func TestClassifyQuotedLimitTextIsNotLimited(t *testing.T) {
 	} {
 		for _, native := range []string{"idle", "working"} {
 			pane := "● Update(internal/worker/poll.go)\n" + quoted + spinner
-			if st, ev := ClassifyFor("claude", pane, false, 60, native); st != StateBusy {
+			if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: native}); st != StateBusy {
 				t.Errorf("%s/%s: want BUSY, got %s %q", name, native, st, ev)
 			}
 			// Idle, with the worker's last reply quoting the text above the input box.
 			idle := "● " + strings.TrimLeft(quoted, " +-\t") + "\n❯ \n  ⏵⏵ bypass permissions on\n"
-			if st, ev := ClassifyFor("claude", idle, false, 60, native); st == StateLimited {
+			if st, ev := ClassifyFor("claude", idle, false, 60, host.AgentStatus{State: native}); st == StateLimited {
 				t.Errorf("%s/%s idle: quoted text read as limited: %q", name, native, ev)
 			}
 		}
@@ -479,13 +480,13 @@ func TestClassifyQuotedLimitTextIsNotLimited(t *testing.T) {
 		"bare":   "● Update(internal/worker/poll.go)\n  ⎿  Done\n\nYou've hit your usage limit · resets 5pm\n\nAdd funds to continue\n",
 	} {
 		pane := dialog + "\n❯ \n  ⏵⏵ bypass permissions on\n"
-		if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited || !strings.Contains(ev, "Add funds") {
+		if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited || !strings.Contains(ev, "Add funds") {
 			t.Errorf("real dialog %s: %s %q", name, st, ev)
 		}
 	}
 	// The harness's own dialog still reads as limited, even after a diff.
 	pane := "+\tx := \"usage limit reached\"\n\nYou've hit your usage limit · resets 5pm\nAdd funds to continue\n"
-	if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited || !strings.Contains(ev, "Add funds") {
+	if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited || !strings.Contains(ev, "Add funds") {
 		t.Errorf("real dialog after a diff: %s %q", st, ev)
 	}
 }
@@ -507,7 +508,7 @@ func TestClassifyMultiParagraphReplyQuotingLimitIsNotLimited(t *testing.T) {
 			}
 			pane += footer
 			for _, native := range []string{"idle", "working"} {
-				if st, ev := ClassifyFor("claude", pane, false, 60, native); st == StateLimited {
+				if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: native}); st == StateLimited {
 					t.Errorf("%s busy=%v native=%s: read as limited: %q", name, busy, native, ev)
 				}
 			}
@@ -524,7 +525,7 @@ func TestClassifyStatuslineUnderFooterIsFrame(t *testing.T) {
 		"╭──────────────╮\n│ ❯            │\n╰──────────────╯\n" +
 		"  ⏵⏵ bypass permissions on\n  opus · ctx 40% · $1.20\n"
 	for _, native := range []string{"idle", "working"} {
-		if st, ev := ClassifyFor("claude", pane, false, 60, native); st == StateLimited {
+		if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: native}); st == StateLimited {
 			t.Errorf("native=%s: statusline pane read as limited: %q", native, ev)
 		}
 	}
@@ -539,7 +540,7 @@ func TestClassifyIdleGutterLinesUnderLastReplyAreDialog(t *testing.T) {
 		"limit error": "● Update(internal/worker/poll.go)\n  ⎿  You've hit your usage limit · resets 5pm\n",
 		"tool output": "● Bash(grep -n limit poll.go)\n  ⎿  poll.go:417: You've hit your usage limit\n",
 	} {
-		if st, ev := ClassifyFor("claude", pane+footer, false, 60, "idle"); st != StateLimited {
+		if st, ev := ClassifyFor("claude", pane+footer, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 			t.Errorf("%s: want LIMITED, got %s %q", name, st, ev)
 		}
 	}
@@ -555,13 +556,13 @@ func TestClassifyRealDialogAtEachRegionEdge(t *testing.T) {
 		"boxed input":  "\n╭────╮\n│ ❯  │\n╰────╯\n  ? for shortcuts\n",
 		"statusline":   "\n╭────╮\n│ ❯  │\n╰────╯\n  ⏵⏵ bypass permissions on\n  opus · ctx 40% · $1.20\n",
 	} {
-		if st, ev := ClassifyFor("claude", dialog+frame, false, 60, "idle"); st != StateLimited {
+		if st, ev := ClassifyFor("claude", dialog+frame, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 			t.Errorf("%s: want LIMITED, got %s %q", name, st, ev)
 		}
 	}
 	// The status area under the footer is the harness's too.
 	pane := "● Done.\n\n❯ \n  ⏵⏵ bypass permissions on\n  You've hit your usage limit · resets 5pm\n"
-	if st, ev := ClassifyFor("claude", pane, false, 60, "idle"); st != StateLimited {
+	if st, ev := ClassifyFor("claude", pane, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 		t.Errorf("status area: want LIMITED, got %s %q", st, ev)
 	}
 }
@@ -579,11 +580,11 @@ func TestClassifyStatuslineAboveFooterIsFrame(t *testing.T) {
 	grep := "● Bash(grep -n 'usage limit' internal/worker/poll.go)\n" +
 		"  ⎿  poll.go:417: You've hit your usage limit · Add funds to continue\n"
 	busy := grep + "\n✻ Running… (3s · esc to interrupt)\n" + frame
-	if st, ev := ClassifyFor("claude", busy, false, 60, "working"); st != StateBusy {
+	if st, ev := ClassifyFor("claude", busy, false, 60, host.AgentStatus{State: "working"}); st != StateBusy {
 		t.Errorf("busy pane: want BUSY, got %s %q", st, ev)
 	}
 	limited := "● Done.\n\nYou've hit your usage limit · resets 5pm\n" + frame
-	if st, ev := ClassifyFor("claude", limited, false, 60, "idle"); st != StateLimited {
+	if st, ev := ClassifyFor("claude", limited, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 		t.Errorf("real dialog: want LIMITED, got %s %q", st, ev)
 	}
 }
@@ -594,11 +595,11 @@ func TestClassifyStatuslineAboveFooterIsFrame(t *testing.T) {
 func TestClassifyCodexPaneLimitAbovePrompt(t *testing.T) {
 	footer := "\n› Ask Codex to do anything\n\n  GPT-6-Sol default fast · 1 warning · f2 to view\n"
 	reply := "• Fixed the classifier.\n\n  It used to read \"You've hit your usage limit\" as a dialog.\n"
-	if st, ev := ClassifyFor("codex", reply+footer, false, 60, "idle"); st == StateLimited {
+	if st, ev := ClassifyFor("codex", reply+footer, false, 60, host.AgentStatus{State: "idle"}); st == StateLimited {
 		t.Errorf("codex prose read as limited: %q", ev)
 	}
 	limit := reply + "\n■ You've hit your usage limit. Try again in 2 hours.\n" + footer
-	if st, ev := ClassifyFor("codex", limit, false, 60, "idle"); st != StateLimited {
+	if st, ev := ClassifyFor("codex", limit, false, 60, host.AgentStatus{State: "idle"}); st != StateLimited {
 		t.Errorf("codex limit: want LIMITED, got %s %q", st, ev)
 	}
 }
@@ -624,11 +625,11 @@ func TestReadsWaitPane(t *testing.T) {
 // in a dialog under the reply still is.
 func TestClassifyPermissionQuotedInReplyIsNotNeedsPermission(t *testing.T) {
 	quoted := paneFixtures["permission quoted"]
-	if st, _ := Classify(quoted, false, 60, "idle"); st == StateNeedsPermission {
+	if st, _ := Classify(quoted, false, 60, host.AgentStatus{State: "idle"}); st == StateNeedsPermission {
 		t.Errorf("quoted permission text read as a dialog: %s", st)
 	}
 	dlg := paneFixtures["permission dialog under reply"]
-	if st, _ := Classify(dlg, false, 60, "idle"); st != StateNeedsPermission {
+	if st, _ := Classify(dlg, false, 60, host.AgentStatus{State: "idle"}); st != StateNeedsPermission {
 		t.Errorf("a real dialog under a reply: %s", st)
 	}
 }
@@ -648,7 +649,7 @@ func TestClassifyLoggedOutPrintsTheKindsOwnAdvice(t *testing.T) {
 			t.Errorf("%s sets PaneVocab.LoggedOut: add a sample pane", kind)
 			continue
 		}
-		st, ev := ClassifyFor(kind, pane, false, 0, "")
+		st, ev := ClassifyFor(kind, pane, false, 0, host.AgentStatus{})
 		if st != StateBlocked {
 			t.Errorf("%s: state %q, want blocked", kind, st)
 		}
@@ -674,13 +675,13 @@ func (f fakePane) PaneVocab() harness.PaneVocab { return f.v }
 
 func TestClassifyPaneReadsAnUnregisteredAdapter(t *testing.T) {
 	p := fakePane{harness.PaneVocab{Busy: []string{`crunching beans`}, Limits: []string{`beans exhausted`}}}
-	if st, _ := ClassifyPane(p, "crunching beans\n", false, 0, ""); st != StateBusy {
+	if st, _ := ClassifyPane(p, "crunching beans\n", false, 0, host.AgentStatus{}); st != StateBusy {
 		t.Errorf("busy vocab: state = %q, want %q", st, StateBusy)
 	}
-	if st, _ := ClassifyPane(p, "beans exhausted\n", false, 0, ""); st != StateLimited {
+	if st, _ := ClassifyPane(p, "beans exhausted\n", false, 0, host.AgentStatus{}); st != StateLimited {
 		t.Errorf("limit vocab: state = %q, want %q", st, StateLimited)
 	}
-	if st, _ := ClassifyPane(nil, "crunching beans\n", false, 0, ""); st == StateBusy {
+	if st, _ := ClassifyPane(nil, "crunching beans\n", false, 0, host.AgentStatus{}); st == StateBusy {
 		t.Errorf("nil pane read another adapter's vocabulary")
 	}
 }

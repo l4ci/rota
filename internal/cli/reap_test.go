@@ -52,7 +52,7 @@ func reapProject(t *testing.T, ops reap.HostOps, hostUp bool) (string, *Deps) {
 		e := round.Env{Git: git.Exec, Base: "feat/x", HostName: "herdr", Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig})}
 		if hostUp {
 			e.Snapshot = func(context.Context) ([]host.Agent, error) {
-				return []host.Agent{{Tab: "w3:t1", Name: "live", Cwd: filepath.Join(root, ".worktrees", "live"), Status: "working"}}, nil
+				return []host.Agent{{Tab: "w3:t1", Name: "live", Cwd: filepath.Join(root, ".worktrees", "live"), Status: host.AgentStatus{State: "working"}}}, nil
 			}
 		} else {
 			e.HostErr = "fake: host down"
@@ -259,7 +259,7 @@ func TestReapApplyCatchesAnAgentThatAppearsAfterFind(t *testing.T) {
 			if calls == 1 { // Find's read: no agent in old yet
 				return nil, nil
 			}
-			return []host.Agent{{Tab: "w3:t1", Name: "late", Cwd: filepath.Join(root, ".worktrees", "old"), Status: "working"}}, nil
+			return []host.Agent{{Tab: "w3:t1", Name: "late", Cwd: filepath.Join(root, ".worktrees", "old"), Status: host.AgentStatus{State: "working"}}}, nil
 		}
 		return e, ops
 	}

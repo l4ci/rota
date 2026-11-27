@@ -140,7 +140,7 @@ func TestUnregisteredWorkerWithLiveAgentIsNeverACandidate(t *testing.T) {
 	g := repo([]wt{{"dana", "dana/58-x", ""}}, []string{"dana/58-x"}, "dana/58-x", "HEAD")
 	g.clean("dana")
 	// A herdr agent nobody registered, working in a subdirectory of its checkout.
-	agents := []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: "/r/.worktrees/dana/internal", Status: "working"}}
+	agents := []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: "/r/.worktrees/dana/internal", Status: host.AgentStatus{State: "working"}}}
 	res := find(t, input(g, nil, agents, nil))
 	if len(res.Candidates) != 0 {
 		t.Errorf("a live unregistered worker was listed: %v", ids(res.Candidates))
@@ -364,8 +364,8 @@ func TestTabsOnlyWhenNoAgentIsProvenAndOwnerIsFree(t *testing.T) {
 		tab("w9:t1", "/r/.worktrees/gone2", true), // snapshot says an agent has it
 	}}
 	agents := []host.Agent{
-		{Tab: "w3:t9", Name: "x", Cwd: "/r/.worktrees/live", Status: "working"},
-		{Tab: "w9:t1", Name: "y", Cwd: "/elsewhere/y", Status: "working"},
+		{Tab: "w3:t9", Name: "x", Cwd: "/r/.worktrees/live", Status: host.AgentStatus{State: "working"}},
+		{Tab: "w9:t1", Name: "y", Cwd: "/elsewhere/y", Status: host.AgentStatus{State: "working"}},
 	}
 	rows := []round.Row{{Name: "slot", Registered: true, Branch: "kit/3-a", Tab: "w6:t1"}}
 	res := find(t, input(g, rows, agents, h), KindTab)
@@ -899,7 +899,7 @@ func TestApplyRefusesAWorktreeAnAgentTookOver(t *testing.T) {
 	if len(res.Candidates) != 1 {
 		t.Fatalf("candidates = %v", ids(res.Candidates))
 	}
-	in.Report.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old/internal", Status: "working"}}
+	in.Report.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old/internal", Status: host.AgentStatus{State: "working"}}}
 	out := Apply(bg, in, res.Candidates)
 	if len(out.Failed) != 1 || g.ran("worktree remove") {
 		t.Errorf("apply = %+v, calls %v", out, g.calls)
@@ -931,7 +931,7 @@ func TestApplyRereadsAgentsAtApplyTime(t *testing.T) {
 	in := input(g, nil, []host.Agent{}, nil)
 	res := find(t, in, KindWorktree)
 	late := *in.Report
-	late.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: "working"}}
+	late.Agents = []host.Agent{{Tab: "w1:t1", Name: "a", Cwd: "/r/.worktrees/old", Status: host.AgentStatus{State: "working"}}}
 	in.Refresh = func(context.Context) (*round.Report, error) { return &late, nil }
 	out := Apply(bg, in, res.Candidates)
 	if len(out.Reaped) != 0 || len(out.Failed) != len(res.Candidates) || g.ran("worktree remove") {

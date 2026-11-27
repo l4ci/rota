@@ -276,7 +276,7 @@ func (t *tmux) draftPane(ctx context.Context, window string) string {
 
 // Status: tmux has no native agent state, so the classifier decides from
 // pane text and movement alone.
-func (t *tmux) Status(ctx context.Context, slot, handle string) string { return "" }
+func (t *tmux) Status(ctx context.Context, slot, handle string) AgentStatus { return AgentStatus{} }
 
 // windowPID is the pane PID of the window with that exact name. Exact match:
 // a bare -t target would also take a prefix, so `w1` could be answered by

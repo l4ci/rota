@@ -446,11 +446,11 @@ func TestCoreAdapterWatchInvalidatesRestartAndReconnect(t *testing.T) {
 	if _, e = w.Next(ctx); e != nil {
 		t.Fatal(e)
 	}
-	if !strings.HasPrefix(h.Status(ctx, "dana", s), UnverifiablePrefix) {
+	if h.Status(ctx, "dana", s).State != StatusUnverifiable {
 		t.Fatal("restart with reused pid retained readiness")
 	}
 	a, err := h.Capabilities().Snapshotter.Snapshot(ctx)
-	if err != nil || len(a) != 1 || !strings.HasPrefix(a[0].Status, UnverifiablePrefix) {
+	if err != nil || len(a) != 1 || a[0].Status.State != StatusUnverifiable {
 		t.Fatalf("snapshot hid restarted program: %v %v", a, err)
 	}
 	f.events <- map[string]any{"method": "missed", "params": map[string]any{"seq": 3, "terminals": []any{}}}
@@ -733,7 +733,7 @@ func TestCoreAdapterSnapshotOnlyOwnedLiveIncarnations(t *testing.T) {
 	f.state = "live"
 	f.pid = 99
 	a, e = h.Capabilities().Snapshotter.Snapshot(context.Background())
-	if e != nil || len(a) != 1 || a[0].Handle() != saved || !strings.HasPrefix(a[0].Status, UnverifiablePrefix) {
+	if e != nil || len(a) != 1 || a[0].Handle() != saved || a[0].Status.State != StatusUnverifiable {
 		t.Fatalf("replacement lost owned recovery identity: %v %v", a, e)
 	}
 }
@@ -750,7 +750,7 @@ func corePendingCreate(t *testing.T, h Host, f *coreFake) string {
 func TestCoreAdapterPendingCreationCleanup(t *testing.T) {
 	h, f := coreFixture(t)
 	s := corePendingCreate(t, h, f)
-	if !strings.HasPrefix(h.Status(context.Background(), "dana", s), UnverifiablePrefix) {
+	if h.Status(context.Background(), "dana", s).State != StatusUnverifiable {
 		t.Fatal("pending create was classified ready")
 	}
 	if _, e := h.ReadPane(context.Background(), "dana", s, 0); e == nil {

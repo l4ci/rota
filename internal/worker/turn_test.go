@@ -98,7 +98,7 @@ func turnPoll(t *testing.T, base int, turn host.Turn, panes ...string) (PollRow,
 	if _, err := UpdateSlot(dir, "w1", func(s *Slot) { s.SetHandle("w9:t1"); s.SetTurnSeq(base) }); err != nil {
 		t.Fatal(err)
 	}
-	f.status["w1"] = turn.Status
+	f.status["w1"] = host.AgentStatus{State: turn.Status}
 	f.panes["w1"] = panes
 	h := turnHost{f, map[string]host.Turn{"w1": turn}}
 	e := envWith(h)
@@ -189,7 +189,7 @@ func (h turnWatcher) Turn(_ context.Context, slot, _ string) (host.Turn, bool) {
 	h.waitHost.mu.Unlock()
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return host.Turn{Status: st, StateSeq: 100, CompletionSeq: h.done[slot]}, true
+	return host.Turn{Status: st.State, StateSeq: 100, CompletionSeq: h.done[slot]}, true
 }
 
 // The #211 shape: right after the done event, two captures of a finished
@@ -201,7 +201,7 @@ func TestWaitFinishedTurnIsReadAtTheEventWithoutARecheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "✻ Working…\n", "working")
+	h.set("w1", "✻ Working…\n", host.AgentStatus{State: "working"})
 	tw := turnWatcher{watcherHost{h}, &sync.Mutex{}, map[string]int{}}
 	captures, armed := 0, false
 	h.onCapture = func(string) {
@@ -220,7 +220,7 @@ func TestWaitFinishedTurnIsReadAtTheEventWithoutARecheck(t *testing.T) {
 		tw.done["w1"] = 55
 		tw.mu.Unlock()
 		h.mu.Lock()
-		h.status["w1"], armed = "done", true
+		h.status["w1"], armed = host.AgentStatus{State: "done"}, true
 		h.mu.Unlock()
 		h.events <- "w1"
 	}()
@@ -245,7 +245,7 @@ func TestWaitPollingFinishedTurnsStillPausesBetweenReads(t *testing.T) {
 		t.Fatal(err)
 	}
 	h := newWaitHost("herdr")
-	h.set("w1", "", "done")
+	h.set("w1", "", host.AgentStatus{State: "done"})
 	ctx, cancel := context.WithCancel(bg)
 	var sleeps []time.Duration
 	e := envWith(turnPollHost{h, 55})
@@ -275,7 +275,7 @@ type turnPollHost struct {
 func (h turnPollHost) Turn(_ context.Context, slot, _ string) (host.Turn, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	return host.Turn{Status: h.status[slot], StateSeq: h.done, CompletionSeq: h.done}, true
+	return host.Turn{Status: h.status[slot].State, StateSeq: h.done, CompletionSeq: h.done}, true
 }
 
 func (h turnHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }

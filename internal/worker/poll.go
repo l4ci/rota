@@ -87,7 +87,7 @@ func (m *widenMemo) remember(key string, sum [32]byte) {
 // the capture fills the window, no sentinel was accepted and the pane changed
 // since the last wider read. It keeps the wider classification only when that
 // finds a sentinel.
-func widenForSentinel(memo *widenMemo, ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native string) (string, string) {
+func widenForSentinel(memo *widenMemo, ctx context.Context, h host.Host, t pollTarget, st, ev, text string, lines int, native host.AgentStatus) (string, string) {
 	if st == StateDone || st == StateBlocked || lines <= 0 || lines >= sentinelScanLines {
 		return st, ev
 	}
@@ -130,7 +130,7 @@ func (e Env) gateRelayCapture(ctx context.Context, h host.Host, t *pollTarget, s
 	}
 	// Use the recovered capture's own sentinel and masking rules. Seeing only
 	// the marker, an idle host or a delivery acknowledgment is not completion.
-	if hs, he := ClassifyFor(t.kind, history, false, 0, ""); hs == StateDone {
+	if hs, he := ClassifyFor(t.kind, history, false, 0, host.AgentStatus{}); hs == StateDone {
 		t.relayObserved = true
 		return hs, he
 	}
@@ -721,14 +721,14 @@ func targetOf(targets []pollTarget, name string) pollTarget {
 func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, settle time.Duration, lines int, memo *widenMemo) (rows []PollRow, settling, slept bool) {
 	tr := h.Capabilities().TurnReader
 	first := map[string]string{}
-	finished := map[string]string{} // slot -> native status of a finished turn
-	readErr := map[string]error{}   // slot -> why a pane read failed
+	finished := map[string]host.AgentStatus{} // slot -> native status of a finished turn
+	readErr := map[string]error{}             // slot -> why a pane read failed
 	for i, t := range targets {
 		// The turn is read before the capture: a capture taken after the
 		// host counted the turn finished holds all of its output.
 		if tr != nil && t.turnSeq > 0 {
 			if tn, ok := tr.Turn(ctx, t.name, t.handle); ok && tn.Finished(t.turnSeq) {
-				finished[t.name] = tn.Status
+				finished[t.name] = host.AgentStatus{State: tn.Status}
 			}
 		}
 		first[t.name], readErr[t.name] = readPane(ctx, h, t, lines)
@@ -784,7 +784,7 @@ func (e Env) classify(ctx context.Context, h host.Host, targets []pollTarget, se
 				}
 			}
 		}
-		if st == StateBusy && moved && native != "working" {
+		if st == StateBusy && moved && native.State != host.StatusWorking {
 			settling = true
 		}
 		push(PollRow{t.name, st, ev})
@@ -803,17 +803,17 @@ func readPane(ctx context.Context, h host.Host, t pollTarget, lines int) (text s
 // nothing about the agent, so it yields to what the host itself reports
 // (`working`, a `blocked` dialog, `gone`, its own unverifiable) and is only
 // pane-unreadable when the host has nothing better.
-func withReadFailure(native string, err error) string {
+func withReadFailure(native host.AgentStatus, err error) host.AgentStatus {
 	if err == nil {
 		return native
 	}
 	if errors.Is(err, host.ErrPaneGone) {
-		return "gone"
+		return host.AgentStatus{State: host.StatusGone}
 	}
-	if JudgeLiveness(LivenessEvidence{Native: native}).State != LivenessAlive || native == "working" || native == "blocked" {
+	if JudgeLiveness(LivenessEvidence{Native: native}).State != LivenessAlive || native.State == host.StatusWorking || native.State == host.StatusBlocked {
 		return native
 	}
-	return host.UnverifiablePrefix + host.ReasonPaneUnreadable
+	return host.AgentStatus{State: host.StatusUnverifiable, Reason: host.ReasonPaneUnreadable}
 }
 
 // IsPRURL reports whether s is a PR or MR URL, the shape `worker poll` stores
@@ -828,7 +828,7 @@ func IsPRURL(s string) bool {
 // `round status` reads it so a freshly reassigned slot is not shown done while
 // `worker poll` reads it busy (#3311).
 func NativeDoneIsStale(s *Slot, native string) bool {
-	if s == nil || (native != "done" && native != "idle") || !IsBusy(s.State()) {
+	if s == nil || (native != host.StatusDone && native != host.StatusIdle) || !IsBusy(s.State()) {
 		return false
 	}
 	return !slotTarget(s).eventAfterDispatch()

@@ -15,7 +15,7 @@ func TestHerdrSnapshotReadsAgents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []Agent{{Tab: "w1:t1", Name: "dana", Cwd: "/p/.worktrees/dana", Status: "working"}, {Tab: "w2:t1", Cwd: "/p", Status: "idle"}}
+	want := []Agent{{Tab: "w1:t1", Name: "dana", Cwd: "/p/.worktrees/dana", Status: AgentStatus{State: "working"}}, {Tab: "w2:t1", Cwd: "/p", Status: AgentStatus{State: "idle"}}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("agents = %+v", got)
 	}
