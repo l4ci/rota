@@ -90,16 +90,7 @@ func (e Env) aheadSlots(ctx context.Context, r *Result, slots []Slot, targets []
 		if !slices.Contains(targets, s.Name) || !worker.IsDone(s.State) || s.PR == "" {
 			continue
 		}
-		if len(e.Held)+len(r.FailedHeads) > 0 {
-			head := ""
-			if e.Head != nil {
-				head, _ = e.Head(ctx, s.Name)
-			}
-			if _, held := HoldReason(e.Held, r.FailedHeads, s.Name, head); held {
-				continue
-			}
-		}
-		if e.TrainFill.Enabled() && e.TrainReady != nil && !e.TrainReady(s.Name) && (e.FillBypass == nil || !e.FillBypass(s.Name)) {
+		if !e.targetDue(ctx, r.FailedHeads, s.Name).due() {
 			continue
 		}
 		due = append(due, s)
