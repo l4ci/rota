@@ -160,9 +160,13 @@ func TestFollowUpSourcesFromPorts(t *testing.T) {
 			started++
 			return []string{"start-warn"}, nil
 		},
-		Warn: func(m string) { warns = append(warns, m) },
+		Receives: func(_ context.Context, slot string, _ bool) error { return errors.New("no " + slot) },
+		Warn:     func(m string) { warns = append(warns, m) },
 	})
 	ctx := context.Background()
+	if err := src.Receives(ctx, "dana", true); err == nil || err.Error() != "no dana" {
+		t.Fatalf("receives %v, want the port's answer", err)
+	}
 	reg(`{"round":1,"slots":[{"name":"ben","state":"idle"}]}`)
 	if list, err := src.List(ctx); err != nil || list != nil || forged != 0 {
 		t.Fatalf("no queued PR: list %v err %v forge calls %d", list, err, forged)

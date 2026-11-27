@@ -223,7 +223,7 @@ func (e Env) reviewFresh(ctx context.Context, root string, o ReviewOpts, reg wor
 	}
 	to := ""
 	for _, name := range e.Round.Roster {
-		if t := reg.Slot(name); name != o.Slot && SlotIdle(t) {
+		if name != o.Slot && SlotIdle(reg.Slot(name)) && e.Receives(ctx, root, o.Board, reg, name, false) == nil {
 			to = name
 			break
 		}

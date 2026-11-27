@@ -21,6 +21,8 @@ type fu struct {
 	manual  bool
 	started []string
 	refuse  map[string]error
+	// unfit are the slots the receiver rule refuses.
+	unfit map[string]error
 	// failed lists the failed-gate starts as "pr->slot: why".
 	failed []string
 }
@@ -31,6 +33,9 @@ func (x *fu) wire(f *fake, e *Env) {
 		Auto:    !x.manual,
 		Reserve: func() []string { return x.reserve },
 		Size:    x.size,
+		Receives: func(_ context.Context, slot string, _ bool) error {
+			return x.unfit[slot]
+		},
 		Start: func(_ context.Context, u FollowUp, slot string, reserve bool) error {
 			if err := x.refuse[u.Issue]; err != nil {
 				return err
@@ -200,6 +205,39 @@ func TestFollowUpReuseDoneReserveSlot(t *testing.T) {
 	}
 	if want := []string{"#8->kit reserve"}; !reflect.DeepEqual(x.started, want) {
 		t.Fatalf("started %v, want %v", x.started, want)
+	}
+}
+
+// #4319: a done reserve slot the receiver rule refuses is passed over for a
+// later one; with none left, its reason is reported.
+func TestFollowUpSkipsReserveSlotTransferWouldRefuse(t *testing.T) {
+	slots := []Slot{{Name: "ben", State: "working", Issue: "#3"}, {Name: "kit", State: "done", Issue: "#7", PR: "#71"}, {Name: "nia", State: "idle"}}
+	unfit := map[string]error{"kit": &round.BlockedError{By: blockedby.SlotBusy, Msg: "slot kit has uncommitted changes"}}
+	f := &fake{slots: slices.Clone(slots)}
+	x := &fu{list: []FollowUp{{Issue: "#8", PR: "#80"}}, reserve: []string{"kit", "nia"}, size: 2, unfit: unfit}
+	e := f.env()
+	e.Active = func() []string { return []string{"ben"} }
+	e.MergeApproval = ""
+	x.wire(f, &e)
+	if _, err := Run(context.Background(), e); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"#8->nia reserve"}; !reflect.DeepEqual(x.started, want) {
+		t.Fatalf("started %v, want %v", x.started, want)
+	}
+
+	f = &fake{slots: slices.Clone(slots[:2])}
+	x = &fu{list: []FollowUp{{Issue: "#8", PR: "#80"}}, reserve: []string{"kit"}, size: 1, unfit: unfit}
+	e = f.env()
+	e.Active = func() []string { return []string{"ben"} }
+	e.MergeApproval = ""
+	x.wire(f, &e)
+	r, err := Run(context.Background(), e)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := needs(r, "followup"); len(x.started) != 0 || len(got) != 1 || !strings.Contains(got[0], "uncommitted changes") {
+		t.Fatalf("started %v, items %v, want one naming the refusal", x.started, got)
 	}
 }
 
