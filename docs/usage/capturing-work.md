@@ -103,6 +103,17 @@ Ordinary brain-dump captures (no `M<NN>` reference) skip the audit entirely.
 
 If the text names a harness ("do this one with codex") or a model, `/rota-capture` records it so [`rota round assign`](parallel-rounds.md#assigning-an-issue) picks it up. On the issue backend it adds the label `harness:claude` or `harness:codex` and, for a model, `model:<id>`. On the file backend it ends the entry with `Harness: codex Model: <id>`. An item with neither runs on the slot's default.
 
+## Capture on hold
+
+Ask `/rota-capture` to “capture this on hold” when the work is valid but must wait for an outside event. On the issue backend it creates the issue and immediately adds `on-hold` (or the name configured in `issues.labels.onHold`). The issue stays open and the backlog marks its title `(on hold)`. Round candidates, assignment and no-argument `/rota-work` suggestions skip it until a person removes the label. There is no automatic release or file-backend equivalent.
+
+For an existing issue, add or remove the configured label yourself:
+
+```sh
+rota issues label 42 --add on-hold
+rota issues label 42 --remove on-hold
+```
+
 ## Dependencies
 
 `rota item create --depends-on <refs>` writes a `## Depends on` section naming the items that must close first. When one item clearly needs another, `/rota-capture` creates the prerequisite first and passes its new ID. Items that are only related use `Related:`. See the [helper reference](../reference/cli-helpers.md).

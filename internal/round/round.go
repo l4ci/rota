@@ -163,6 +163,8 @@ type Env struct {
 	// NeedsHuman is issues.labels.needsHuman, the label of an issue handed to the
 	// human (C10); config.Label supplies its default.
 	NeedsHuman string
+	// OnHold is issues.labels.onHold: work waits until a person removes it.
+	OnHold string
 	// SupportLabel is the derived machine:<round.support> pin.
 	SupportLabel string
 	// NeedsReview is issues.labels.needsReview, the label of an issue whose PR

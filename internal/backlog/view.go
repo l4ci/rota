@@ -6,6 +6,7 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,11 +31,12 @@ type Row struct {
 	Section string // "Bugs" | "Features" | "Tasks"
 	Raw     string // the bullet line, "- **[B07] ..." (what --grep searches)
 	Fields  Fields
+	OnHold  bool // issue mode: carries the configured hold label
 }
 
 // issueRows is Rows for the tracker backends: the open issues of be, each
 // naming its sub-repo when umbrella.
-func issueRows(be Backend, umbrella bool) ([]Row, error) {
+func issueRows(be Backend, umbrella bool, onHold string) ([]Row, error) {
 	items, err := be.List(false)
 	if err != nil {
 		return nil, err
@@ -42,7 +44,8 @@ func issueRows(be Backend, umbrella bool) ([]Row, error) {
 	var rows []Row
 	for _, it := range items {
 		r := Row{ID: it.ID, Key: it.Key(), Number: it.Number, Type: it.Type, Tag: it.Tag,
-			Title: it.Title, Section: sectionOfLetter(it.Type), Raw: it.Line, Fields: it.Fields}
+			Title: it.Title, Section: sectionOfLetter(it.Type), Raw: it.Line, Fields: it.Fields,
+			OnHold: onHold != "" && slices.Contains(it.Labels, onHold)}
 		if umbrella {
 			r.Repo = it.Fields.Get("repos")
 		}
@@ -515,12 +518,18 @@ func (l *Listing) render(md string, active []Active, grep string) {
 		}
 		out = append(out, "")
 	}
+	title := func(r ListRow) string {
+		if r.OnHold {
+			return r.Title + " (on hold)"
+		}
+		return r.Title
+	}
 	table("Bugs", l.Bugs, []string{"ID", "Prio", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Tag, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, r.Tag, title(r), r.Related} })
 	table("Features", l.Features, []string{"ID", "Size", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Tag, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, r.Tag, title(r), r.Related} })
 	table("Tasks", l.Tasks, []string{"ID", "Title", "Related"},
-		func(r ListRow) []string { return []string{r.ID, r.Title, r.Related} })
+		func(r ListRow) []string { return []string{r.ID, title(r), r.Related} })
 	if len(l.clusterKeys) > 0 {
 		out = append(out, "### Clusters\n")
 		for _, c := range l.clusterKeys {

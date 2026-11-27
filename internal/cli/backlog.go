@@ -116,6 +116,7 @@ func backlogList(fs *flag.FlagSet) RunFunc {
 					o.Set(tagName, r.Tag)
 				}
 				o.Set("title", r.Title)
+				o.Set("onHold", r.OnHold)
 				rel := relatedIDRe.FindAllString(r.Related, -1)
 				if issues {
 					for i := range rel {

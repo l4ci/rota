@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tui"
 )
 
 func get(v any, path ...string) any {
@@ -102,6 +103,57 @@ func TestBacklogViewsInIssueMode(t *testing.T) {
 	prog := get(dataOf(env), "inProgress").([]any)
 	if len(prog) != 1 || get(prog[0], "id") != "12" || get(prog[0], "type") != "B" {
 		t.Errorf("in progress = %v", prog)
+	}
+}
+
+func TestBacklogOnHoldJSONPreservesTitle(t *testing.T) {
+	root := trackerProject(t, `{"forge":{"provider":"github"},"issues":{"source":"github"}}`)
+	deps := withTracker(t, &trackertest.Fake{Issues: []backlog.Issue{
+		{Key: tracker.NumKey(1), Title: "Waiting bug", State: "open", Labels: []string{"type:bug", "on-hold"}},
+		{Key: tracker.NumKey(2), Title: "Ready bug", State: "open", Labels: []string{"type:bug"}},
+		{Key: tracker.NumKey(3), Title: "Waiting feature", State: "open", Labels: []string{"type:feature", "on-hold"}},
+		{Key: tracker.NumKey(4), Title: "Ready feature", State: "open", Labels: []string{"type:feature"}},
+		{Key: tracker.NumKey(5), Title: "Waiting task", State: "open", Labels: []string{"on-hold"}},
+		{Key: tracker.NumKey(6), Title: "Ready task", State: "open"},
+	}})
+	code, env, stderr := rotaRunWith(t, deps, "--json", "-C", root, "backlog", "list")
+	if code != 0 {
+		t.Fatalf("list: exit %d: %s", code, stderr)
+	}
+	for _, section := range []struct{ key, kind string }{{"bugs", "bug"}, {"features", "feature"}, {"tasks", "task"}} {
+		rows := get(dataOf(env), section.key).([]any)
+		if len(rows) != 2 {
+			t.Fatalf("%s rows: %v", section.key, rows)
+		}
+		for i, prefix := range []string{"Waiting ", "Ready "} {
+			if got, want := get(rows[i], "title"), prefix+section.kind; got != want {
+				t.Errorf("title = %v, want %q", got, want)
+			}
+			if got, want := get(rows[i], "onHold"), i == 0; got != want {
+				t.Errorf("onHold = %v, want %v", got, want)
+			}
+		}
+	}
+	b := buildBrowser(t, backlogView, dataOf(env))
+	frame := tui.Strip(b.Render(180, vh, tui.Style{}))
+	for _, kind := range []string{"bug", "feature", "task"} {
+		if !strings.Contains(frame, "Waiting "+kind+" (on hold)") {
+			t.Errorf("terminal view lacks %s hold marker:\n%s", kind, frame)
+		}
+	}
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	var out, errb bytes.Buffer
+	if code := mainWith(deps, []string{"-C", root, "backlog", "list"}, strings.NewReader(""), &out, &errb); code != 0 {
+		t.Fatalf("text list: exit %d: %s", code, errb.String())
+	}
+	for _, kind := range []string{"bug", "feature", "task"} {
+		if !strings.Contains(out.String(), "Waiting "+kind+" (on hold)") {
+			t.Errorf("text output lacks %s hold marker: %s", kind, out.String())
+		}
+		if strings.Contains(out.String(), "Ready "+kind+" (on hold)") {
+			t.Errorf("text marks ready %s as held: %s", kind, out.String())
+		}
 	}
 }
 

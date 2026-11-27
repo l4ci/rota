@@ -98,6 +98,9 @@ func backlogView(c *Ctx, res Result) (tui.Model, error) {
 	var rows []browseRow
 	add := func(o *jsonx.Object, kind, tag string) {
 		id, title, ms := jsonx.Str(o, "id"), jsonx.Str(o, "title"), jsonx.Str(o, "milestone")
+		if jsonx.Bool(o, "onHold") {
+			title += " (on hold)"
+		}
 		kind = strings.TrimSpace(kind + " " + tag)
 		label := fmt.Sprintf("%-6s %-10s", id, kind)
 		if ms != "" {

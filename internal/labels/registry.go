@@ -19,6 +19,7 @@ const (
 	MilestoneTracker  = "milestone-tracker"
 	OnMilestonePrefix = "on-milestone/"
 	NeedsHuman        = "needs-human"
+	OnHold            = "on-hold"
 	TypeBug           = "type:bug"
 	TypeFeature       = "type:feature"
 	TypeTask          = "type:task"
@@ -93,6 +94,7 @@ func definitions() []definition {
 		fixed(NotPlanned, "Closed without a planned implementation.", "cfd3d7", "state", "issues.labels.notPlanned", "item complete; tracker close", "backlog; tracker close reason", "reopen or next state"),
 		fixed(Blocked, "Work is blocked and remains open.", "b60205", "state", "issues.labels.blocked", "item complete --reason blocked", "backlog", "next state"),
 		fixed(NeedsHuman, "Work is handed to the maintainer.", "b60205", "state", "issues.labels.needsHuman", "round transfer --to human", "round candidates", "return to worker queue"),
+		fixed(OnHold, "Valid work waiting until a person releases the hold.", "d4c5f9", "state", "issues.labels.onHold", "maintainer; capture", "round candidates; round assign; backlog; /rota-work", "person removes label"),
 		fixed(MilestoneTracker, "Tracking issue for a rota milestone.", "0052cc", "milestone", "issues.labels.milestoneTracker", "milestone create", "milestone lookup; backlog filtering", "retained"),
 		fixed(TypeBug, "A defect to fix.", "d73a4a", "type", "issues.labels.types.bug", "item create; migrate", "backlog type", "type change"),
 		fixed(TypeFeature, "A capability to build.", "a2eeef", "type", "issues.labels.types.feature", "item create; migrate", "backlog type", "type change"),

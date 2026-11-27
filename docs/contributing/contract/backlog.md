@@ -215,13 +215,14 @@ note: renamed from `item audit` so the exit follows the predicate in the name (r
 ### rota backlog list
 rota backlog list [--grep <pattern>]
 repo: scoped
-data: {"inProgress": [{"id": string, "type": "B"|"F"|"T", "title": string, "branch": string, "startedAt": string, "repo"?: string}], "bugs": [{"id": string, "priority": string, "title": string, "related": []string, "milestone"?: string}], "features": [{"id": string, "size": string, "title": string, "related": []string, "milestone"?: string}], "tasks": [{"id": string, "title": string, "related": []string, "milestone"?: string}], "clusters": [[]string]}
+data: {"inProgress": [{"id": string, "type": "B"|"F"|"T", "title": string, "branch": string, "startedAt": string, "repo"?: string}], "bugs": [{"id": string, "priority": string, "title": string, "onHold": bool, "related": []string, "milestone"?: string}], "features": [{"id": string, "size": string, "title": string, "onHold": bool, "related": []string, "milestone"?: string}], "tasks": [{"id": string, "title": string, "onHold": bool, "related": []string, "milestone"?: string}], "clusters": [[]string]}
 exit: tracker (works under both backends)
 old: hv-backlog [--grep <pattern>]
 shim: parse the markdown tables (`### In Progress`, `### Bugs`, `### Features`, `### Tasks`) into the lists, `Related` cells `[F3], [B1]` into `["F3","B1"]`, and `### Clusters` bullets into ID arrays; the placeholder lines become all-empty lists. Items active in status.json appear only in `inProgress`. `--grep` is a case-insensitive substring of the raw bullet; `--grep ""` is unfiltered; in-progress rows are never filtered.
 note: Single spelling `--grep <pattern>` (the `--grep=<p>` form still parses under Go `flag`).
 note: `related` entries use the rule-11 `id` spelling, so in issue mode they are bare issue numbers.
 note: `rota backlog list --ui` browses the same lists as rows (id, kind, priority or size, milestone, title). The filter matches the whole row; Enter reads the item's body. Terminal only.
+note: Bug, feature and task rows keep `title` unchanged and carry `onHold`: true when the issue has the configured `issues.labels.onHold` label, false otherwise (including file mode). Plain text output and the terminal browser append ` (on hold)` to held titles for display; it is not part of the stored title or the `--grep` search.
 
 ### rota backlog ids
 rota backlog ids --milestone <id>

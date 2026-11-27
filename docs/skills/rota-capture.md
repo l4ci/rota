@@ -34,6 +34,10 @@ example:
 
 Captures bugs, features and tasks into the backlog with `rota item create`. Where the item lands depends on `issues.source`. On the file backend (default) it goes into [`BACKLOG.md`](../reference/rota-folder.md) under the correct section with a zero-padded auto-incrementing ID (`[B01]`, `[F01]`, `[T01]`). On the issue backend it becomes a GitHub or GitLab issue with type, priority and size labels, and the ID is the issue number (`#42`); see [issue backend](../usage/issue-backend.md). Either way it classifies each item automatically and assigns priority (P0/P1/P2) for bugs and size (Major/Minor/Cosmetic) for features. See [capturing work](../usage/capturing-work.md) for the full flow.
 
+## Capture on hold
+
+Say “capture this on hold” to keep valid work open without offering it as work yet. On the issue backend, capture adds the label configured by `issues.labels.onHold` (default `on-hold`) immediately after creation. The backlog marks the item, and rounds and no-argument `/rota-work` skip it until a person removes that label. See [capture on hold](../usage/capturing-work.md#capture-on-hold).
+
 ## --triage
 
 Vets tracker issues filed by someone else: redundancy search, prior-decision check and, for bugs, a bounded reproduce. Creates no item. Each issue ends in one outcome you confirm: closed with the reason, `needs-info` with a question comment, or ready. See [capturing work](../usage/capturing-work.md#triaging-an-issue-someone-else-filed).

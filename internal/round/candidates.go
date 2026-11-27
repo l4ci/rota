@@ -151,6 +151,10 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if err != nil {
 		return nil, err
 	}
+	held, err := e.labelled(ctx, be, e.OnHold)
+	if err != nil {
+		return nil, err
+	}
 	unclear, err := e.labelled(ctx, be, NeedsInfoLabel)
 	if err != nil {
 		return nil, err
@@ -187,7 +191,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	cross := crossMilestones{root: root, be: be, open: items, openRead: true}
 	var out []Candidate
 	for _, it := range chosen {
-		if handed[it.IssueKey()] {
+		if handed[it.IssueKey()] || held[it.IssueKey()] {
 			continue
 		}
 		if taken != nil && stale[it.ID].Holder == "" && taken(it) {
@@ -549,7 +553,7 @@ func (e Env) handedToHuman(ctx context.Context, be backlog.Backend) (map[tracker
 
 // labelled is the open issues carrying label; nil without an issue tracker.
 func (e Env) labelled(ctx context.Context, be backlog.Backend, label string) (map[tracker.IssueKey]bool, error) {
-	if !e.forgeOn(be) {
+	if label == "" || !e.forgeOn(be) {
 		return nil, nil
 	}
 	issues, err := e.Forge.List(ctx, tracker.ListFilter{State: "open", Labels: []string{label}})

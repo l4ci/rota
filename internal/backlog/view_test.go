@@ -88,6 +88,31 @@ func TestOpenRowsIssues(t *testing.T) {
 	}
 }
 
+func TestOnHoldBacklogMarked(t *testing.T) {
+	for _, cfg := range []string{`{}`, `{"issues":{"labels":{"onHold":"waiting-for-vendor"}}}`} {
+		t.Run(cfg, func(t *testing.T) {
+			label := "on-hold"
+			if cfg != `{}` {
+				label = "waiting-for-vendor"
+			}
+			b, _ := newIssues(t, cfg,
+				Issue{Key: tracker.NumKey(1), Title: "Waiting", State: "open", Labels: []string{label}},
+				Issue{Key: tracker.NumKey(2), Title: "Ready", State: "open"})
+			rows, md, _, err := OpenRows(b)
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := BuildListing(rows, md, nil, "").Text()
+			if !strings.Contains(text, "Waiting (on hold)") {
+				t.Fatalf("hold not marked:\n%s", text)
+			}
+			if strings.Contains(text, "Ready (on hold)") {
+				t.Fatal("ready work marked held")
+			}
+		})
+	}
+}
+
 func TestIDsByMilestoneAndMilestonesFor(t *testing.T) {
 	rows, _, _, _ := OpenRows(fileBackend(t, viewBacklog))
 	if got := IDsByMilestone(rows, "M02"); !reflect.DeepEqual(got, []string{"B01", "F01"}) {

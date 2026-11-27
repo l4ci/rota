@@ -7,6 +7,18 @@ import (
 	"testing"
 )
 
+func TestOnHoldSyncDefinition(t *testing.T) {
+	for _, change := range Diff(Resolve(nil), nil, nil, true) {
+		if change.Label.Name == "on-hold" {
+			if change.Kind != Missing || change.Label.Description == "" || change.Label.Color == "" {
+				t.Fatalf("hold sync metadata: %+v", change)
+			}
+			return
+		}
+	}
+	t.Fatal("sync does not create on-hold")
+}
+
 func TestResolveOverridesAndOpenPrefixes(t *testing.T) {
 	defaults := Resolve(nil)
 	settings := map[string]string{}
