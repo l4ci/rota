@@ -33,7 +33,7 @@ example:
         No code changed.
         Not checked: test files under internal/cli.
   changes:
-    - one `refactor`-labelled issue per candidate
+    - one `refactor`-labelled issue per finding; small findings in one package directory share one issue
     - no code changes unless you pass --fix
 ---
 # /rota-refactor

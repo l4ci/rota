@@ -90,6 +90,8 @@ Assign each finding a strength:
 - **Worth exploring**: plausible depth gain, but a design choice or a missing second adapter is unsettled.
 - **Speculative**: a hunch the code does not yet back.
 
+A less-code finding with a proven case, such as a deletion whose unused-code search is clean, can be Strong.
+
 Give each finding an **impact tier** beside its strength: **must**, **should** or **nice**, plus one `If skipped:` line (tiers in [`less-code.md`](less-code.md)). Order the findings by tier, then strength. The cap stays 8 to 12 across both lenses.
 
 When two fixes solve the same problem, take the one with the smaller net diff. Add a layer only when it removes more than it adds. Batch small findings (net change of 20 lines or fewer, no design choice) per package directory into one issue of at most 10 items. List each item with its path, line range, kind and estimate. The issue takes the highest tier of its items.
