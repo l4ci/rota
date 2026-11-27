@@ -77,6 +77,7 @@ var citeRe = regexp.MustCompile(`references/([A-Za-z0-9][A-Za-z0-9._-]*\.md)`)
 
 // Every references/<name>.md an installed file cites resolves inside its skill.
 func TestEmbeddedInstallResolvesEveryReference(t *testing.T) {
+	shared := embeddedRefs(t)
 	s, err := Embedded()
 	if err != nil {
 		t.Fatal(err)
@@ -90,36 +91,81 @@ func TestEmbeddedInstallResolvesEveryReference(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, r := range roots {
-		n := 0
-		for _, p := range s.Paths() {
-			skill := strings.SplitN(p, "/", 2)[0]
-			b, err := os.ReadFile(filepath.Join(r.Path, filepath.FromSlash(p)))
-			if err != nil {
-				t.Fatal(err)
-			}
-			if want, _ := s.File(p); string(b) != string(want) {
-				t.Errorf("%s: installed bytes differ from embedded", p)
-			}
-			for _, m := range citeRe.FindAllStringSubmatch(string(b), -1) {
-				// Only names that exist as shared references count; prose such as
-				// "a references/x.md" example would not.
-				if _, ok := s.File(skill + "/references/" + m[1]); !ok {
-					if _, shared := embeddedRefs()[m[1]]; shared {
-						t.Errorf("%s cites references/%s, missing from %s", p, m[1], skill)
-					}
-				}
-				n++
-			}
-		}
-		if n == 0 {
-			t.Errorf("%s: no reference citation found, the check proves nothing", r.Path)
+		for _, problem := range installedReferenceProblems(t, s, r.Path, shared) {
+			t.Error(problem)
 		}
 	}
 }
 
-func embeddedRefs() map[string]bool {
+func TestInstalledReferenceAssertion(t *testing.T) {
+	shared := embeddedRefs(t)
+	for _, omit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("omit=%t", omit), func(t *testing.T) {
+			s, err := Load(fstest.MapFS{
+				"rota-fixture/SKILL.md":               {Data: []byte("See references/authoring-conventions.md and references/example-only.md.\n")},
+				"references/authoring-conventions.md": {Data: []byte("A real shared reference name.\n")},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if omit {
+				delete(s.files, "rota-fixture/references/authoring-conventions.md")
+				s.paths = []string{"rota-fixture/SKILL.md"}
+			}
+			roots := oneRoot(t)
+			if _, err := s.Install(roots, Options{Mode: ModeFull}); err != nil {
+				t.Fatal(err)
+			}
+			got := installedReferenceProblems(t, s, roots[0].Path, shared)
+			var want []string
+			if omit {
+				want = []string{"rota-fixture/SKILL.md cites references/authoring-conventions.md, missing from rota-fixture"}
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("installed reference problems = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// Both the embedded installation and the omission fixture use this assertion.
+func installedReferenceProblems(t *testing.T, s *Set, root string, shared map[string]bool) []string {
+	t.Helper()
+	var problems []string
+	n := 0
+	for _, p := range s.Paths() {
+		skill := strings.SplitN(p, "/", 2)[0]
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(p)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want, _ := s.File(p); string(b) != string(want) {
+			problems = append(problems, fmt.Sprintf("%s: installed bytes differ from embedded", p))
+		}
+		for _, m := range citeRe.FindAllStringSubmatch(string(b), -1) {
+			// Only names that exist as shared references count; prose such as
+			// "a references/x.md" example would not.
+			if _, ok := s.File(skill + "/references/" + m[1]); !ok {
+				if shared[m[1]] {
+					problems = append(problems, fmt.Sprintf("%s cites references/%s, missing from %s", p, m[1], skill))
+				}
+			}
+			n++
+		}
+	}
+	if n == 0 {
+		problems = append(problems, fmt.Sprintf("%s: no reference citation found, the check proves nothing", root))
+	}
+	return problems
+}
+
+func embeddedRefs(t *testing.T) map[string]bool {
+	t.Helper()
 	out := map[string]bool{}
-	entries, _ := os.ReadDir("../../references")
+	entries, err := os.ReadDir("../../skills/references")
+	if err != nil {
+		t.Fatalf("read shared reference inventory: %v", err)
+	}
 	for _, e := range entries {
 		out[e.Name()] = true
 	}

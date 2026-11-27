@@ -355,7 +355,7 @@ data: text-read
 exit: 2 when no name is given
 old: hv-map-query <name>…    (same positionals)
 shim: stdout is `text`; `missing` is omitted.
-note: returns each `.rota/map/<name>.md` body without frontmatter, in argument order. A missing file is silent, exit 0. The zero-argument exit moves from 1 to 2.
+note: returns each `.rota/map/<name>.md` body without frontmatter, in argument order. `<name>` is the file name, in `map query`, `map index`, `map stats` and `backlog stale --kind map` alike; the `subsystem:` frontmatter field does not name a file, and a file without it is still listed. A missing file is silent, exit 0. The zero-argument exit moves from 1 to 2.
 
 ### rota map index
 rota map index
