@@ -154,15 +154,13 @@ func addFile(root, title, summary string, deps []string, kind, today string) (st
 	if err != nil {
 		return "", err
 	}
-	detail := detailPath(root, id)
-	if err := os.MkdirAll(filepath.Dir(detail), 0o777); err != nil {
-		return "", err
-	}
 	stub, err := StubOn(id, title, summary, deps, today)
 	if err != nil {
 		return "", err
 	}
-	if err := fsio.WriteFileAtomic(detail, []byte(WithKind(stub, kind))); err != nil {
+	if _, err := milestoneDocs(root).Create(id, func() (string, string) {
+		return id, WithKind(stub, kind)
+	}); err != nil {
 		return "", err
 	}
 	overview := "—"

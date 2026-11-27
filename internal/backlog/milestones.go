@@ -283,7 +283,8 @@ func milestonePlanText(body string) string {
 // MilestoneStatus moves milestone mid to planned, active, shipped or
 // archived: it swaps the status label, syncs the body frontmatter, closes
 // (shipped: completed, archived: not planned) or reopens the tracking issue,
-// and does the same to the native milestone.
+// and does the same to the native milestone. It reports whether it wrote
+// anything, also when a later write fails.
 func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	if !slices.Contains(MilestoneStatuses, status) {
 		return false, errf(ErrInvalid, "status must be one of: %s", strings.Join(MilestoneStatuses, " "))
@@ -301,7 +302,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	if status == "shipped" && (is.State != "closed" || is.StateReason != tracker.CloseCompleted) {
 		children, err := mt.List(b.ctx(), tracker.ListFilter{State: "closed", Milestone: is.Milestone})
 		if err != nil {
-			return false, err
+			return changed, err
 		}
 		sort.SliceStable(children, func(i, j int) bool { return tracker.CompareKeys(children[i].Key, children[j].Key) < 0 })
 		var closed []string
@@ -322,13 +323,13 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	}
 	if !slices.Contains(is.Labels, label) {
 		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
-			return false, err
+			return changed, err
 		}
 		changed = true
 	}
 	if len(stale) > 0 {
 		if err := mt.RemoveLabels(b.ctx(), n, stale); err != nil {
-			return false, err
+			return changed, err
 		}
 		changed = true
 	}
@@ -341,7 +342,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		return true, nil
 	})
 	if err != nil {
-		return false, err
+		return changed, err
 	}
 	changed = changed || wrote
 	want := nativeStateOf(status)
@@ -352,24 +353,24 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	}
 	if is.State == "closed" && (!wantClosed || is.StateReason != reason) {
 		if err := mt.Reopen(b.ctx(), n); err != nil {
-			return false, err
+			return changed, err
 		}
 		is.State = "open"
 		changed = true
 	}
 	if wantClosed && is.State == "open" {
 		if err := mt.Close(b.ctx(), n, reason, summary); err != nil {
-			return false, err
+			return changed, err
 		}
 		changed = true
 	}
 	nm, err := b.nativeMilestone(mt, mid, is)
 	if err != nil {
-		return false, err
+		return changed, err
 	}
 	if nm != nil && nm.State != want {
 		if err := mt.EditMilestone(b.ctx(), nm.Number, tracker.MilestoneEdit{State: &want}); err != nil {
-			return false, err
+			return changed, err
 		}
 		changed = true
 	}

@@ -15,6 +15,8 @@ When the session ends, `/rota-vision` writes two things:
 
 Run `/rota-vision` whenever the conversation is about strategy rather than tactics: *"plan the next quarter"*, *"what's the bigger picture"*, *"create a roadmap"*, *"brainstorm milestones"*. Re-running it on a project that already has milestones enters edit mode automatically.
 
+On the file backend, `rota milestone add` refuses with exit 4 if the counter mints an ID whose detail file already exists. It names the file and keeps both it and the overview unchanged. The counter advances, so retrying tries the next ID.
+
 ## Milestones: the four statuses
 
 Each milestone carries one of four statuses:

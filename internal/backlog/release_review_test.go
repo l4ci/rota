@@ -665,3 +665,74 @@ func TestUmbrellaReleaseReview(t *testing.T) {
 		t.Fatalf("re-run: changed %v %v", changed, err)
 	}
 }
+
+// rrReleased gives the completed issues of M07 their released label and
+// comment, so a close has none of either left to write.
+func rrReleased(t *testing.T, f *rrFake, tag string) {
+	t.Helper()
+	for _, n := range []int{4, 6, 10} {
+		key := tracker.NumKey(n)
+		if err := f.Fake.AddLabels(context.Background(), key, []string{"released"}, true); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Fake.AddComment(context.Background(), key, "Released in "+tag); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// changed on a failed close says whether a write landed before the failure; a
+// refused write is not one.
+func TestIssuesReleaseClosePartialFailure(t *testing.T) {
+	for _, c := range []struct {
+		name, fail string
+		labelled   bool // labels and comments are already there
+		changed    bool
+	}{
+		{"first write refused", "add_labels", false, false},
+		{"after a label", "add_comment", false, true},
+		{"after labels and comments", "edit_milestone", false, true},
+		{"after only milestone-status writes", "close", true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b, f := rrOne(t)
+			if c.labelled {
+				rrReleased(t, f, "v1.2.0")
+			}
+			f.Fake.Fail = map[string]error{c.fail: errors.New("boom")}
+			_, changed, err := b.ReleaseClose("M07", "v1.2.0")
+			if err == nil || changed != c.changed {
+				t.Fatalf("changed %v, want %v (err %v)", changed, c.changed, err)
+			}
+		})
+	}
+}
+
+func TestUmbrellaReleaseClosePartialFailure(t *testing.T) {
+	for _, c := range []struct {
+		name, scope, fail string
+		labelled          bool
+		changed           bool
+	}{
+		{"first write refused", "gl", "add_labels", false, false},
+		{"after labels and comments", "gl", "edit_milestone", false, true},
+		{"native close is the first write and is refused", "gl", "edit_milestone", true, false},
+		{"after only shipping writes", "gh", "close", true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			u, f := rrUmbrella(t)
+			u.Scope = c.scope
+			if c.labelled {
+				rrReleased(t, f[c.scope], "v1.0.0")
+			}
+			if c.scope == "gh" { // the last sub-repo to close
+				f["gh"].MS.Native[0].State, f["gl"].MS.Native[0].State = "closed", "closed"
+			}
+			f[c.scope].Fake.Fail = map[string]error{c.fail: errors.New("boom")}
+			_, changed, err := u.ReleaseClose("M07", "v1.0.0")
+			if err == nil || changed != c.changed {
+				t.Fatalf("changed %v, want %v (err %v)", changed, c.changed, err)
+			}
+		})
+	}
+}

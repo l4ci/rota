@@ -101,7 +101,8 @@ func backlogScope(c *Ctx) (string, error) {
 // umbrella, issue mode opens one tracker per sub-repo, built on first use;
 // --repo narrows reads and bare references to one sub-repo and names the
 // capture target, and a capture with none goes to the sub-repo the working
-// directory is in.
+// directory is in. Backend notices go to stderr and into the envelope's
+// warnings.
 func openBacklog(c *Ctx, root string, fileOnly bool, hint string) (backlog.Backend, error) {
 	return openBacklogVia(c, root, fileOnly, hint, nil)
 }
@@ -159,8 +160,7 @@ func openBacklogFile(c *Ctx, root, hint string) (backlog.FileOps, error) {
 // --repo is exit 3 and the file backend is refused (RefusedError, backend; map
 // it with backlogFail, or backlogFailRead for a read-only verb). At an
 // umbrella root a verb that acts on one sub-repo (perRepo) needs --repo
-// (exit 2). Duplicate-tracking-issue notices go to stderr and into the
-// envelope's warnings.
+// (exit 2).
 func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, error) {
 	root, err := backlogScope(c)
 	if err != nil {
@@ -189,6 +189,5 @@ func openIssueBackend(c *Ctx, hint string, perRepo bool) (backlog.IssueBackend, 
 	if !ok {
 		return nil, &Error{Exit: ExitInternal, Message: fmt.Sprintf("%s: backend %T has no issue verbs", c.Path, be)}
 	}
-	ib.SetWarn(func(msg string) { c.Warn("%s", msg) })
 	return ib, nil
 }
