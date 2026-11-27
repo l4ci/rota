@@ -997,11 +997,11 @@ func TestReviewDepthShowsTheCrossAccount(t *testing.T) {
 
 // #4242: a PR into a milestone branch is measured against that branch, not
 // against main, so the milestone's own commits do not count toward its depth.
-func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
+func TestReviewVerbsUseTheOpenPRBase(t *testing.T) {
 	root := newRepo(t, t.TempDir(), "proj", "main")
 	gittest.Run(t, root, "checkout", "-q", "-b", "m/x")
 	for _, f := range []string{"m1.txt", "m2.txt"} {
-		write(t, filepath.Join(root, f), "milestone\n")
+		write(t, filepath.Join(root, f), "place"+"holder\n")
 		gittest.Run(t, root, "add", f)
 		gittest.Run(t, root, "commit", "-q", "-m", "milestone "+f)
 	}
@@ -1031,6 +1031,58 @@ func TestReviewDepthUsesTheOpenPRBase(t *testing.T) {
 	d, _ := run()
 	if d["base"] != "m/x" || d["changedLines"].(float64) != 1 || d["baseSource"] != "pr" {
 		t.Errorf("open PR base must be the span base: %v", d)
+	}
+
+	// Run from the orchestrator's default branch, rather than the PR checkout.
+	gittest.Run(t, root, "checkout", "-q", "main")
+	for _, verb := range [][]string{{"review", "scope"}, {"review", "brief"}, {"change", "classify"}} {
+		o := trRunWith(t, deps, root, "", append(verb, "nia/6-small", "--json")...)
+		if o.code != 0 {
+			t.Fatalf("%v: %s", verb, o.stderr)
+		}
+		d := envelope(t, o.stdout)["data"].(map[string]any)
+		if d["base"] != "m/x" {
+			t.Errorf("%v base = %v, want m/x", verb, d["base"])
+		}
+	}
+	for _, explicit := range []bool{false, true} {
+		flags := []string{}
+		if explicit {
+			flags = append(flags, "--base", "main")
+		}
+		o := trRunWith(t, deps, root, "", append([]string{"review", "scaffolding", "nia/6-small", "--json"}, flags...)...)
+		if o.code != 0 {
+			t.Fatal(o.stderr)
+		}
+		findings := envelope(t, o.stdout)["data"].(map[string]any)["findings"].([]any)
+		want := 0
+		if explicit {
+			want = 2
+		}
+		if len(findings) != want {
+			t.Errorf("scaffolding explicit=%v: got %d findings, want %d", explicit, len(findings), want)
+		}
+		o = trRunWith(t, deps, root, "", append([]string{"review", "package", "nia/6-small", "--json"}, flags...)...)
+		if o.code != 0 {
+			t.Fatal(o.stderr)
+		}
+		d := envelope(t, o.stdout)["data"].(map[string]any)
+		body, err := os.ReadFile(d["path"].(string))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "m1.txt") != explicit {
+			t.Errorf("package explicit=%v: %s", explicit, body)
+		}
+		if explicit {
+			o = trRunWith(t, deps, root, "", "change", "classify", "nia/6-small", "--base", "main", "--json")
+			if o.code != 0 {
+				t.Fatal(o.stderr)
+			}
+			if d := envelope(t, o.stdout)["data"].(map[string]any); d["base"] != "main" || d["changedLines"] != float64(3) {
+				t.Errorf("explicit classify: %v", d)
+			}
+		}
 	}
 	o := trRunWith(t, deps, root, "", "review", "depth", "nia/6-small")
 	if !strings.Contains(o.stdout, "REVIEW-BASE nia/6-small — m/x (open PR #9)") {

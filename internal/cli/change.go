@@ -25,15 +25,9 @@ func changeCommands() *Command {
 func changeClassify(fs *flag.FlagSet) RunFunc {
 	baseFlag := fs.String("base", "", "compare against this ref instead of the base branch")
 	return func(c *Ctx, args []string) (Result, error) {
-		t, err := resolveBranch(c, args)
+		t, err := reviewTarget(c, args, "classify", *baseFlag, "")
 		if err != nil {
 			return Result{}, err
-		}
-		if *baseFlag != "" {
-			t.Base = *baseFlag
-		}
-		if t.Branch == t.Base {
-			return Result{}, Failed("cannot classify base branch '%s' against itself", t.Base)
 		}
 		res := branchChange(c, t)
 		files := make([]any, 0, len(res.Files))
@@ -47,8 +41,8 @@ func changeClassify(fs *flag.FlagSet) RunFunc {
 
 // branchChange classifies t's diff against its base, reading the Door line of
 // the branch's open PR when one can be read.
-func branchChange(c *Ctx, t branchTarget) change.Result {
-	src := worker.ChangeSources{Git: c.deps().Git, Dir: t.Dir, Span: t.Base + "..." + t.Branch}
+func branchChange(c *Ctx, t reviewSpan) change.Result {
+	src := worker.ChangeSources{Git: c.deps().Git, Dir: t.Dir, Span: t.diffSpan(t.Head)}
 	root, err := backlogScope(c)
 	if err != nil {
 		src.PolicyErr = err
@@ -61,7 +55,7 @@ func branchChange(c *Ctx, t branchTarget) change.Result {
 	case err == nil:
 		src.PRBody = func() (string, error) {
 			prs, err := f.OpenPRs(c.Context())
-			pr, _ := tracker.BranchPR(prs, t.Branch)
+			pr, _ := tracker.BranchPR(prs, t.Name)
 			return pr.Body, err
 		}
 	case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):

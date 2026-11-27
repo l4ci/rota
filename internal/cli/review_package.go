@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/rotatree"
-	"github.com/l4ci/rota/internal/worker"
 )
 
 // reviewPackageDir is where review packages land, relative to the project root (gitignored).
@@ -29,16 +28,13 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 	baseFlag := fs.String("base", "", "base ref to diff against (default: the resolved base)")
 	sinceFlag := fs.String("since", "", "package only the commits after this sha (re-review after fixes)")
 	return func(c *Ctx, args []string) (Result, error) {
-		t, err := reviewTarget(c, args, "package")
+		t, err := reviewTarget(c, args, "package", *baseFlag, *sinceFlag)
 		if err != nil {
 			return Result{}, err
 		}
-		if *baseFlag != "" {
-			t.Base = *baseFlag
-		}
 		ctx := c.Context()
 		r := c.deps().Repo(t.Dir)
-		for _, ref := range []string{t.Base, *sinceFlag} {
+		for _, ref := range []string{t.Base, t.Since} {
 			if ref == "" {
 				continue
 			}
@@ -50,40 +46,24 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 				return Result{}, Resolution("%s: no such commit or branch", ref)
 			}
 		}
-		// head is the sha every read below uses and the one reported: the sha a
-		// verdict on this review binds to (verdict add --sha), even if the branch
-		// moves while the package is written.
-		head, err := reviewGit(ctx, c.deps(), t.Dir, "rev-parse", "--verify", t.Branch+"^{commit}")
-		if err != nil {
-			return Result{}, err
-		}
-		head = strings.TrimSpace(head)
+		// The shared resolver pins the head before choosing the fix boundary.
+		head := t.Head
 		if err := reviewRequirePushedHead(c, t.Dir, t.Branch, head); err != nil {
 			return Result{}, err
-		}
-		// An integration branch is reviewed on its fix commits only: --since
-		// defaults to just before the first of them (#3096).
-		if *sinceFlag == "" {
-			if since, ok, err := integrationSince(c, t.Dir, t.Branch, head); err != nil {
-				return Result{}, err
-			} else if ok {
-				*sinceFlag = since
-			}
 		}
 		// base...branch is the merge-base diff, so a base that has moved on since
 		// the branch forked is fine; only unrelated histories have no merge-base.
 		// --since is a point on the branch, so it must be an ancestor of its tip.
-		var from, logSpan, diffSpan string
+		from := t.Base
+		logSpan, diffSpan := t.logSpan(head), t.diffSpan(head)
 		ownOnly := false
-		if *sinceFlag != "" {
-			if ok, err := reviewIsAncestor(c, t.Dir, *sinceFlag, head); err != nil {
+		if t.Since != "" {
+			if ok, err := reviewIsAncestor(c, t.Dir, t.Since, head); err != nil {
 				return Result{}, err
 			} else if !ok {
-				return Result{}, Resolution("--since %s is not an ancestor of '%s'", *sinceFlag, t.Branch)
+				return Result{}, Resolution("--since %s is not an ancestor of '%s'", t.Since, t.Branch)
 			}
-			from = *sinceFlag
-			logSpan = from + ".." + head
-			diffSpan = logSpan
+			from = t.Since
 			// A base merge inside since..head carries the base's changes: diff
 			// only the branch's own non-merge commits then.
 			// Any other merge (a side branch) keeps the full diff, so nothing
@@ -95,9 +75,6 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 			if _, err := reviewGit(ctx, c.deps(), t.Dir, "merge-base", t.Base, head); err != nil {
 				return Result{}, Resolution("'%s' and base '%s' share no history", t.Branch, t.Base)
 			}
-			from = t.Base
-			logSpan = from + ".." + head
-			diffSpan = t.Base + "..." + head
 		}
 		count, err := reviewGit(ctx, c.deps(), t.Dir, "rev-list", "--count", logSpan)
 		if err != nil {
@@ -262,26 +239,4 @@ func reviewIsAncestor(c *Ctx, dir, ancestor, ref string) (bool, error) {
 // reviewPackageName turns a branch into a file stem: "nia/240-x" -> "nia-240-x".
 func reviewPackageName(branch string) string {
 	return strings.NewReplacer("/", "-", "\\", "-", " ", "-").Replace(branch)
-}
-
-// integrationSince is the --since default of an open integration branch, ok
-// false for any other branch.
-func integrationSince(c *Ctx, dir, branch, head string) (string, bool, error) {
-	root, err := c.Root()
-	if err != nil {
-		return "", false, nil
-	}
-	reg, err := worker.LoadRegistry(root)
-	if err != nil {
-		return "", false, nil
-	}
-	rec, ok := reg.IntegrationByBranch(branch)
-	if !ok || rec.Landed {
-		return "", false, nil
-	}
-	since, err := c.deps().workerEnv().WithDefaults().ReviewSince(dir, rec, head)
-	if err != nil {
-		return "", false, Resolution("%v", err)
-	}
-	return since, since != "", nil
 }

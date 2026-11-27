@@ -98,7 +98,7 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		info, err := reviewScan(c, t)
+		info, err := reviewScan(c, reviewSpan{branchTarget: t, Head: t.Branch})
 		if err != nil {
 			return Result{}, err
 		}

@@ -82,10 +82,10 @@ func nonBlankLines(s string) []string {
 
 // reviewScan reads the branch's commits, files and origin entries
 // (hv-review-scope). The caller has checked that the branch is not the base.
-func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
+func reviewScan(c *Ctx, t reviewSpan) (reviewInfo, error) {
 	info := reviewInfo{Branch: t.Branch, Base: t.Base, Commits: []reviewCommit{}, Files: []string{}, IDs: []string{}, Intents: []reviewIntent{}}
 	ctx := c.Context()
-	span := t.Base + ".." + t.Branch
+	span := t.logSpan(t.Head)
 	logOut, err := reviewGit(ctx, c.deps(), t.Dir, "log", "--no-merges", "--format=%h%x1f%s", span)
 	if err != nil {
 		return info, err
@@ -95,7 +95,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 			info.Commits = append(info.Commits, reviewCommit{h, s})
 		}
 	}
-	files, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, t.Base+"..."+t.Branch)
+	files, err := git.ChangedPaths(ctx, c.deps().Git, t.Dir, t.diffSpan(t.Head))
 	if err != nil {
 		return info, diffErr(err)
 	}
@@ -116,7 +116,7 @@ func reviewScan(c *Ctx, t branchTarget) (reviewInfo, error) {
 		return info, err
 	}
 	if issue {
-		reviewScanIssues(c, t, bodies, &info)
+		reviewScanIssues(c, t.branchTarget, bodies, &info)
 		return info, nil
 	}
 	if ids := backlog.FindItemIDs(bodies, itemid.ItemLetters); ids != nil {
@@ -162,8 +162,8 @@ func reviewScanIssues(c *Ctx, t branchTarget, bodies string, info *reviewInfo) {
 
 // reviewTarget resolves the branch and refuses the base branch; what is the
 // verb's name for the message.
-func reviewTarget(c *Ctx, args []string, what string) (branchTarget, error) {
-	t, err := resolveBranch(c, args)
+func reviewTarget(c *Ctx, args []string, what, base, since string) (reviewSpan, error) {
+	t, err := resolveReviewSpan(c, args, base, since)
 	if err != nil {
 		return t, err
 	}
@@ -174,7 +174,7 @@ func reviewTarget(c *Ctx, args []string, what string) (branchTarget, error) {
 }
 
 func reviewScope(c *Ctx, args []string) (Result, error) {
-	t, err := reviewTarget(c, args, "review")
+	t, err := reviewTarget(c, args, "review", "", "")
 	if err != nil {
 		return Result{}, err
 	}
@@ -205,7 +205,7 @@ func reviewScope(c *Ctx, args []string) (Result, error) {
 }
 
 func reviewBrief(c *Ctx, args []string) (Result, error) {
-	t, err := reviewTarget(c, args, "second-opinion")
+	t, err := reviewTarget(c, args, "second-opinion", "", "")
 	if err != nil {
 		return Result{}, err
 	}
@@ -255,7 +255,7 @@ func reviewBrief(c *Ctx, args []string) (Result, error) {
 	p("")
 	for _, path := range info.Files {
 		// A failing per-file diff printed as empty, as subprocess.run(check=False) did.
-		res, err := c.deps().Repo(t.Dir).Run(ctx, "diff", t.Base+"..."+t.Branch, "--", path)
+		res, err := c.deps().Repo(t.Dir).Run(ctx, "diff", t.diffSpan(t.Head), "--", path)
 		if err != nil {
 			return Result{}, gitErr(err)
 		}
@@ -355,50 +355,22 @@ func scaffoldScan(diff string) []scaffoldFinding {
 func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 	baseFlag := fs.String("base", "", "base branch to diff against (default: the resolved base)")
 	return func(c *Ctx, args []string) (Result, error) {
-		if len(args) > 1 {
-			return Result{}, Usage("unexpected argument %q", args[1])
-		}
-		dir, err := gitDir(c)
+		t, err := resolveReviewSpan(c, args, *baseFlag, "")
 		if err != nil {
 			return Result{}, err
 		}
-		ctx := c.Context()
-		r := c.deps().Repo(dir)
-		base := *baseFlag
-		if base == "" {
-			b, ok, err := resolveBase(ctx, c.deps(), dir)
-			if err != nil {
-				return Result{}, err
-			}
-			if !ok {
-				return Result{}, Resolution(noBaseMsg).WithHint("pass --base <ref>")
-			}
-			base = b
+		found, err := c.deps().Repo(t.Dir).Verify(c.Context(), t.Base+"^{commit}")
+		if err != nil {
+			return Result{}, gitErr(err)
 		}
-		var branch string
-		if len(args) == 1 && args[0] != "" {
-			branch = args[0]
-		} else {
-			if branch, err = r.CurrentBranch(ctx); err != nil {
-				return Result{}, gitErr(err)
-			}
-			if branch == "" {
-				return Result{}, Resolution("no branch given and HEAD is not on a branch")
-			}
+		if !found {
+			return Result{}, Resolution("%s: no such branch", t.Base)
 		}
-		for _, ref := range []string{base, branch} {
-			found, err := r.Verify(ctx, ref+"^{commit}")
-			if err != nil {
-				return Result{}, gitErr(err)
-			}
-			if !found {
-				return Result{}, Resolution("%s: no such branch", ref)
-			}
-		}
-		diff, err := reviewGit(ctx, c.deps(), dir, "diff", base+"..."+branch)
+		diff, err := reviewGit(c.Context(), c.deps(), t.Dir, "diff", t.diffSpan(t.Head))
 		if err != nil {
 			return Result{}, err
 		}
+
 		findings := []any{}
 		var lines []string
 		// Data drops the CR of a CRLF line (the shim's line splitting did); text keeps it, as the old helper did.
@@ -453,7 +425,7 @@ func reviewQueue(c *Ctx, args []string) (Result, error) {
 func reviewDepth(fs *flag.FlagSet) RunFunc {
 	labelsFlag := fs.String("labels", "", "extra labels, added to the branch issue's own")
 	return func(c *Ctx, args []string) (Result, error) {
-		t, err := reviewTarget(c, args, "review")
+		t, err := reviewTarget(c, args, "review", "", "")
 		if err != nil {
 			return Result{}, err
 		}
@@ -463,7 +435,7 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 				extra = append(extra, l)
 			}
 		}
-		prNum := openPRBase(c, &t)
+		prNum := t.PRNumber
 		res, why, err := branchReviewDepth(c, t, extra)
 		if err != nil {
 			return Result{}, err
@@ -529,38 +501,6 @@ func reviewDepth(fs *flag.FlagSet) RunFunc {
 	}
 }
 
-// openPRBase points t.Base at the base branch of t.Branch's open PR and returns
-// the PR number, so a PR into a milestone branch is measured against that branch
-// and not against main. It returns 0 and leaves t.Base alone when there is no
-// open PR, the forge cannot be read (the Door read reports that itself) or the
-// PR's base is not a ref in this checkout.
-func openPRBase(c *Ctx, t *branchTarget) int {
-	root, err := backlogScope(c)
-	if err != nil {
-		return 0
-	}
-	f, err := c.deps().forge(c.Context(), c.projectConfig(root), "", root)
-	if err != nil {
-		return 0
-	}
-	prs, err := f.OpenPRs(c.Context())
-	if err != nil {
-		return 0
-	}
-	pr, ok := tracker.BranchPR(prs, t.Branch)
-	if !ok || pr.Base == "" || pr.Base == t.Branch {
-		return 0
-	}
-	r := c.deps().Repo(t.Dir)
-	for _, ref := range []string{pr.Base, "origin/" + pr.Base} {
-		if ok, err := r.Verify(c.Context(), ref+"^{commit}"); err == nil && ok {
-			t.Base = ref
-			return pr.Number
-		}
-	}
-	return 0
-}
-
 func baseSource(prNum int) string {
 	if prNum > 0 {
 		return "pr"
@@ -572,15 +512,15 @@ func baseSource(prNum int) string {
 // size against the base, the labels of the branch's issue (read from the
 // tracker when the policy has a labels map) plus extra, and the Door line of
 // its open PR. why carries the Door note.
-func branchReviewDepth(c *Ctx, t branchTarget, extra []string) (worker.ReviewDepth, string, error) {
+func branchReviewDepth(c *Ctx, t reviewSpan, extra []string) (worker.ReviewDepth, string, error) {
 	root, err := backlogScope(c)
 	if err != nil {
 		return worker.ReviewDepth{}, "", err
 	}
 	cfg := c.projectConfig(root)
 	inputs, err := worker.BuildReviewInputs(c.Context(), worker.ReviewInputOptions{
-		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Branch,
-		Span: t.Base + "..." + t.Branch, Git: c.deps().Git, Labels: extra,
+		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Name,
+		Span: t.diffSpan(t.Head), Git: c.deps().Git, Labels: extra,
 		Issues: func() (worker.ReviewIssues, error) {
 			return c.deps().issuesOrNone(c.Context(), cfg, root, cachedReads)
 		},

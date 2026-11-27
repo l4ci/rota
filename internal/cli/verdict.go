@@ -444,11 +444,10 @@ func raisedDepthNote(c *Ctx, args []string, t verdictBranch, head, kind string) 
 	if !verdict.IsCoreReview(kind) {
 		return ""
 	}
-	bt, err := resolveBranch(c, args)
+	bt, err := reviewTarget(c, args, "review", "", "")
 	if err != nil || bt.Branch == bt.Base {
 		return ""
 	}
-	openPRBase(c, &bt)
 	res, why, err := branchReviewDepth(c, bt, nil)
 	if err != nil {
 		return ""
