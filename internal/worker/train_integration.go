@@ -11,6 +11,7 @@ import (
 
 	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/fsio"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/strutil"
@@ -359,7 +360,7 @@ func (t *trainRun) integrationConflict(p *trainPlanning, failed int, paths []str
 	res.Interaction = append([]string{pending.Target}, t.touching(p, it.Members, pending.Target, paths)...)
 	res.Verdict, res.Culprit = landing.GateInteraction, ""
 	res.Err = fmt.Sprintf("TRAIN-INTERACTION %s — %s does not merge onto %s: conflict in %s; the members before it are pushed, nothing is verified or landed",
-		strings.Join(res.Interaction, ", "), pending.Branch, it.Branch, strings.Join(paths, ", "))
+		strings.Join(res.Interaction, ", "), pending.Branch, it.Branch, land.ConflictList(paths))
 	res.Hint = t.integrationInteractionHint(*it, res.Interaction)
 	return true, nil
 }
@@ -381,15 +382,13 @@ func (t *trainRun) touching(p *trainPlanning, ms []landing.IntegrationMember, ex
 		if m.Target == except || m.Pending {
 			continue
 		}
-		names, code := t.e.git(t.root, "diff", "--name-only", p.baseSHA+"..."+m.Head)
-		if code != 0 {
+		// Both names of a rename: a member that moved a file away collides too.
+		files, err := git.DiffFiles(t.ctx, t.e.Git, t.root, p.baseSHA+"..."+m.Head)
+		if err != nil {
 			continue
 		}
-		for _, f := range strings.Split(names, "\n") {
-			if slices.Contains(paths, strings.TrimSpace(f)) {
-				out = append(out, m.Target)
-				break
-			}
+		if slices.ContainsFunc(files, func(f string) bool { return slices.Contains(paths, f) }) {
+			out = append(out, m.Target)
 		}
 	}
 	return out

@@ -11,7 +11,7 @@ import (
 
 func TestMergeBaseErrorKeepsChain(t *testing.T) {
 	rec := landing.Integration{Branch: "int", OntoBase: "main"}
-	conflict := &land.ConflictError{Out: "CONFLICT (content): Merge conflict in a.go"}
+	conflict := &land.ConflictError{Paths: []string{"a.go"}}
 	cases := []struct {
 		name   string
 		err    error

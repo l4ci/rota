@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landing"
 	"strings"
 
@@ -125,7 +126,7 @@ func (e Env) integrationPreflight(ctx context.Context, root string, o *GateOpts,
 	// The record alone decides a pending member: no remote is needed for it.
 	for _, m := range rec.Members {
 		if m.Pending {
-			return refuse(landing.GateStale, fmt.Sprintf("member %s does not merge yet (conflict in %s)", m.Target, strings.Join(m.Conflicts, ", ")),
+			return refuse(landing.GateStale, fmt.Sprintf("member %s does not merge yet (conflict in %s)", m.Target, land.ConflictList(m.Conflicts)),
 				"resolve it through the interaction item on "+rec.Branch+", then "+rerun), nil
 		}
 	}
