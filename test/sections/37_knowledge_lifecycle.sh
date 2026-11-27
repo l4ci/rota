@@ -19,23 +19,20 @@ cat > .rota/KNOWLEDGE.md <<'EOF'
 EOF
 
 # --- knowledge tier subcommands ---
-OUT=$(hvj knowledge tier get --topic "Architecture" --title "Nonexistent") || vfail
-[ "$(jget data.found <<<"$OUT")" = "false" ] || fail "knowledge tier get on missing should be found:false: $OUT"
-pass "knowledge tier get on missing entry reports found:false"
+RC=0; hvj knowledge tier get --topic "Architecture" --title "Nonexistent" >/dev/null 2>&1 || RC=$?
+[ "$RC" = "3" ] || fail "knowledge tier get on an unknown title should exit 3; got $RC"
+pass "knowledge tier get refuses an unknown title"
 
-# A tier read registers every titled bullet as provisional/0 (lazy init, #174),
-# so the get above has already tracked "Foo rule".
+# A tier read shows every titled bullet as provisional/0 (lazy init, #174).
 OUT=$(hvj knowledge tier get --topic "Architecture" --title "Foo rule") || vfail
 [ "$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")" = "provisional/0" ] || fail "tier get should backfill a bullet as provisional/0: $OUT"
 pass "knowledge tier get backfills untracked bullets as provisional/0"
 
-# Setting an entry with no bullet and no sidecar row creates it with hits 0.
-OUT=$(hvj knowledge tier set --topic "Architecture" --title "Ghost rule" --tier provisional) || vfail
-[ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "tier set on untracked entry should change: $OUT"
-if jget data.previousTier <<<"$OUT" >/dev/null 2>&1; then fail "untracked entry should have no previousTier: $OUT"; fi
-OUT=$(hvj knowledge tier get --topic "Architecture" --title "Ghost rule") || vfail
-[ "$(jget data.tier <<<"$OUT")/$(jget data.hits <<<"$OUT")" = "provisional/0" ] || fail "tier set on untracked entry wrong shape: $OUT"
-pass "knowledge tier set creates an untracked entry as provisional/0"
+# A title that names no bullet is refused, so no orphan record is written (#4307).
+RC=0; hvj knowledge tier set --topic "Architecture" --title "Ghost rule" --tier provisional >/dev/null 2>&1 || RC=$?
+[ "$RC" = "3" ] || fail "tier set on an unknown title should exit 3; got $RC"
+[ ! -e .rota/knowledge-tier.json ] || fail "refused tier set wrote the sidecar"
+pass "knowledge tier set refuses an unknown title"
 
 hvj knowledge hit --topic "Architecture" --title "Foo rule" >/dev/null 2>&1
 OUT=$(hvj knowledge hit --topic "Architecture" --title "Foo rule" 2>/dev/null) || vfail

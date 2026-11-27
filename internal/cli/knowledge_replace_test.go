@@ -64,8 +64,8 @@ func TestKnowledgeReplace(t *testing.T) {
 	if e, found, err := st.TierGet(knowledge.Umbrella, "Architecture", "Beta law"); err != nil || !found || e.Tier != knowledge.Provisional || e.Hits != 1 {
 		t.Errorf("retitled metadata: %+v found=%v err=%v", e, found, err)
 	}
-	if _, found, err := st.TierGet(knowledge.Umbrella, "Architecture", "Beta rule"); err != nil || found {
-		t.Errorf("old title remains: found=%v err=%v", found, err)
+	if _, found := knTracked(t, st, "Architecture")["Beta rule"]; found {
+		t.Error("old title remains")
 	}
 }
 
@@ -112,4 +112,21 @@ func TestMilestoneOverview(t *testing.T) {
 	if b, _ := os.ReadFile(path); !strings.Contains(string(b), "fresh wording") {
 		t.Errorf("index dropped the overview:\n%s", b)
 	}
+}
+
+// knTracked lists topic's tier records by title, including any whose bullet is
+// gone (`tier get` refuses those).
+func knTracked(t *testing.T, st knowledge.Store, topic string) map[string]knowledge.Entry {
+	t.Helper()
+	list, err := st.TierList(knowledge.Umbrella, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := map[string]knowledge.Entry{}
+	for _, e := range list {
+		if e.Topic == topic {
+			out[e.Title] = e
+		}
+	}
+	return out
 }

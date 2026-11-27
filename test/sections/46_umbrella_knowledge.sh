@@ -62,9 +62,9 @@ OUT=$( cd "$TMP_UK/web" && hvj knowledge tier set --topic Architecture --title "
 [ -f "$TMP_UK/.rota/knowledge/web/knowledge-tier.json" ] \
   || fail "F21[3]: .rota/knowledge/web/knowledge-tier.json must exist after tier set"
 # Read via the tier interface so this check does not depend on key encoding.
-OUT=$( cd "$TMP_UK" && hvj knowledge tier get --topic Architecture --title "web rule" ) || vfail
-[ "$(jget data.found <<<"$OUT")" = "false" ] \
-  || fail "F21[3]: umbrella tier sidecar must NOT track 'web rule': $OUT"
+OUT=$( cd "$TMP_UK" && hvj knowledge tier list ) || vfail
+grep -q "web rule" <<<"$OUT" \
+  && fail "F21[3]: umbrella tier sidecar must NOT track 'web rule': $OUT"
 pass "F21[3]: tier sidecar is scoped per sub-repo"
 
 # ── 4. Cross-file amend guard ───────────────────────────────────────────────

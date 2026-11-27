@@ -91,8 +91,8 @@ func TestEveryTierOperationSkipsGlossary(t *testing.T) {
 	})
 	t.Run("TierSet", func(t *testing.T) {
 		s, p, raw := glossaryFixture(t)
-		if prev, changed, err := s.TierSet(Umbrella, g, "Term", Confirmed); err != nil || changed || prev != "" {
-			t.Errorf("TierSet: %q %v %v", prev, changed, err)
+		if r, err := s.TierSet(Umbrella, g, "Term", Confirmed); err != nil || r.Changed || r.Previous != "" {
+			t.Errorf("TierSet: %+v %v", r, err)
 		}
 		assertSidecarUnchanged(t, p, raw)
 	})

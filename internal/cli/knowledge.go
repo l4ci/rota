@@ -535,7 +535,11 @@ func knTierGet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return knFail(err)
 		}
-		d := jsonx.Obj("topic", *topic, "title", *title, "found", found)
+		stored := *title
+		if found {
+			stored = e.Title
+		}
+		d := jsonx.Obj("topic", *topic, "title", stored, "found", found)
 		if !found {
 			return Result{Data: d, Text: "untracked"}, nil
 		}
@@ -564,18 +568,18 @@ func knTierSet(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		prev, changed, err := st.TierSet(scope, *topic, *title, *tier)
+		res, err := st.TierSet(scope, *topic, *title, *tier)
 		if err != nil {
 			return knFail(err)
 		}
-		d := jsonx.Obj("topic", *topic, "title", *title, "tier", *tier)
-		if prev != "" {
-			d.Set("previousTier", prev)
+		d := jsonx.Obj("topic", *topic, "title", res.Title, "tier", *tier)
+		if res.Previous != "" {
+			d.Set("previousTier", res.Previous)
 		}
-		d.Set("changed", changed)
-		text := fmt.Sprintf("tier: %s :: %s = %s", *topic, *title, *tier)
-		if !changed {
-			text = fmt.Sprintf("unchanged: %s :: %s", *topic, *title)
+		d.Set("changed", res.Changed)
+		text := fmt.Sprintf("tier: %s :: %s = %s", *topic, res.Title, *tier)
+		if !res.Changed {
+			text = fmt.Sprintf("unchanged: %s :: %s", *topic, res.Title)
 		}
 		return Result{Data: d, Text: text}, nil
 	}

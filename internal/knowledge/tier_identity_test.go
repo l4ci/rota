@@ -2,6 +2,7 @@ package knowledge
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -18,7 +19,7 @@ func TestTierIdentityAcrossDelimiterNames(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.TierSet(Umbrella, "A::B", "C", Deprecated); err != nil {
+	if _, err := s.TierSet(Umbrella, "A::B", "C", Deprecated); err != nil {
 		t.Fatal(err)
 	}
 	out, _, err := s.Query(Umbrella, []string{"A", "A::B"}, QueryOpts{})
@@ -58,12 +59,17 @@ func TestTierIdentitySurvivesMovesRetitlesAndDeletion(t *testing.T) {
 	if _, err := s.FoldHits(Umbrella); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.TierSet(Umbrella, "A::B", "C", Deprecated); err != nil {
+	if _, err := s.TierSet(Umbrella, "A::B", "C", Deprecated); err != nil {
 		t.Fatal(err)
 	}
 	assertTier := func(topic, title, tier string, hits int, found bool) {
 		t.Helper()
-		e, ok, err := s.TierGet(Umbrella, topic, title)
+		// The sidecar itself: TierGet refuses a title whose bullet is gone.
+		sc, err := s.effective(Umbrella)
+		if err != nil {
+			t.Fatal(err)
+		}
+		e, ok, err := sc.Get(topic, title)
 		if err != nil || ok != found || (ok && (e.Tier != tier || e.Hits != hits)) {
 			t.Fatalf("(%q, %q): %+v found=%v err=%v", topic, title, e, ok, err)
 		}
@@ -177,7 +183,7 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 			mustRefuse(err)
 			_, err = s.TierList(Umbrella, "")
 			mustRefuse(err)
-			_, _, err = s.TierSet(Umbrella, c.topic, c.title, Confirmed)
+			_, err = s.TierSet(Umbrella, c.topic, c.title, Confirmed)
 			mustRefuse(err)
 			_, err = s.Hit(Umbrella, c.topic, c.title)
 			mustRefuse(err)
@@ -217,15 +223,16 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 			if err != nil || res.Hits != 0 || res.Changed {
 				t.Fatalf("ambiguous-only fold: %+v err=%v", res, err)
 			}
-			if _, _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
+			if _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
 				t.Fatal(err)
 			}
 			b, _ := os.ReadFile(p)
 			if !strings.Contains(string(b), `"legacyEntries"`) || !strings.Contains(string(b), c.raw) || !strings.Contains(string(b), `"extra": true`) {
 				t.Fatalf("unrelated write lost unresolved metadata: %s", b)
 			}
+			writeBullets(t, s, "## "+c.topic+"\n\n- **"+c.title+"** — body\n\n## Safe\n\n- **Known** — safe\n")
 			_, _, err = s.TierGet(Umbrella, c.topic, c.title)
-			if err == nil {
+			if !errors.Is(err, ErrMultiMatch) {
 				t.Fatal("migration bypassed ambiguity refusal")
 			}
 		})
@@ -234,6 +241,7 @@ func TestTierAmbiguousLegacyRefusesOnlyNeededKeys(t *testing.T) {
 
 func TestTierLegacyReservedFieldRemainsReadable(t *testing.T) {
 	s := lockedStore(t)
+	writeBullets(t, s, "## Safe\n\n- **Known** — safe\n")
 	p := mustTier(t, s)
 	raw := `{"version":1,"legacyEntries":"extension owned by another writer","entries":{"Safe::Known":{"tier":"confirmed","hits":2}}}`
 	if err := os.WriteFile(p, []byte(raw), 0o644); err != nil {
@@ -243,7 +251,7 @@ func TestTierLegacyReservedFieldRemainsReadable(t *testing.T) {
 	if err != nil || !found || e.Tier != Confirmed || e.Hits != 2 {
 		t.Fatalf("legacy extension broke reads: %+v found=%v err=%v", e, found, err)
 	}
-	if _, _, err := s.TierSet(Umbrella, "Safe", "Known", Deprecated); err == nil || !strings.Contains(err.Error(), "legacyEntries") {
+	if _, err := s.TierSet(Umbrella, "Safe", "Known", Deprecated); err == nil || !strings.Contains(err.Error(), "legacyEntries") {
 		t.Fatalf("reserved field overwritten: %v", err)
 	}
 	if b, _ := os.ReadFile(p); string(b) != raw {
@@ -253,6 +261,7 @@ func TestTierLegacyReservedFieldRemainsReadable(t *testing.T) {
 
 func TestTierSetFoldsSafeHitsAndRetainsAmbiguousHits(t *testing.T) {
 	s := lockedStore(t)
+	writeBullets(t, s, "## Safe\n\n- **Known** — safe\n\n## A::B\n\n- **C** — body\n")
 	p := mustTier(t, s)
 	if err := os.WriteFile(p, []byte(`{"version":1,"entries":{"A::B::C":{"tier":"deprecated","hits":7},"Safe::Known":{"tier":"confirmed","hits":2}}}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -267,7 +276,7 @@ func TestTierSetFoldsSafeHitsAndRetainsAmbiguousHits(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
+	if _, err := s.TierSet(Umbrella, "Safe", "Known", Provisional); err != nil {
 		t.Fatalf("unrelated tier set blocked by another owner: %v", err)
 	}
 	for range 2 {
@@ -319,5 +328,16 @@ func TestTierSetFoldsSafeHitsAndRetainsAmbiguousHits(t *testing.T) {
 	}
 	if res, err := s.FoldHits(Umbrella); err != nil || res.Hits != 0 || res.Changed {
 		t.Fatalf("retained hit replayed: %+v err=%v", res, err)
+	}
+}
+
+func writeBullets(t *testing.T, s Store, md string) {
+	t.Helper()
+	km, err := s.KnowledgePath(Umbrella)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(km, []byte(md), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
