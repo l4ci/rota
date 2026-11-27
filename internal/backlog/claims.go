@@ -11,10 +11,10 @@ import (
 // ReclaimedBranchClaim requires a branch-agent claim, its release, then a
 // different still-open claim, in that order. A bare release or an existing
 // best-of peer is not evidence that the branch was reclaimed.
-func ReclaimedBranchClaim(comments []tracker.Comment, agent string, held []string) bool {
+func ReclaimedBranchClaim(events []tracker.ClaimEvent, agent string, held []string) bool {
 	claimed := map[string]bool{}
 	released := false
-	for _, ev := range marker.FoldClaims(tracker.ClaimComments(comments)).Events {
+	for _, ev := range events {
 		holder, _, _ := strings.Cut(ev.ID, "@")
 		if holder == agent && agent != "" {
 			if ev.Verb == marker.KindClaim {

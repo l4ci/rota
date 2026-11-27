@@ -49,21 +49,21 @@ type SharedClaimer interface {
 	ClaimShared(ref, claimID string, holders int) (won bool, holder string, err error)
 }
 
-// ClaimHistorian reads the raw tracker comments that carry claim markers, for
+// ClaimHistorian reads authoritative claim/release events, for
 // a caller that audits who held an item. ok is false when the backend has no
 // tracker to read. The issues and umbrella backends implement it; the
 // context is the backend's own, as in every sibling method.
 type ClaimHistorian interface {
-	ClaimComments(key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error)
+	ClaimEvents(key tracker.IssueKey) (events []tracker.ClaimEvent, ok bool, err error)
 }
 
-// ClaimComments lists the issue's tracker comments.
-func (b *Issues) ClaimComments(key tracker.IssueKey) ([]tracker.Comment, bool, error) {
+// ClaimEvents reads the issue's claim surface.
+func (b *Issues) ClaimEvents(key tracker.IssueKey) ([]tracker.ClaimEvent, bool, error) {
 	if b.Tracker == nil {
 		return nil, false, nil
 	}
-	comments, err := b.Tracker.Comments(b.ctx(), key)
-	return comments, true, err
+	claims, err := tracker.ReadClaims(b.ctx(), b.Tracker, key)
+	return claims.Events, true, err
 }
 
 // ClaimLabelSyncer repairs visible labels derived from tracker claims and

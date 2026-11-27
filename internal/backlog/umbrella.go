@@ -489,9 +489,9 @@ func (u *Umbrella) ReleaseByHand(ref, claimID string) (bool, error) {
 	return viaOwner(u, ref, func(s *Issues, plain string) (bool, error) { return s.ReleaseByHand(plain, claimID) })
 }
 
-// ClaimComments lists the owning tracker's comments on the item.
-func (u *Umbrella) ClaimComments(key tracker.IssueKey) (comments []tracker.Comment, ok bool, err error) {
-	return viaOwner2(u, key.Ref(), func(s *Issues, _ string) ([]tracker.Comment, bool, error) { return s.ClaimComments(key) })
+// ClaimEvents lists the owning tracker's claim history on the item.
+func (u *Umbrella) ClaimEvents(key tracker.IssueKey) (events []tracker.ClaimEvent, ok bool, err error) {
+	return viaOwner2(u, key.Ref(), func(s *Issues, _ string) ([]tracker.ClaimEvent, bool, error) { return s.ClaimEvents(key) })
 }
 
 // ClaimLabelDrift reads the owning tracker's derived claim labels.

@@ -66,3 +66,8 @@ func (t *Itsaplan) CloseAfterMerge(ctx context.Context, key IssueKey, pr string)
 		return c != nil && (c.StateType == "completed" || c.StateType == "canceled"), nil
 	})
 }
+
+// ClaimState returns claim times and history from the shared comment store.
+func (t *Itsaplan) ClaimState(ctx context.Context, key IssueKey) (ClaimState, error) {
+	return t.claimStore().ClaimState(ctx, key)
+}

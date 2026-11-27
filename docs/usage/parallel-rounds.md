@@ -1640,6 +1640,12 @@ visible with `blockedBy: stale-claim`, `staleHolder` and `lastActivity`; `rota d
 adds a warning with the same holder and time. Local held items use the existing stalled
 and claim-mismatch checks instead.
 
+Claim times come from the tracker's server timestamps, for both marker comments
+and plain claims on Jira, Linear and Itsaplan. Releasing a plain claim retains its
+original time and comment identity in the release record before deleting the claim
+comment, so adopt can still recognize a later takeover. Older releases without that
+history cannot prove a takeover.
+
 The default threshold is four hours for bugs, tasks and Minor/Cosmetic features, eight
 hours for Major features. Configure `round.claimStaleMinutes` and
 `round.claimStaleMinutesMajor`; `0` disables the corresponding class. PR comments and

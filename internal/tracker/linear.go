@@ -1112,13 +1112,7 @@ func (l *Linear) dropState(ctx context.Context, key IssueKey, name string) error
 // claimStore is the shared claim-comment rule over Linear's comments.
 func (l *Linear) claimStore() claimComments {
 	return claimComments{
-		list: func(ctx context.Context, key IssueKey) ([]Comment, error) {
-			id, err := l.issueID(ctx, key)
-			if err != nil {
-				return nil, err
-			}
-			return l.comments(ctx, id, nil)
-		},
+		list: l.Comments,
 		add: func(ctx context.Context, key IssueKey, body string) error {
 			_, err := l.AddComment(ctx, key, body)
 			return err
@@ -1141,4 +1135,9 @@ func (l *Linear) PutClaim(ctx context.Context, key IssueKey, id string) error {
 // DropClaim records the release and deletes every claim comment of id; none is a no-op.
 func (l *Linear) DropClaim(ctx context.Context, key IssueKey, id string, byHand bool) error {
 	return l.claimStore().DropClaim(ctx, key, id, byHand)
+}
+
+// ClaimState returns claim times and history from the shared comment store.
+func (l *Linear) ClaimState(ctx context.Context, key IssueKey) (ClaimState, error) {
+	return l.claimStore().ClaimState(ctx, key)
 }
