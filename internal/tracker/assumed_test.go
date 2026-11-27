@@ -46,8 +46,11 @@ func TestAssumedForgeRefusesEveryWrite(t *testing.T) {
 	}
 	// The read set is a decision: adding to IssueReader must be deliberate.
 	slices.Sort(reads)
-	want := []string{"CheckAuth", "ClosesIssue", "CommentURL", "Comments", "FindMilestone", "Get", "IssuesInMilestone", "List", "Milestones", "Provider"}
+	want := []string{"CheckAuth", "ClosesIssue", "CommentURL", "Comments", "FindMilestone", "Get", "IssuesInMilestone", "LabelMatcher", "List", "Milestones", "Provider"}
 	if !slices.Equal(reads, want) {
 		t.Fatalf("IssueReader methods = %v, want %v", reads, want)
+	}
+	if !HasLabel(a, []string{"Partial-Slice"}, "partial-slice") {
+		t.Fatal("assumed forge lost its issue label rule")
 	}
 }

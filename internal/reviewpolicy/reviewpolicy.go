@@ -239,8 +239,13 @@ func MatchLenses(l config.Lenses, files, labels []string, matchers ...func([]str
 		}
 		if why == "" {
 			for _, lb := range labels {
-				if labelPresent(match, lens.Labels, lb) {
-					why = "label " + lb
+				for _, want := range lens.Labels {
+					if labelPresent(match, []string{lb}, want) {
+						why = "label " + lb
+						break
+					}
+				}
+				if why != "" {
 					break
 				}
 			}

@@ -484,3 +484,38 @@ type caseReviewIssues struct {
 func (f caseReviewIssues) LabelMatcher() tracker.LabelMatcher {
 	return (tracker.IssueActor{Source: f.provider}).LabelMatcher()
 }
+
+func TestReviewDepthKeepsSuppliedLabelsExact(t *testing.T) {
+	for _, bundled := range []bool{false, true} {
+		t.Run(strconv.FormatBool(bundled), func(t *testing.T) {
+			issues := sourceReviewMap{byKeyIssues: byKeyIssues{tracker.NumKey(5): {Labels: []string{"other"}}}}
+			src := ReviewSources{Policy: config.ReviewPolicy{Default: config.DepthLight, Labels: map[string]config.ReviewDepth{"risk:high": config.DepthFull}},
+				Git: git.Exec, Dir: depthRepo(t), Span: "main...feat", Issue: tracker.NumKey(5), Issues: issues,
+				Labels: []string{"Risk:High"}, Lenses: config.Lenses{"security": {Labels: []string{"risk:high"}}},
+				Cross: roundcfg.CrossReview{Labels: []string{"risk:high"}, Harnesses: []string{harness.Claude, harness.Codex}}, Author: harness.Claude}
+			want := config.DepthLight
+			if bundled {
+				src.Policy = config.ReviewPolicy{Default: config.DepthFull, Labels: map[string]config.ReviewDepth{"review:none": config.DepthNone}}
+				src.Labels = []string{"Review:None"}
+				issues.byKeyIssues[tracker.NumKey(5)] = tracker.Issue{Labels: []string{"Review:None"}}
+				issues.byKeyIssues[tracker.NumKey(6)] = tracker.Issue{Labels: []string{"other"}}
+				src.Members = []tracker.IssueKey{tracker.NumKey(6)}
+				src.Cross = roundcfg.CrossReview{}
+				want = config.DepthFull
+			}
+			got, err := ResolveReviewDepth(context.Background(), src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Depth != want || len(got.Lenses) != 0 || got.Cross != "" {
+				t.Fatalf("review = %+v, want depth %s without supplied-label triggers", got, want)
+			}
+		})
+	}
+}
+
+type sourceReviewMap struct{ byKeyIssues }
+
+func (sourceReviewMap) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: "github"}).LabelMatcher()
+}
