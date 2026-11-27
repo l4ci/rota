@@ -248,11 +248,9 @@ func (e Env) resolveAttempt(root string, reg worker.Registry, id string, a worke
 	if err != nil {
 		return v, err
 	}
-	for _, p := range prs {
-		if p.Branch == a.Branch {
-			v.PR, v.State = fmt.Sprintf("#%d", p.Number), AttemptOpenPR
-			return v, nil
-		}
+	if p, ok := tracker.BranchPR(prs, a.Branch); ok {
+		v.PR, v.State = fmt.Sprintf("#%d", p.Number), AttemptOpenPR
+		return v, nil
 	}
 	v.State = AttemptGone
 	if v.slot != nil {

@@ -212,7 +212,7 @@ def new_pr(db, tool, title, body, head, base):
 def gh_pr(p):
     return {"number": p["number"], "title": p["title"], "body": p["body"],
             "headRefName": p["head"], "baseRefName": p["base"], "state": p["state"].upper(),
-            "headRefOid": p.get("sha", ""),
+            "headRefOid": p.get("sha", ""), "isCrossRepository": False,
             "mergeCommit": {"oid": p["merge_sha"]} if p.get("merge_sha") else None,
             "url": "https://github.com/fake/repo/pull/%d" % p["number"]}
 
@@ -220,6 +220,7 @@ def gh_pr(p):
 def gl_mr(p):
     out = {"iid": p["number"], "title": p["title"], "description": p["body"],
            "source_branch": p["head"], "target_branch": p["base"], "sha": p.get("sha", ""),
+           "source_project_id": 1, "target_project_id": 1,
            "state": "opened" if p["state"] == "open" else p["state"],
            "web_url": "https://gitlab.com/fake/repo/-/merge_requests/%d" % p["number"]}
     if p.get("merge_sha"):

@@ -55,7 +55,7 @@ func supersededPRFixture(t *testing.T) (string, Env, *fakeRemote) {
 		o.Set("pr", oldURL)
 	}))
 	fr := &fakeRemote{
-		prs:      []tracker.PR{{Number: 8, Branch: "ben/12-thing", URL: newURL}},
+		prs:      []tracker.PR{{Number: 8, SameRepository: true, Branch: "ben/12-thing", URL: newURL}},
 		states:   map[int]string{7: "closed"},
 		labelled: []int{12},
 	}
@@ -159,7 +159,7 @@ func TestReconcileSupersededPRForgeUnreadable(t *testing.T) {
 
 func TestStatusExternalDerivedState(t *testing.T) {
 	url := "https://github.com/o/r/pull/7"
-	root, e, _ := extFixture(t, "", tracker.PR{Number: 7, Branch: "codex/12-thing", URL: url})
+	root, e, _ := extFixture(t, "", tracker.PR{Number: 7, SameRepository: true, Branch: "codex/12-thing", URL: url})
 	rep, err := e.Status(bg, root)
 	if err != nil {
 		t.Fatal(err)
@@ -362,7 +362,7 @@ func TestStatusExternalForgeDown(t *testing.T) {
 }
 
 func TestReconcileSkipsExternal(t *testing.T) {
-	root, e, _ := extFixture(t, "https://github.com/o/r/pull/7", tracker.PR{Number: 7, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7"})
+	root, e, _ := extFixture(t, "https://github.com/o/r/pull/7", tracker.PR{Number: 7, SameRepository: true, Branch: "codex/12-thing", URL: "https://github.com/o/r/pull/7"})
 	// A stale handle and an old activity stamp would read DeadTab, StalledSlot
 	// and ItemTimeout on a driven slot.
 	if err := rawSlot(root, "ext-1", func(o *jsonx.Object) {

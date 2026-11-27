@@ -209,18 +209,16 @@ func doneClosing(c *Ctx, root, dir, branch string) func(tracker.IssueKey) bool {
 	if err != nil {
 		return assumeClosing
 	}
-	for _, pr := range prs {
-		if pr.Branch != branch {
-			continue
-		}
-		issues, err := env.Issues(dir, settings)
-		if err != nil {
-			return assumeClosing
-		}
-		src := tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}
-		return func(key tracker.IssueKey) bool { return issues.ClosesIssue(key, src) }
+	pr, ok := tracker.BranchPR(prs, branch)
+	if !ok {
+		return func(tracker.IssueKey) bool { return false }
 	}
-	return func(tracker.IssueKey) bool { return false }
+	issues, err := env.Issues(dir, settings)
+	if err != nil {
+		return assumeClosing
+	}
+	src := tracker.ClosingSource{Body: pr.Body, Title: pr.Title, Branch: pr.Branch}
+	return func(key tracker.IssueKey) bool { return issues.ClosesIssue(key, src) }
 }
 
 // proofRows is the proof rows of item id, errors mapped onto the exit table.

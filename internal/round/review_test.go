@@ -461,6 +461,23 @@ func TestReviewRelayFreshFallsBackWithNoFreeSlot(t *testing.T) {
 	}
 }
 
+// #4319: a slot past the round's slot count is idle but Transfer refuses it, so
+// freshAt does not pick it.
+func TestReviewRelayFreshPassesOverASlotOutsideTheRound(t *testing.T) {
+	f, o := freshFx(t)
+	if err := worker.Update(f.root, func(d *worker.Doc) { d.SetSlotCount(1) }); err != nil {
+		t.Fatal(err)
+	}
+	f.env.Round.Roster = []string{"ben", "dana"}
+	got, err := f.env.ReviewRelay(bg, f.root, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Fresh != "" || !strings.Contains(got.FreshSkipped, "no free slot") {
+		t.Fatalf("%+v", got)
+	}
+}
+
 func TestReviewRelayFreshOffOrNotDue(t *testing.T) {
 	f, o := freshFx(t)
 	o.FreshAt = 0

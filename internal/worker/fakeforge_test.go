@@ -243,7 +243,7 @@ func (f *fakeForge) OpenPRs(context.Context) ([]tracker.PR, error) {
 	if f.w.forgeWord("listed") != "1" {
 		return nil, nil
 	}
-	return []tracker.PR{{Number: 7, Branch: f.w.forgeWord("head"), URL: ghURL}}, nil
+	return []tracker.PR{{Number: 7, SameRepository: true, Branch: f.w.forgeWord("head"), URL: ghURL}}, nil
 }
 
 // ClosedNumbers reads `Closes #N` lines. Get and RemoveLabels serve one issue

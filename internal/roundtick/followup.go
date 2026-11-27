@@ -36,6 +36,9 @@ type FollowUpSources struct {
 	// fewer names means the roster is too short.
 	Reserve func() []string
 	Size    int
+	// Receives is Transfer's rule for its receiving slot (round.Env.Receives):
+	// an error says why slot would be refused. Nil refuses nothing.
+	Receives func(ctx context.Context, slot string, reserve bool) error
 	// Start transfers the follow-up's issue to slot with its review input as
 	// the brief; reserve is true for a reserve slot. A *round.BlockedError is
 	// a refusal that leaves the follow-up pending.
@@ -56,6 +59,8 @@ type FollowUpPorts struct {
 	Registry func() worker.Registry
 	// Forge opens the review forge; it is asked only when a PR is queued.
 	Forge func(ctx context.Context) (round.ReviewForge, error)
+	// Receives says why a transfer would refuse slot (round.Env.Receives).
+	Receives func(ctx context.Context, slot string, reserve bool) error
 	// List reads the follow-ups through the forge, with the warnings it raised.
 	List func(ctx context.Context, f round.ReviewForge) ([]round.FollowUp, []string, error)
 	// Start continues one follow-up in slot and returns the warnings it raised.
@@ -71,9 +76,10 @@ type FollowUpPorts struct {
 // joined into Who; the reserve slots follow the settings.
 func NewFollowUpSources(p FollowUpPorts) FollowUpSources {
 	s := FollowUpSources{
-		Auto:    p.Settings.ReviewLoop == roundcfg.ReviewLoopAuto,
-		Size:    p.Settings.FollowupReserve,
-		Reserve: func() []string { return round.Reserve(p.Registry(), p.Settings) },
+		Auto:     p.Settings.ReviewLoop == roundcfg.ReviewLoopAuto,
+		Size:     p.Settings.FollowupReserve,
+		Reserve:  func() []string { return round.Reserve(p.Registry(), p.Settings) },
+		Receives: p.Receives,
 		List: func(ctx context.Context) ([]FollowUp, error) {
 			if len(p.Registry().PRs()) == 0 {
 				return nil, nil
@@ -155,7 +161,7 @@ func (e Env) askedFollowUps(ctx context.Context, r *Result, started int, taken [
 			pending(f, fmt.Sprintf("this tick already used %d of round.autopilotCap", started))
 			continue
 		}
-		slot, reserve, why := e.followUpSlot(taken)
+		slot, reserve, why := e.followUpSlot(ctx, taken)
 		if slot == "" {
 			pending(f, why)
 			continue
@@ -196,15 +202,22 @@ func (e Env) askedFollowUps(ctx context.Context, r *Result, started int, taken [
 
 // followUpSlot picks a follow-up's receiver: the first idle active slot, else
 // the first reserve slot that is idle or done with its PR (the transfer queues
-// that PR). why names the limiting resource when there is none.
-func (e Env) followUpSlot(taken []string) (slot string, reserve bool, why string) {
+// that PR). Either must also pass the transfer's receiver rule (Receives). why
+// names the limiting resource when there is none.
+func (e Env) followUpSlot(ctx context.Context, taken []string) (slot string, reserve bool, why string) {
+	receives := func(name string, reserve bool) error {
+		if e.FollowUp.Receives == nil {
+			return nil
+		}
+		return e.FollowUp.Receives(ctx, name, reserve)
+	}
 	slots := e.Slots()
 	var active []string
 	if e.Active != nil {
 		active = e.Active()
 	}
 	for _, s := range slots {
-		if !slices.Contains(taken, s.Name) && (active == nil || slices.Contains(active, s.Name)) && (worker.IsIdle(s.State) || s.State == "") && s.Issue == "" {
+		if !slices.Contains(taken, s.Name) && (active == nil || slices.Contains(active, s.Name)) && (worker.IsIdle(s.State) || s.State == "") && s.Issue == "" && receives(s.Name, false) == nil {
 			return s.Name, false, ""
 		}
 	}
@@ -232,7 +245,12 @@ func (e Env) followUpSlot(taken []string) (slot string, reserve bool, why string
 		}
 		s := slots[i]
 		if (worker.IsIdle(s.State) || s.State == "") && s.Issue == "" || worker.IsDone(s.State) && s.PR != "" {
-			return name, true, ""
+			err := receives(name, true)
+			if err == nil {
+				return name, true, ""
+			}
+			busy = append(busy, name+" refused: "+strutil.FirstLine(err.Error()))
+			continue
 		}
 		busy = append(busy, name+" "+strutil.FirstNonEmpty(s.State, "busy"))
 	}
@@ -296,7 +314,7 @@ func (e Env) failedFollowUps(ctx context.Context, r *Result, started int, taken 
 			pending(fmt.Sprintf("this tick already used %d of round.autopilotCap", started))
 			continue
 		}
-		slot, reserve, whyNot := e.followUpSlot(taken)
+		slot, reserve, whyNot := e.followUpSlot(ctx, taken)
 		if slot == "" {
 			pending(whyNot)
 			continue
