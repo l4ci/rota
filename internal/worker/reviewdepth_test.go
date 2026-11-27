@@ -469,7 +469,7 @@ func TestReviewDepthTrackerLabelCase(t *testing.T) {
 				t.Fatal(err)
 			}
 			fold := provider != "gitlab" && provider != "jira"
-			if (got.Depth == config.DepthFull) != fold || (len(got.Lenses) == 1) != fold || (got.Cross == "codex") != fold {
+			if (got.Depth == config.DepthFull) != fold || (len(got.Lenses) == 1) != fold || (got.Cross == harness.Codex) != fold {
 				t.Fatalf("review = %+v, want tracker case folding=%v", got, fold)
 			}
 		})

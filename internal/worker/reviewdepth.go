@@ -337,12 +337,18 @@ func resolveCross(c roundcfg.CrossReview, labels []string, author string, pools 
 	if !c.Active() {
 		return crossResult{}
 	}
+	routes := []string{CrossNone}
+	for _, kind := range harness.Kinds() {
+		if crossReviewer(kind) {
+			routes = append(routes, kind)
+		}
+	}
 	var trigger, route string
 	for _, l := range labels {
 		if trigger == "" && hasLabel(c.Labels, l) {
 			trigger = l
 		}
-		for _, reviewer := range []string{CrossNone, harness.Claude, harness.Codex} {
+		for _, reviewer := range routes {
 			if route != CrossNone && hasLabel([]string{l}, labeldefs.ReviewPrefix+reviewer) {
 				route = reviewer
 			}
