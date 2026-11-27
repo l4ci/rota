@@ -10,7 +10,6 @@ import (
 	"github.com/l4ci/rota/internal/stamp"
 	"github.com/l4ci/rota/internal/strutil"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -244,7 +243,7 @@ func (e Env) closedSinceReview(ctx context.Context, root string, be backlog.Back
 	}
 	n := 0
 	for _, is := range closed {
-		if is.StateReason == tracker.CloseNotPlanned || isRefactorTitle(is.Title) || slices.Contains(is.Labels, RefactorLabel) {
+		if is.StateReason == tracker.CloseNotPlanned || isRefactorTitle(is.Title) || tracker.HasLabel(e.Forge, is.Labels, RefactorLabel) {
 			continue
 		}
 		if !floor.IsZero() {

@@ -2,7 +2,6 @@ package round
 
 import (
 	"context"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -40,7 +39,7 @@ func (e Env) SupportQueue(ctx context.Context, be backlog.Backend, support strin
 	wf, hasWorkflow := backlog.ItemTrackerFor(be)
 	var out []SupportItem
 	for _, it := range items {
-		if it.Closed || !slices.Contains(it.Labels, e.SupportLabel) {
+		if it.Closed || !it.HasLabel(e.SupportLabel) {
 			continue
 		}
 		if err := ctx.Err(); err != nil {

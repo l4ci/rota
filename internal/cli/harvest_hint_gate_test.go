@@ -22,6 +22,8 @@ func (noPRForge) ClosedNumbers(string) []int                    { return nil }
 
 type fixedIssues struct{}
 
+func (fixedIssues) LabelMatcher() tracker.LabelMatcher { return tracker.LabelMatcher{} }
+
 func (fixedIssues) Get(_ context.Context, key tracker.IssueKey, _ bool) (tracker.Issue, error) {
 	return tracker.Issue{Key: key, Title: "t", State: "open"}, nil
 }

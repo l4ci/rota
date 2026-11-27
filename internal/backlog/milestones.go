@@ -216,10 +216,12 @@ func (b *Issues) MilestoneAdd(mid, title, summary string, depends []string, kind
 	return mid, nil
 }
 
-func msStatusOf(is Issue) string {
-	for _, l := range is.Labels {
-		if strings.HasPrefix(l, msStatusPrefix) && slices.Contains(MilestoneStatuses, l[len(msStatusPrefix):]) {
-			return l[len(msStatusPrefix):]
+func (b *Issues) msStatusOf(is Issue) string {
+	for _, name := range is.Labels {
+		for _, status := range MilestoneStatuses {
+			if tracker.HasLabel(b.Tracker, []string{name}, msStatusPrefix+status) {
+				return status
+			}
 		}
 	}
 	if is.State == "closed" {
@@ -252,7 +254,7 @@ func (b *Issues) MilestoneList() ([]ms.Entry, error) {
 		if title == "" {
 			title = is.Title
 		}
-		r := ms.Entry{ID: id, Title: pystr.Strip(title), Status: msStatusOf(is), Depends: ms.IDs(block["Depends"])}
+		r := ms.Entry{ID: id, Title: pystr.Strip(title), Status: b.msStatusOf(is), Depends: ms.IDs(block["Depends"])}
 		if r.Depends == nil {
 			r.Depends = []string{}
 		}
@@ -307,7 +309,7 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 		sort.SliceStable(children, func(i, j int) bool { return tracker.CompareKeys(children[i].Key, children[j].Key) < 0 })
 		var closed []string
 		for _, child := range children {
-			if is.Milestone != "" && child.Milestone == is.Milestone && child.State == "closed" && !slices.Contains(child.Labels, config.Label(b.Cfg, "milestoneTracker")) {
+			if is.Milestone != "" && child.Milestone == is.Milestone && child.State == "closed" && !tracker.HasLabel(b.Tracker, child.Labels, config.Label(b.Cfg, "milestoneTracker")) {
 				closed = append(closed, ms.ClosedItemBullet(child.Key.Ref(), oneLine(child.Title), ""))
 			}
 		}
@@ -317,11 +319,12 @@ func (b *Issues) MilestoneStatus(mid, status string) (bool, error) {
 	label := msStatusPrefix + status
 	var stale []string
 	for _, l := range is.Labels {
-		if strings.HasPrefix(l, msStatusPrefix) && l != label {
+		_, statusLabel := tracker.LabelsFor(b.Tracker).CutPrefix(l, msStatusPrefix)
+		if statusLabel && !tracker.HasLabel(b.Tracker, []string{l}, label) {
 			stale = append(stale, l)
 		}
 	}
-	if !slices.Contains(is.Labels, label) {
+	if !tracker.HasLabel(b.Tracker, is.Labels, label) {
 		if err := mt.AddLabels(b.ctx(), n, []string{label}, b.AutoCreate()); err != nil {
 			return changed, err
 		}
@@ -415,7 +418,7 @@ func (b *Issues) MilestonePut(mid, text string) (bool, error) {
 			}
 			d.Fields["Depends"] = strings.Join(ms.DependsOf(fm), ", ")
 		}
-		text, _ = frontmatter.UpdateField(text, "status", msStatusOf(is))
+		text, _ = frontmatter.UpdateField(text, "status", b.msStatusOf(is))
 		d.Text = ms.JoinChildren(text, children)
 		newBody = RenderFieldsBlock(d.Text, d.Order, d.Fields)
 		return true, nil
@@ -457,7 +460,7 @@ func (b *Issues) SyncMilestoneChildren(mid string) (ChildSync, error) {
 	label := config.Label(b.Cfg, "milestoneTracker")
 	var kids []tracker.Issue
 	for _, c := range list {
-		if c.Milestone == is.Milestone && !slices.Contains(c.Labels, label) {
+		if c.Milestone == is.Milestone && !tracker.HasLabel(b.Tracker, c.Labels, label) {
 			kids = append(kids, c)
 		}
 	}

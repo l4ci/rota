@@ -24,9 +24,11 @@ type Call struct {
 // Fake is the tracker. Fill Issues (and Milestones, the native milestone
 // titles that exist) before use; Comments holds each issue's comments.
 type Fake struct {
-	Issues     []tracker.Issue
-	Milestones []string
-	Calls      []Call
+	// ProviderName chooses label matching; empty keeps the exact-match default.
+	ProviderName string
+	Issues       []tracker.Issue
+	Milestones   []string
+	Calls        []Call
 	// Fail maps a Python-style method name to the error it returns.
 	Fail map[string]error
 	// KeyPrefix, when set, makes Create mint key issues (PROJ-1, PROJ-2) the
@@ -34,6 +36,10 @@ type Fake struct {
 	KeyPrefix string
 
 	nextComment int
+}
+
+func (f *Fake) LabelMatcher() tracker.LabelMatcher {
+	return (tracker.IssueActor{Source: f.ProviderName}).LabelMatcher()
 }
 
 func (f *Fake) rec(method string, args ...any) error {
@@ -169,11 +175,11 @@ func (f *Fake) Edit(_ context.Context, key tracker.IssueKey, e tracker.IssueEdit
 		is.Body = *e.Body
 	}
 	for _, l := range e.AddLabels {
-		if !slices.Contains(is.Labels, l) {
+		if !tracker.HasLabel(f, is.Labels, l) {
 			is.Labels = append(is.Labels, l)
 		}
 	}
-	is.Labels = slices.DeleteFunc(is.Labels, func(l string) bool { return slices.Contains(e.RemoveLabels, l) })
+	is.Labels = slices.DeleteFunc(is.Labels, func(l string) bool { return tracker.HasLabel(f, e.RemoveLabels, l) })
 	if e.Milestone != "" {
 		is.Milestone = e.Milestone
 	}
@@ -199,7 +205,7 @@ func (f *Fake) AddLabels(_ context.Context, key tracker.IssueKey, labels []strin
 		return err
 	}
 	for _, l := range labels {
-		if !slices.Contains(is.Labels, l) {
+		if !tracker.HasLabel(f, is.Labels, l) {
 			is.Labels = append(is.Labels, l)
 		}
 	}
@@ -216,7 +222,7 @@ func (f *Fake) RemoveLabels(_ context.Context, key tracker.IssueKey, labels []st
 	if err != nil {
 		return err
 	}
-	is.Labels = slices.DeleteFunc(is.Labels, func(l string) bool { return slices.Contains(labels, l) })
+	is.Labels = slices.DeleteFunc(is.Labels, func(l string) bool { return tracker.HasLabel(f, labels, l) })
 	return nil
 }
 

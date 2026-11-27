@@ -138,7 +138,7 @@ func (e Env) Candidates(ctx context.Context, root string, be backlog.Backend, o 
 	if o.Support != "" && o.Role == roundcfg.RoleSupport {
 		slices.SortStableFunc(chosen, func(a, b backlog.Item) int {
 			pinned := func(it backlog.Item) int {
-				if slices.Contains(roundcfg.PinsOf(it.Labels), o.Support) {
+				if it.HasLabel(roundcfg.MachineLabel(o.Support)) {
 					return 0
 				}
 				return 1

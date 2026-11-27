@@ -6,7 +6,6 @@ import (
 	ms "github.com/l4ci/rota/internal/milestone"
 	"os"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,7 +44,7 @@ func issueRows(be Backend, umbrella bool, onHold string) ([]Row, error) {
 	for _, it := range items {
 		r := Row{ID: it.ID, Key: it.Key(), Number: it.Number, Type: it.Type, Tag: it.Tag,
 			Title: it.Title, Section: sectionOfLetter(it.Type), Raw: it.Line, Fields: it.Fields,
-			OnHold: onHold != "" && slices.Contains(it.Labels, onHold)}
+			OnHold: onHold != "" && it.HasLabel(onHold)}
 		if umbrella {
 			r.Repo = it.Fields.Get("repos")
 		}

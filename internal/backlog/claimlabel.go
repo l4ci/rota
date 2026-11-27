@@ -16,13 +16,18 @@ const claimLabelPrefix = labels.ClaimPrefix
 
 // IsClaimLabel reports whether label is a visible, derived claim marker.
 // It recognizes the prefix only; it does not validate the agent or machine.
-func IsClaimLabel(label string) bool {
-	return strings.HasPrefix(label, claimLabelPrefix)
+func IsClaimLabel(label string, matchers ...tracker.LabelMatcher) bool {
+	var matcher tracker.LabelMatcher
+	if len(matchers) > 0 {
+		matcher = matchers[0]
+	}
+	_, ok := matcher.CutPrefix(label, claimLabelPrefix)
+	return ok
 }
 
 // HasClaimLabel reports whether labels contains a claim marker.
-func HasClaimLabel(labels []string) bool {
-	return slices.ContainsFunc(labels, IsClaimLabel)
+func HasClaimLabel(labels []string, matchers ...tracker.LabelMatcher) bool {
+	return slices.ContainsFunc(labels, func(label string) bool { return IsClaimLabel(label, matchers...) })
 }
 
 var claimLabelID = regexp.MustCompile(`^([a-z][a-z0-9-]*)@[0-9]+$`)
@@ -60,7 +65,7 @@ func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 		return nil, nil, err
 	}
 	if is.State == "closed" {
-		remove = closedIssueLabels(is, config.ClosedIssueLabels(b.Cfg))
+		remove = closedIssueLabels(is, config.ClosedIssueLabels(b.Cfg), tracker.LabelsFor(b.Tracker))
 		slices.Sort(remove)
 		return nil, remove, nil
 	}
@@ -77,12 +82,16 @@ func (b *Issues) ClaimLabelDrift(ref string) (add, remove []string, err error) {
 		}
 	}
 	for label := range want {
-		if !slices.Contains(is.Labels, label) {
+		if !tracker.HasLabel(b.Tracker, is.Labels, label) {
 			add = append(add, label)
 		}
 	}
+	expected := make([]string, 0, len(want))
+	for label := range want {
+		expected = append(expected, label)
+	}
 	for _, label := range is.Labels {
-		if IsClaimLabel(label) && !want[label] {
+		if IsClaimLabel(label, tracker.LabelsFor(b.Tracker)) && !tracker.HasLabel(b.Tracker, expected, label) {
 			remove = append(remove, label)
 		}
 	}
@@ -119,6 +128,7 @@ func (b *Issues) SyncClaimLabels(ref string) (changed bool, err error) {
 
 // ClaimLabelTracker is the tracker surface needed to clean up a closed issue.
 type ClaimLabelTracker interface {
+	tracker.LabelSource
 	tracker.ClaimReader
 	RemoveLabels(context.Context, tracker.IssueKey, []string) error
 }
@@ -133,7 +143,7 @@ func CleanupClosedIssueLabels(ctx context.Context, tr ClaimLabelTracker, key tra
 	if err != nil {
 		return nil, err
 	}
-	drop = closedIssueLabels(is, workflow)
+	drop = closedIssueLabels(is, workflow, tracker.LabelsFor(tr))
 	if len(drop) == 0 {
 		return nil, nil
 	}
@@ -142,12 +152,12 @@ func CleanupClosedIssueLabels(ctx context.Context, tr ClaimLabelTracker, key tra
 
 // closedIssueLabels is the shared cleanup and drift rule. Keep input order for
 // removal diagnostics; drift sorts its result for a stable comparison.
-func closedIssueLabels(is tracker.Issue, workflow []string) (drop []string) {
+func closedIssueLabels(is tracker.Issue, workflow []string, matcher tracker.LabelMatcher) (drop []string) {
 	if is.State != "closed" {
 		return nil
 	}
 	for _, label := range is.Labels {
-		if IsClaimLabel(label) || slices.Contains(workflow, label) {
+		if IsClaimLabel(label, matcher) || matcher.HasLabel(workflow, label) {
 			drop = append(drop, label)
 		}
 	}

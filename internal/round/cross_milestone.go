@@ -136,8 +136,13 @@ func (c *crossMilestones) check(it backlog.Item) ([]string, error) {
 		if dep.Closed {
 			tags = nil
 			for _, label := range dep.Labels {
-				if id, ok := strings.CutPrefix(label, labels.OnMilestonePrefix); ok && id != "" {
-					tags = append(tags, id)
+				if id, ok := dep.CutLabelPrefix(label, labels.OnMilestonePrefix); ok && id != "" {
+					if canonical := strings.ToUpper(id); dep.HasLabel(labels.OnMilestonePrefix + canonical) {
+						id = canonical
+					}
+					if !slices.Contains(tags, id) {
+						tags = append(tags, id)
+					}
 				}
 			}
 			state = "merged on the milestone branch only"

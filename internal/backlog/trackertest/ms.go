@@ -39,7 +39,7 @@ func (f *MS) List(ctx context.Context, fl tracker.ListFilter) ([]tracker.Issue, 
 	for _, is := range all {
 		ok := !slices.Contains(f.lagged, is.Key)
 		for _, l := range fl.Labels {
-			ok = ok && slices.Contains(is.Labels, l)
+			ok = ok && tracker.HasLabel(f, is.Labels, l)
 		}
 		if ok {
 			out = append(out, is)

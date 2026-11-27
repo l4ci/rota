@@ -2,7 +2,6 @@ package backlog
 
 import (
 	"context"
-	"slices"
 	"sort"
 	"strconv"
 
@@ -327,7 +326,7 @@ func (b *Issues) releaseGate(mid string, optional bool) (blocked []Blocker, warn
 		}
 		hit := ""
 		for _, l := range roles {
-			if slices.Contains(is.Labels, l) {
+			if tracker.HasLabel(b.Tracker, is.Labels, l) {
 				hit = l
 				break
 			}
@@ -412,7 +411,7 @@ func (b *Issues) labelReleased(mid, tag string, optional bool) (issues int, chan
 			continue
 		}
 		issues++
-		if !slices.Contains(is.Labels, label) {
+		if !tracker.HasLabel(b.Tracker, is.Labels, label) {
 			if err := b.Tracker.AddLabels(b.ctx(), is.Key, []string{label}, b.AutoCreate()); err != nil {
 				return issues, changed, err
 			}

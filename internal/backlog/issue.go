@@ -7,7 +7,6 @@ import (
 	"github.com/l4ci/rota/internal/itemid"
 	ms "github.com/l4ci/rota/internal/milestone"
 	"regexp"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +38,7 @@ func KeyTag(letter string, k tracker.IssueKey) string {
 // exactly those methods, with the Adapter's own signatures. A missing issue is
 // a *tracker.Error of KindNotFound, never an error message to parse.
 type Tracker interface {
+	tracker.LabelSource
 	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
 	List(ctx context.Context, f tracker.ListFilter) ([]tracker.Issue, error)
 	Create(ctx context.Context, title, body string, labels []string, milestone string) (tracker.IssueKey, error)
@@ -112,7 +112,7 @@ func (b *Issues) Rows() ([]Row, error) { return issueRows(b, false, config.Label
 // carries, else "T" (_letter).
 func (b *Issues) Letter(is Issue) string {
 	for _, t := range Types {
-		if t.Role != "" && slices.Contains(is.Labels, config.Label(b.Cfg, t.Role)) {
+		if t.Role != "" && tracker.HasLabel(b.Tracker, is.Labels, config.Label(b.Cfg, t.Role)) {
 			return t.Letter
 		}
 	}
@@ -122,7 +122,7 @@ func (b *Issues) Letter(is Issue) string {
 // IsMilestoneTracker reports whether the issue is a milestone tracking issue,
 // which is not an item (_is_tracker).
 func (b *Issues) IsMilestoneTracker(is Issue) bool {
-	return slices.Contains(is.Labels, config.Label(b.Cfg, "milestoneTracker"))
+	return tracker.HasLabel(b.Tracker, is.Labels, config.Label(b.Cfg, "milestoneTracker"))
 }
 
 // tag is the priority (bugs) or size (features) taken from the labels (_tag).
@@ -131,7 +131,7 @@ func (b *Issues) tag(is Issue, letter string) string {
 	case "B":
 		pre := config.Label(b.Cfg, "priorityPrefix")
 		for _, l := range is.Labels {
-			rest, ok := strings.CutPrefix(l, pre)
+			rest, ok := tracker.LabelsFor(b.Tracker).CutPrefix(l, pre)
 			if ok && rest != "" && allDigits(rest) {
 				return "P" + rest
 			}
@@ -139,8 +139,14 @@ func (b *Issues) tag(is Issue, letter string) string {
 	case "F":
 		pre := config.Label(b.Cfg, "sizePrefix")
 		for _, l := range is.Labels {
-			if strings.HasPrefix(l, pre) && len(l) > len(pre) {
-				return l[len(pre):]
+			if value, ok := tracker.LabelsFor(b.Tracker).CutPrefix(l, pre); ok && value != "" {
+				typ, _ := TypeByLetter(letter)
+				for _, tag := range strings.Fields(typ.Tags) {
+					if tracker.HasLabel(b.Tracker, []string{l}, pre+tag) {
+						return tag
+					}
+				}
+				return value
 			}
 		}
 	}
@@ -486,14 +492,15 @@ func (b *Issues) item(is Issue) *Item {
 	_, block, _ := ParseFieldsBlock(is.Body)
 	letter := b.Letter(is)
 	it := &Item{
-		ID:     is.Key.String(),
-		Type:   letter,
-		Tag:    b.tag(is, letter),
-		Title:  pystr.Strip(strings.TrimRight(oneLine(strings.ReplaceAll(is.Title, "*", "")), ".")),
-		Closed: is.State == "closed",
-		Number: is.Num(),
-		URL:    is.URL,
-		Labels: is.Labels,
+		ID:           is.Key.String(),
+		Type:         letter,
+		Tag:          b.tag(is, letter),
+		Title:        pystr.Strip(strings.TrimRight(oneLine(strings.ReplaceAll(is.Title, "*", "")), ".")),
+		Closed:       is.State == "closed",
+		Number:       is.Num(),
+		URL:          is.URL,
+		Labels:       is.Labels,
+		labelMatcher: tracker.LabelsFor(b.Tracker),
 	}
 	if it.Title == "" {
 		it.Title = "(untitled)"

@@ -326,6 +326,7 @@ type MilestoneEdit struct {
 // IssueTracker directly is a write by definition; assumedForge holds only an
 // IssueReader and refuses everything else.
 type IssueReader interface {
+	LabelSource
 	Provider() string
 	// CheckAuth fails with KindUnavailable unless the tracker's CLI is
 	// installed and logged in.

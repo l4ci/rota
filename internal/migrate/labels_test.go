@@ -96,3 +96,25 @@ func TestRelabelSupportReportsPartialWrite(t *testing.T) {
 		t.Fatalf("partial write rows=%v err=%v", rows, err)
 	}
 }
+
+// A tracker may return a filter superset. Local checks must use its rule too.
+func TestRelabelSupportTrackerCase(t *testing.T) {
+	for _, provider := range []string{"github", "linear", "itsaplan", "gitlab", "jira"} {
+		t.Run(provider, func(t *testing.T) {
+			f := labelFake()
+			f.ProviderName = provider
+			f.Issues = []tracker.Issue{{Key: tracker.NumKey(1), State: "open", Labels: []string{"Remote"}}}
+			rows, err := RelabelSupport(context.Background(), f, "remote", "machine:mac", true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := provider != "gitlab" && provider != "jira"
+			if (len(rows) == 1 && rows[0].Changed) != want {
+				t.Fatalf("migration rows = %v, want changed=%v", rows, want)
+			}
+			if want && !slices.Equal(f.Issues[0].Labels, []string{"machine:mac"}) {
+				t.Fatalf("labels after migration = %v", f.Issues[0].Labels)
+			}
+		})
+	}
+}

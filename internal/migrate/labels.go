@@ -3,7 +3,6 @@ package migrate
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/roundcfg"
@@ -25,6 +24,7 @@ func (e *LabelConflictError) Error() string {
 
 // LabelTracker is the tracker surface used by the label migration.
 type LabelTracker interface {
+	tracker.LabelSource
 	List(context.Context, tracker.ListFilter) ([]tracker.Issue, error)
 	EnsureLabels(context.Context, []string, bool) error
 	AddLabels(context.Context, tracker.IssueKey, []string, bool) error
@@ -48,12 +48,12 @@ func RelabelSupport(ctx context.Context, t LabelTracker, from, to string, apply 
 	ensured := false
 	for _, is := range issues {
 		// Backends and fakes may return a superset of the requested filter.
-		if is.State != "open" || !slices.Contains(is.Labels, from) {
+		if is.State != "open" || !tracker.HasLabel(t, is.Labels, from) {
 			continue
 		}
 		conflict := false
-		for _, pin := range roundcfg.PinsOf(is.Labels) {
-			if roundcfg.MachineLabel(pin) != to {
+		for _, pin := range roundcfg.PinsOf(is.Labels, tracker.LabelsFor(t).CutPrefix) {
+			if !tracker.HasLabel(t, []string{roundcfg.MachineLabel(pin)}, to) {
 				conflicts.Issues = append(conflicts.Issues, is.Key.String()+": "+roundcfg.MachineLabel(pin))
 				conflict = true
 			}
@@ -74,7 +74,7 @@ func RelabelSupport(ctx context.Context, t LabelTracker, from, to string, apply 
 				ensured = true
 			}
 			wrote := false
-			if !slices.Contains(is.Labels, to) {
+			if !tracker.HasLabel(t, is.Labels, to) {
 				if err := t.AddLabels(ctx, is.Key, []string{to}, true); err != nil {
 					return rows, err
 				}

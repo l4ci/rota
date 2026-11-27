@@ -326,6 +326,7 @@ type Forge interface {
 // label a landed PR releases. It is the issue source (issues.source), not the
 // forge; a file source has none.
 type Issues interface {
+	tracker.LabelSource
 	Get(ctx context.Context, key tracker.IssueKey, withComments bool) (tracker.Issue, error)
 	RemoveLabels(ctx context.Context, key tracker.IssueKey, labels []string) error
 	// ClosesIssue is the tracker's own closing convention: a keyword in the PR

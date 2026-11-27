@@ -18,6 +18,7 @@ import (
 
 // ReviewIssues is the issue read the depth resolver needs.
 type ReviewIssues interface {
+	tracker.LabelSource
 	Get(context.Context, tracker.IssueKey, bool) (tracker.Issue, error)
 }
 

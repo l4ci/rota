@@ -327,6 +327,8 @@ func TestGateBehaviourTrustReadFailureBreaksTheCheck(t *testing.T) {
 // bareIssues is an issue source that cannot say who wrote an issue.
 type bareIssues struct{ f *fakeForge }
 
+func (b bareIssues) LabelMatcher() tracker.LabelMatcher { return b.f.LabelMatcher() }
+
 func (b bareIssues) Get(ctx context.Context, k tracker.IssueKey, c bool) (tracker.Issue, error) {
 	return b.f.Get(ctx, k, c)
 }

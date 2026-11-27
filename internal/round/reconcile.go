@@ -129,7 +129,7 @@ func (e Env) findClosedClaimLabels(ctx context.Context, rep *Report) {
 		if is.State != "closed" || seen[is.Key.String()] {
 			continue
 		}
-		if backlog.HasClaimLabel(is.Labels) || slices.ContainsFunc(is.Labels, func(l string) bool { return slices.Contains(workflow, l) }) {
+		if backlog.HasClaimLabel(is.Labels, tracker.LabelsFor(e.Forge)) || slices.ContainsFunc(is.Labels, func(l string) bool { return tracker.HasLabel(e.Forge, workflow, l) }) {
 			keys = append(keys, is.Key)
 			seen[is.Key.String()] = true
 		}

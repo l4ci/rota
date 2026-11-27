@@ -9,7 +9,6 @@ import (
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/tracker"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -257,7 +256,7 @@ func (g *gateRun) closeMerged(src tracker.ClosingSource) bool {
 			continue
 		}
 		is, err := g.issues.Get(g.ctx, key, false)
-		if err == nil && slices.Contains(is.Labels, PartialSliceLabel) {
+		if err == nil && tracker.HasLabel(g.issues, is.Labels, PartialSliceLabel) {
 			continue
 		}
 		if err == nil {

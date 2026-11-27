@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/blockedby"
@@ -62,7 +61,7 @@ func migrateLabels(fs *flag.FlagSet) RunFunc {
 				return backlogFail(err)
 			}
 			for _, issue := range issues {
-				if issue.State == "open" && slices.Contains(issue.Labels, from) {
+				if issue.State == "open" && tracker.HasLabel(tr, issue.Labels, from) {
 					return blockedRefusal(nil, blockedby.Config, "round.support must name the support machine before migrating labels", "open issues still carry "+from)
 				}
 			}
