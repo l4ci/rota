@@ -666,6 +666,25 @@ func TestUmbrellaReleaseReview(t *testing.T) {
 	}
 }
 
+// Coverage is milestone-wide: --repo does not narrow it, and a sub-repo without
+// the milestone adds nothing instead of failing the read.
+func TestUmbrellaReleaseFeaturesCoversEverySubRepo(t *testing.T) {
+	u, f := rrUmbrella(t)
+	one, err := (&Umbrella{Cfg: u.Cfg, CountProof: u.CountProof, Repos: u.Repos[:1], NewTracker: u.NewTracker}).ReleaseFeatures("M07")
+	if err != nil || len(one) == 0 {
+		t.Fatalf("gh alone: %v %v", one, err)
+	}
+	u.Scope = "gl"
+	if both, err := u.ReleaseFeatures("M07"); err != nil || len(both) != 2*len(one) {
+		t.Fatalf("both: %d of %d, %v", len(both), len(one), err)
+	}
+	u, f = rrUmbrella(t)
+	f["gl"].MS.Native = nil
+	if got, err := u.ReleaseFeatures("M07"); err != nil || len(got) != len(one) {
+		t.Fatalf("gl without the milestone: %d, %v", len(got), err)
+	}
+}
+
 // rrReleased gives the completed issues of M07 their released label and
 // comment, so a close has none of either left to write.
 func rrReleased(t *testing.T, f *rrFake, tag string) {
