@@ -108,7 +108,7 @@ type shipVerdictLookup struct {
 
 // shipVerdict is the B3 verdict gate for the checkout in dir. root holds its store.
 func shipVerdict(c *Ctx, dir, root string) shipVerdictLookup {
-	v := shipVerdictLookup{c: c, dir: dir, root: root, repo: repos.VerdictRepo(root, dir, c.Repo)}
+	v := shipVerdictLookup{c: c, dir: dir, root: root, repo: repos.VerdictRepo(c.deps().Git, root, dir, c.Repo)}
 	v.Check = v.local()
 	return v
 }

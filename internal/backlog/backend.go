@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/repos"
 
 	"github.com/l4ci/rota/internal/config"
@@ -225,6 +226,8 @@ type SubRepoScoped interface {
 
 // Options configure Open.
 type Options struct {
+	// Git resolves the working directory; nil uses git.Exec.
+	Git git.Runner
 	// Scope narrows an umbrella's reads and bare references to one sub-repo.
 	Scope string
 	// Cwd is the working directory; an umbrella derives its CwdRepo from it.
@@ -274,7 +277,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		u.Warn = opts.Warn
 		u.Scope = opts.Scope
 		if opts.Cwd != "" {
-			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
+			u.CwdRepo = CwdSubRepo(opts.Git, opts.Cwd, u.Repos)
 		}
 		return u, nil
 	}

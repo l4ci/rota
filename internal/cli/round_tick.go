@@ -355,7 +355,7 @@ func (w *tickWorld) ReviewReadiness(slot, base string) (string, bool) {
 	observe := w.observe
 	ctx, stop := w.c.workerContext()
 	defer stop()
-	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, VerdictRepo: repos.VerdictRepo(w.root, w.root, w.c.Repo), ItemBody: lazyItemBody(w.c, w.root)})
+	r, err := workerEnvCtx(w.c, ctx).Gate(ctx, w.root, worker.GateOpts{Slot: slot, Base: base, ReviewsOnly: true, Observe: observe, VerdictRepo: repos.VerdictRepo(w.c.deps().Git, w.root, w.root, w.c.Repo), ItemBody: lazyItemBody(w.c, w.root)})
 	return roundtick.ReviewReadinessOf(r, err, slot)
 }
 

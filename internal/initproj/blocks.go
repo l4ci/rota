@@ -2,6 +2,7 @@ package initproj
 
 import (
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 
 	"github.com/l4ci/rota/internal/knowledge"
 	"github.com/l4ci/rota/internal/mapqa"
@@ -73,7 +74,7 @@ func Blocks(root string, milestone func() (changed bool, err error)) BlocksResul
 		if knowledge.UmbrellaOnlyBlock(key) {
 			return knowledge.Umbrella
 		}
-		return st.DefaultScope(root)
+		return knowledge.DefaultScope(git.Exec, root, repos.Load(root))
 	}
 	if milestone == nil {
 		milestone = func() (bool, error) { return ms.Index(root) }
