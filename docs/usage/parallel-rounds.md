@@ -935,7 +935,8 @@ checks, `round.maxBounces` and, later, the merge gate. Under `manual` the tick o
 `round.followupReserve: N` (default 0) keeps the N roster names after the round's slots for
 follow-ups. `round start` provisions them; `round assign` and the tick never put backlog work there.
 When every round slot is busy, a follow-up takes a free reserve slot: an idle one, or one whose
-follow-up is done (its PR goes back to review). A reserve slot that holds work drains like any slot
+follow-up is done (its PR goes back to review). A slot that `round transfer` would refuse, for
+example one with uncommitted changes, is passed over. A reserve slot that holds work drains like any slot
 past `round.slots`, so restarting the watch or the round loses nothing. `round status` shows a busy
 reserve slot as `draining` and an idle one as a plain idle row.
 

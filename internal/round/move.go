@@ -990,24 +990,10 @@ func (e Env) planTransferRun(ctx context.Context, root string, be Board, o Trans
 		return nil, blocked(blockedby.MergeInProgress, "slot %s is mid-merge (MERGE_HEAD) in its worktree: wait for the worker to commit or abort it before moving %s", sender.Name(), id)
 	}
 	if !toHuman {
-		if run.to = reg.Slot(o.To); run.to == nil {
-			return nil, &exitcode.Error{Exit: exitcode.ExitResolution, Message: fmt.Sprintf("slot %s is not provisioned: run rota round start", o.To)}
-		}
-		if err := fenceExternal(run.to, "transfer", "check a branch out in a worktree"); err != nil {
+		if run.queueTo, err = e.receiverCheck(ctx, root, be, reg, set, o.To, resuming, o.Reserve); err != nil {
 			return nil, err
 		}
-		if err := checkActive(reg, set, o.To, resuming, o.Reserve); err != nil {
-			return nil, err
-		}
-		if !resuming {
-			if h := run.to.HeldID(); h != "" {
-				ok, why := e.parkable(ctx, root, be, run.to)
-				if !ok {
-					return nil, blocked(blockedby.SlotBusy, "%s", busyMsg(o.To, h, why))
-				}
-				run.queueTo = true
-			}
-		}
+		run.to = reg.Slot(o.To)
 	} else if !e.forgeOn(be) {
 		return nil, unavailable("handing %s to the human needs the issue tracker (the %s label); this project has none", id, e.NeedsHuman)
 	}
