@@ -167,8 +167,15 @@ func reviewTarget(c *Ctx, args []string, what, base, since string) (reviewSpan, 
 	if err != nil {
 		return t, err
 	}
-	if t.Branch == t.Base {
-		return t, Failed("cannot %s base branch '%s' against itself", what, t.Base)
+	if t.DefaultBaseErr != nil {
+		return t, t.DefaultBaseErr
+	}
+	guardBase := t.DefaultBase
+	if base != "" {
+		guardBase = t.Base
+	}
+	if t.Branch == guardBase {
+		return t, Failed("cannot %s base branch '%s' against itself", what, guardBase)
 	}
 	return t, nil
 }

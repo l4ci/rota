@@ -32,10 +32,13 @@ func reviewPackage(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		// Explicit package ranges reach the empty-range check below; --since
-		// may even select commits when the explicit base equals the branch.
-		if *baseFlag == "" && t.Branch == t.Base {
-			return Result{}, Failed("cannot package base branch '%s' against itself", t.Base)
+		// Package refuses the resolved base branch regardless of comparison
+		// overrides. Other branches may still have empty ranges.
+		if t.DefaultBaseErr != nil {
+			return Result{}, t.DefaultBaseErr
+		}
+		if t.Branch == t.DefaultBase {
+			return Result{}, Failed("cannot package base branch '%s' against itself", t.DefaultBase)
 		}
 		ctx := c.Context()
 		r := c.deps().Repo(t.Dir)

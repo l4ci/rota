@@ -668,6 +668,9 @@ func TestReviewPackage(t *testing.T) {
 // refusal to review the project's base branch.
 func TestReviewEmptyRangeExitCodes(t *testing.T) {
 	plain, _ := reviewProject(t)
+	gittest.Run(t, plain, "branch", "older", "main~1")
+	gittest.Run(t, plain, "update-ref", "refs/remotes/origin/main", "main")
+	gittest.Run(t, plain, "checkout", "-q", "main")
 	for _, tc := range []struct {
 		name string
 		args []string
@@ -680,9 +683,20 @@ func TestReviewEmptyRangeExitCodes(t *testing.T) {
 		{"scaffolding base", []string{"review", "scaffolding", "main", "--base", "main"}, 0},
 		{"scaffolding empty", []string{"review", "scaffolding", "empty"}, 0},
 		{"classify base", []string{"change", "classify", "main"}, 1},
+		{"classify base explicit self", []string{"change", "classify", "main", "--base", "main"}, 1},
+		{"classify base explicit feature", []string{"change", "classify", "main", "--base", "feat/x"}, 0},
+		{"classify base explicit older", []string{"change", "classify", "main", "--base", "older"}, 0},
 		{"classify empty", []string{"change", "classify", "empty"}, 0},
 		{"classify explicit self", []string{"change", "classify", "feat/x", "--base", "feat/x"}, 1},
 		{"package base", []string{"review", "package", "main"}, 1},
+		{"package base explicit self", []string{"review", "package", "main", "--base", "main"}, 1},
+		{"package base explicit feature", []string{"review", "package", "main", "--base", "feat/x"}, 1},
+		{"package base explicit remote", []string{"review", "package", "main", "--base", "origin/main"}, 1},
+		{"package base explicit older", []string{"review", "package", "main", "--base", "older"}, 1},
+		{"package base explicit missing", []string{"review", "package", "main", "--base", "missing"}, 1},
+		{"package base with since", []string{"review", "package", "main", "--base", "main", "--since", "older"}, 1},
+		{"package current base explicit self", []string{"review", "package", "--base", "main"}, 1},
+		{"package current base explicit older", []string{"review", "package", "--base", "older"}, 1},
 		{"package empty", []string{"review", "package", "empty"}, 3},
 		{"package explicit self", []string{"review", "package", "feat/x", "--base", "feat/x"}, 3},
 		{"package since tip", []string{"review", "package", "feat/x", "--since", "feat/x"}, 3},
@@ -694,6 +708,23 @@ func TestReviewEmptyRangeExitCodes(t *testing.T) {
 				t.Errorf("%v: exit %d, want %d: %s", tc.args, o.code, tc.want, o.stderr)
 			}
 		})
+	}
+}
+
+// A PR base changes the review span, not the identity of the resolved base
+// branch that review commands refuse to review.
+func TestReviewResolvedBaseBranchRefusal(t *testing.T) {
+	plain, _ := reviewProject(t)
+	write(t, filepath.Join(plain, ".rota", "config.json"), `{"forge":{"provider":"github"}}`)
+	deps := testDeps()
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _ proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: `[{"number":10,"headRefName":"main","baseRefName":"feat/x","isCrossRepository":false}]`}, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	for _, verb := range [][]string{{"review", "scope"}, {"review", "brief"}, {"review", "depth"}, {"review", "package"}, {"change", "classify"}} {
+		o := trRunWith(t, deps, plain, "", append(verb, "main")...)
+		if o.code != 1 {
+			t.Errorf("%v main: exit %d, want 1: %s", verb, o.code, o.stderr)
+		}
 	}
 }
 
