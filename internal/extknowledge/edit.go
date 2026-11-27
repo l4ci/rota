@@ -107,6 +107,13 @@ func (c Clone) replace(ctx context.Context, in ReplaceIn) (WriteResult, error) {
 		pol, err := c.Policy()
 		return WriteResult{Policy: pol}, err
 	}
+	// A case change in place introduces no title.
+	oldTitle, _ := bulletfmt.Title(e.lines[hit])
+	if newTitle, _ := bulletfmt.Title(edited[0]); !strings.EqualFold(oldTitle, newTitle) {
+		if err := bulletfmt.CheckFree(e.lines, hit, newTitle); err != nil {
+			return WriteResult{}, fmt.Errorf("%w (in %q)", err, in.Topic)
+		}
+	}
 	copy(e.lines[hit:end], edited)
 	text, _ := bulletfmt.SplitStamp(edited[0])
 	return e.land(ctx, fmt.Sprintf("knowledge: replace text in %q of %s", titleOrLine(text), in.Topic))

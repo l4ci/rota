@@ -16,8 +16,8 @@ import (
 var (
 	// ErrNotFound: a topic, bullet or file named by the caller does not exist.
 	ErrNotFound = bulletfmt.ErrNotFound
-	// ErrExists: the target of a rename already exists.
-	ErrExists = errors.New("already exists")
+	// ErrExists: the target of a rename, or a new bullet title, is already taken.
+	ErrExists = bulletfmt.ErrExists
 	// ErrAmbiguous: a fragment matches in more than one file.
 	ErrAmbiguous = errors.New("ambiguous")
 	// ErrMultiMatch: a fragment, title or legacy tier key can match multiple bullets.
@@ -295,10 +295,28 @@ func storedTitle(km, topic, title string) (string, error) {
 	return hit.Title, nil
 }
 
+// checkMoveTarget refuses a bullet move into a topic that already holds title.
+// A missing file or topic is left for renameLocked to report.
+func checkMoveTarget(km, topic, title string) error {
+	content, err := ReadFile(km)
+	if err != nil {
+		return err
+	}
+	st, en, ok := section.Find(content, topic)
+	if !ok {
+		return nil
+	}
+	if err := bulletfmt.CheckFree(strings.Split(content[st:en], "\n"), -1, title); err != nil {
+		return fmt.Errorf("%w (under '## %s' in %s)", err, topic, km)
+	}
+	return nil
+}
+
 // RenameTopic renames the "## from" heading to "## to" and re-keys the
 // sidecar entries (topic mode, title empty), or moves the single bullet
 // titled title from one topic to the other and re-keys its entry (bullet
-// mode; "## to" must exist). from == to is a no-op.
+// mode; "## to" must exist and hold no bullet of that title, else
+// ErrExists). from == to is a no-op.
 func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) {
 	mode := "topic"
 	if title != "" {
@@ -320,6 +338,12 @@ func (s Store) RenameTopic(scope, from, to, title string) (RenameResult, error) 
 		// The sidecar is keyed by the stored title, not the typed one.
 		if mode == "bullet" {
 			if title, err = storedTitle(km, from, title); err != nil {
+				return err
+			}
+		}
+		// Before the preflight and the hit fold: a refusal writes nothing.
+		if mode == "bullet" {
+			if err := checkMoveTarget(km, to, title); err != nil {
 				return err
 			}
 		}
@@ -431,7 +455,8 @@ type ReplaceResult struct {
 // bullet is its "- " line plus indented continuations (see bulletfmt.End), so
 // wrapped bullets match as a whole and prose after them is never touched. It refuses with ErrMultiMatch when old sits in more
 // than one bullet and returns ErrNotFound when it sits in none. When the edit
-// changes the bullet's bold title, the tier entry is re-keyed to the new one.
+// changes the bullet's bold title, the tier entry is re-keyed to the new one;
+// a title another bullet of the topic holds is ErrExists.
 // old == new is a no-op.
 func (s Store) Replace(scope, topic, old, new string) (ReplaceResult, error) {
 	if err := bulletfmt.CheckLine("replacement", new); err != nil {
@@ -479,6 +504,12 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 	}
 	oldTitle, _ := bulletfmt.Title(lines[h])
 	newTitle, _ := bulletfmt.Title(edited[0])
+	// A case change in place introduces no title.
+	if !strings.EqualFold(oldTitle, newTitle) {
+		if err := bulletfmt.CheckFree(lines, h, newTitle); err != nil {
+			return res, fmt.Errorf("%w (under '## %s' in %s)", err, topic, km)
+		}
+	}
 	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Retitle(topic, oldTitle, newTitle); return err }); err != nil {
 			return res, err
