@@ -80,7 +80,7 @@ Use the glossary's names for domain concepts. Do not re-suggest what a recorded 
 
 Dispatch one exploration subagent on `orchestrator.model` (`light` is enough for a small area), scoped to the area. With an `<area>`, rank files by inbound imports, then size, then recent change. With none, rank by churn first (`git log --since=90.days --name-only --pretty=format: | sort | uniq -c | sort -rn`), then inbound imports, then size; read the top fifth in full plus one hop of callers and importers; sample the rest. Stop at 8 to 12 findings, or after 30+ files with no new kind of friction in the last 5. Do not pad.
 
-Per finding it reports files with line ranges, one concrete case (Step 4), the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). It also reports the areas it did not read, sampled files included. No interface proposals.
+Read [`less-code.md`](less-code.md) into the brief: it also looks for code to delete or shrink, in the same pass and under the same cap. Per finding it reports files with line ranges, one concrete case (Step 4), the friction in vocabulary terms, the deletion-test result, what is hard to test today and the dependency category (Step 3). It also reports the areas it did not read, sampled files included. No interface proposals.
 
 ### Step 3 — Rank
 
@@ -162,6 +162,7 @@ Read [`fix-path.md`](fix-path.md) when `--fix` was passed and follow it. `--fix`
 
 ## References
 
+- [`less-code.md`](less-code.md): the less-code finding kinds, net line estimate, impact tier and batching of small findings.
 - [`options.md`](options.md): umbrella projects, `--map` mode, `--interactive` filing, recording rejections.
 - [`fix-path.md`](fix-path.md): `--fix` configuration, clean-tree guard and the fix steps.
 - [`references/refactor-design-approaches.md`](references/refactor-design-approaches.md): competing-interface choreography for `--designs`.
