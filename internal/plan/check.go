@@ -22,6 +22,7 @@ type Report struct {
 	Orphans   []string  // tasks whose Serves line names no criterion (or is missing)
 	Unknown   []Unknown // tasks serving an id the item lacks
 	NoVerify  []string  // tasks without a Verify step
+	NoTasks   bool      // the Tasks section has no task bullet; not part of Ok
 
 	UncoveredDecisions []string  // decisions no task honors
 	UnknownDecisions   []Unknown // tasks honoring a decision the item lacks
@@ -88,7 +89,9 @@ func Check(body string, ids, decisions []string) Report {
 	honored := map[string]bool{}
 	var r Report
 
-	for _, tb := range taskBlocks(body) {
+	blocks := taskBlocks(body)
+	r.NoTasks = len(blocks) == 0
+	for _, tb := range blocks {
 		task, block := tb.name, tb.lines
 		var serves []string
 		for _, l := range block {
