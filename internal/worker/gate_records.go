@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/config"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/proof"
 	"github.com/l4ci/rota/internal/strutil"
@@ -17,14 +18,16 @@ import (
 // attempt the slot no longer holds: a worker whose assignment was reclaimed or
 // transferred pushed it, with or without --attempt on its verbs. It judges the
 // commits after the branch tip the current attempt inherited, which keep their
-// earlier trailers, so a transfer never turns the new holder's PR away. It
+// earlier trailers, so a transfer never turns the new holder's PR away.
+// Commits on the base or the default branch are not judged. It
 // reads the slot, not the queued record, and runs under CheckOnly too.
 //
 // Anything it cannot tell passes: a slot with no attempt (assigned before the
 // fence), an unstamped commit, an inherited tip that is not an ancestor of the
 // head (a rebase rewrote it) or a log that fails.
-func (runner gateRun) stepAttempt(result landing.GateResult, target GateTarget, refs gateRefsResult) (struct{}, landing.GateResult, bool, error) {
+func (runner gateRun) stepAttempt(result landing.GateResult, target GateTarget, remote bool, refs gateRefsResult) (struct{}, landing.GateResult, bool, error) {
 	g := runner.operation(result, target, gateForgeResult{})
+	g.remote = remote
 	g.headRef, g.baseRef, g.verified = refs.head, refs.base, refs.localHead
 	finish := func(done bool, err error) (struct{}, landing.GateResult, bool, error) {
 		return struct{}{}, *g.res, done, err
@@ -37,6 +40,11 @@ func (runner gateRun) stepAttempt(result landing.GateResult, target GateTarget, 
 	// The base's own commits (a merge of main into the branch brings other
 	// workers' stamped commits) are nobody's attempt here: exclude them too.
 	rng := []string{g.headRef, "^" + g.baseRef}
+	// A milestone base lags the default branch, so a sync merge brings commits
+	// the base lacks that have already landed (#4263).
+	if def := g.defaultRef(); def != "" {
+		rng = append(rng, "^"+def)
+	}
 	if t.AttemptBase != "" {
 		if inherited, err := g.isAncestor(g.root, t.AttemptBase, g.headRef); err != nil || !inherited {
 			// A rebase rewrote the inherited tip, or git could not read it: the
@@ -61,6 +69,23 @@ func (runner gateRun) stepAttempt(result landing.GateResult, target GateTarget, 
 		}
 	}
 	return finish(false, nil)
+}
+
+// defaultRef is the project's default branch as this gate reads refs (the
+// remote's copy on a remote gate), "" when it cannot be resolved: nothing extra
+// is excluded then, so the attempt check stays as strict as the base alone.
+func (g *gateRun) defaultRef() string {
+	name, ok, err := git.Repo{Dir: g.root, Runner: g.e.Git}.Base(g.ctx, g.in.cfg.BaseBranch)
+	if err != nil || !ok {
+		return ""
+	}
+	if g.remote {
+		name = g.rem() + "/" + name
+	}
+	if _, code := g.git(g.root, "rev-parse", "--verify", "--quiet", name+"^{commit}"); code != 0 {
+		return ""
+	}
+	return name
 }
 
 // partialLifted reports whether a partial outcome no longer stands: every

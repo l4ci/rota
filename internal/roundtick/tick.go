@@ -327,7 +327,7 @@ func Run(ctx context.Context, e Env) (Result, error) {
 		// Do not keep such entries pinned to an otherwise unchanged head.
 		for target, prev := range r.FailedHeads {
 			v, _, _ := strings.Cut(prev.Why, ":")
-			if !failedHeadVerdict(v) {
+			if !landing.ClassifyVerdict(v).HoldHead {
 				delete(r.FailedHeads, target)
 			}
 		}
@@ -562,13 +562,13 @@ func (e Env) merge(ctx context.Context, r *Result, targets []string) error {
 				}
 				r.gateFailed[m.Target] = FailedHead{Head: head, Why: why}
 			}
-			if e.Head != nil && failedHeadVerdict(m.Verdict) || e.Head == nil && m.Hold {
+			if e.Head != nil && landing.ClassifyVerdict(m.Verdict).HoldHead || e.Head == nil && m.Hold {
 				r.Held[m.Target] = why
 				if head := heads[m.Target]; head != "" {
 					r.FailedHeads[m.Target] = FailedHead{Head: head, Why: why}
 				}
 			}
-			r.NeedsYou = append(r.NeedsYou, heldItem(m.Target, why, e.Head != nil && failedHeadVerdict(m.Verdict)))
+			r.NeedsYou = append(r.NeedsYou, heldItem(m.Target, why, e.Head != nil && landing.ClassifyVerdict(m.Verdict).HoldHead))
 		}
 	}
 	return nil
@@ -598,24 +598,12 @@ func heldItem(target, why string, atHead bool) Item {
 	return Item{Kind: "gate-failed", Target: target, Why: why}
 }
 
-// failedHeadVerdict identifies results that judged the head's content. A CI
-// failure and a failed train verification both use GateVerifyFailed; merge
-// conflicts use GateStale; members red only together use GateInteraction. Refusals and infrastructure errors can clear without
-// a push, so they are reported for this tick and retried on the next one.
-func failedHeadVerdict(v string) bool {
-	switch v {
-	case landing.GateStale, landing.GateVerifyFailed, landing.GateVacuousTests, landing.GateInteraction:
-		return true
-	default:
-		return false
-	}
-}
-
 // mergeAll groups the targets by the base each merges into, in first-seen
 // order: a lone target is a gate, several a train. A target that did not land
-// is reported with its verdict; whether it is held for a person is the
-// verdict's call: a stale or provenance refusal goes back to the worker uncounted and
-// returns, any other failure waits for a person.
+// is reported with its verdict. With head tracking, stale, verify-failed,
+// vacuous-tests and interaction stay held at that head; provenance failures
+// retry next tick. Under round.reviewLoop auto, routable queued failures go
+// to worker follow-ups; interactions remain the orchestrator's to fix.
 func (e Env) mergeAll(ctx context.Context, r *Result, targets []string) []Merged {
 	prs := make([]roundcfg.FillPR, len(targets))
 	for i, t := range targets {

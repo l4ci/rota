@@ -261,22 +261,12 @@ func (e Env) followUpSlot(ctx context.Context, taken []string) (slot string, res
 	return "", false, why
 }
 
-// routedVerdict is a gate verdict the follow-up step hands back to a worker
-// (#4247): one about the PR's content that a push fixes. An interaction is the
-// orchestrator's to fix, and an infrastructure refusal clears without a push.
-func routedVerdict(v string) bool {
-	switch v {
-	case landing.GateStale, landing.GateProvenanceFail, landing.GateVerifyFailed, landing.GateVacuousTests:
-		return true
-	}
-	return false
-}
-
 // failedFollowUps (#4247) starts a follow-up for each queued PR whose current
-// head failed the gate with a routed verdict, this tick or an earlier one: its
-// worker moved on (assign-ahead or a manual assign), so nobody else would fix
-// it. Only under round.reviewLoop auto; otherwise, or for an interaction, it
-// stays under "needs you" as before. It shares the cap and the slots with the
+// head failed with a RouteToWorker verdict: its worker moved on (assign-ahead
+// or a manual assign), so nobody else would fix it. Stale failures stay held
+// at their head across ticks; provenance failures retry the gate and are routed
+// from this tick's result. Only under round.reviewLoop auto; otherwise, or for
+// an interaction, it stays under "needs you". It shares the cap and slots with the
 // follow-ups people asked for. A head that moved since the gate starts nothing:
 // the new head gets its own gate. One that cannot start stays reported and its
 // failure kept, so a later tick tries again.
@@ -300,7 +290,7 @@ func (e Env) failedFollowUps(ctx context.Context, r *Result, started int, taken 
 			continue
 		}
 		why := failedWhy(r, ref, head)
-		if v, _, _ := strings.Cut(why, ":"); !routedVerdict(v) {
+		if v, _, _ := strings.Cut(why, ":"); !landing.ClassifyVerdict(v).RouteToWorker {
 			continue
 		}
 		pending := func(reason string) {
