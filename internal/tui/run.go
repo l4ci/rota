@@ -71,6 +71,11 @@ func (c Cmd) zero() bool { return c.Exec == nil && !c.Quit && c.Async == nil }
 // background load.
 type Starter interface{ Init() Cmd }
 
+// escWait is how long Run waits after a read that ends inside an escape
+// sequence. A terminal sends a sequence in one burst, so a longer pause means
+// the ESC was the Esc key (or the sequence never ends, and is dropped).
+const escWait = 50 * time.Millisecond
+
 // asyncPoll is how often Run looks for a finished Async while it waits for a key.
 const asyncPoll = 25 * time.Millisecond
 
@@ -87,7 +92,9 @@ type Terminal struct {
 	Style Style
 	// Tick, when set, sends Update a Tick that often while no key arrives.
 	// It needs an In with SetReadDeadline; on a terminal file that has none,
-	// Run reads /dev/tty instead, and with neither no Tick comes.
+	// Run reads /dev/tty instead, and with neither no Tick comes. The same
+	// deadline bounds escWait: without one, a read that ends in a lone ESC is
+	// the Esc key at once, so an escape sequence split there is not rejoined.
 	Tick time.Duration
 	// Signals delivers SIGINT and SIGTERM while the terminal is raw, Resize
 	// delivers SIGWINCH; nil listens on the process. Exit ends the process
@@ -169,6 +176,8 @@ func Run(t Terminal, m Model) error {
 	}
 
 	buf := make([]byte, 64)
+	var dec decoder
+	var escAt time.Time // when the wait on an unfinished escape ends; zero: not started
 	next := time.Now().Add(t.Tick)
 	var cmd Cmd
 	if s, ok := m.(Starter); ok {
@@ -181,25 +190,46 @@ func Run(t Terminal, m Model) error {
 		}
 		var msgs []Msg
 		if !first {
+			escArmed := false
 			if dl != nil {
-				at := next
-				if p := time.Now().Add(asyncPoll); pending > 0 && p.Before(at) {
-					at = p
+				var at time.Time
+				if t.Tick > 0 {
+					at = next
+					if p := time.Now().Add(asyncPoll); pending > 0 && p.Before(at) {
+						at = p
+					}
+				}
+				if dec.escaped() {
+					if escAt.IsZero() {
+						escAt = time.Now().Add(escWait)
+					}
+					if at.IsZero() || escAt.Before(at) {
+						at, escArmed = escAt, true
+					}
 				}
 				dl.SetReadDeadline(at)
 			}
 			n, rerr := in.Read(buf)
+			var keys []Key
 			switch {
-			case dl != nil && errors.Is(rerr, os.ErrDeadlineExceeded):
+			case errors.Is(rerr, os.ErrDeadlineExceeded) && escArmed:
+				keys = dec.flush()
+			case errors.Is(rerr, os.ErrDeadlineExceeded) && dl != nil && t.Tick > 0:
 				if pending == 0 || !time.Now().Before(next) {
 					msgs, next = []Msg{Tick{}}, time.Now().Add(t.Tick)
 				}
 			case n == 0 && rerr != nil:
-				return nil
-			default:
-				for _, k := range DecodeKeys(buf[:n]) {
-					msgs = append(msgs, k)
+				if keys = dec.flush(); len(keys) == 0 {
+					return nil
 				}
+			case n > 0:
+				keys, escAt = dec.feed(buf[:n]), time.Time{}
+				if dl == nil && dec.loneEsc() {
+					keys = append(keys, dec.flush()...)
+				}
+			}
+			for _, k := range keys {
+				msgs = append(msgs, k)
 			}
 			for ; pending > 0; pending-- {
 				select {
@@ -219,6 +249,10 @@ func Run(t Terminal, m Model) error {
 				break // the rest of the read was typed at the old screen
 			}
 		}
+		if !cmd.zero() {
+			dec.discard()
+			escAt = time.Time{}
+		}
 		for !cmd.zero() {
 			d.set(m)
 			start(cmd)
@@ -234,7 +268,7 @@ func Run(t Terminal, m Model) error {
 					dl.SetReadDeadline(time.Time{})
 				}
 				var stop bool
-				if err, stop = d.handOver(cmd, in, buf); stop {
+				if err, stop = d.handOver(cmd, in, buf, &dec); stop {
 					return err
 				}
 			} else if err = cmd.Exec(); cmd.Quit {
@@ -248,7 +282,7 @@ func Run(t Terminal, m Model) error {
 // handOver runs a Cooked Exec on a cooked terminal and takes raw mode back.
 // stop says Run ends, with err: the Cmd quits, raw mode is lost, or the
 // input ended at "press any key".
-func (d *driver) handOver(cmd Cmd, in io.Reader, buf []byte) (err error, stop bool) {
+func (d *driver) handOver(cmd Cmd, in io.Reader, buf []byte, dec *decoder) (err error, stop bool) {
 	d.leave()
 	d.leave = nil
 	fmt.Fprint(d.t.Out, ClearScreen)
@@ -264,20 +298,21 @@ func (d *driver) handOver(cmd Cmd, in io.Reader, buf []byte) (err error, stop bo
 	}
 	if cmd.Wait {
 		fmt.Fprint(d.t.Out, "\npress any key")
-		if n, _ := in.Read(buf); n == 0 {
+		n, _ := in.Read(buf)
+		if n == 0 {
 			return nil, true
 		}
+		// The key answers the prompt, also when only its start was read.
+		dec.feed(buf[:n])
+		dec.discard()
 	}
 	return err, false
 }
 
-// input is where keys come from. With a Tick it must take a read deadline:
+// input is where keys come from, with its read deadline when it takes one:
 // a terminal file opened by the shell often cannot, /dev/tty opened here can.
 func (d *driver) input() (io.Reader, deadliner, func()) {
 	in := d.t.In
-	if d.t.Tick <= 0 {
-		return in, nil, func() {}
-	}
 	if dl, ok := in.(deadliner); ok && dl.SetReadDeadline(time.Time{}) == nil {
 		return in, dl, func() {}
 	}

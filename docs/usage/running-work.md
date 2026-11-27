@@ -15,6 +15,8 @@ The orchestrator plans tasks, dispatches workers in parallel (one per task), ver
 
 **Precondition:** a clean working tree. Files that tools generate beside your work (a lockfile, a codegen output) are swept into a `chore:` commit and the run continues. Any other uncommitted change of yours stops it: commit or stash first.
 
+On the file backend, the target item's `.rota/designs/<ID>.md` and `.rota/plans/<milestone>-<ID>.md` are swept too: for `B07`, a plan is named `M01-B07.md`. Another item's plan or a slice plan remains a user change. An empty or whitespace-only design or plan file does not satisfy `rota item ready`.
+
 **Status tracking:** registers in `.rota/status.json` at start so [`/rota-work` (no argument)](picking-work.md) in another session knows those items are in progress.
 
 **Start in one call:** `rota work start` does the clean-tree guard, the sibling sweep, the branch name (`rota/<id>-<slug>`, or `--branch <name>`), the branch or worktree per [`work.isolation`](#isolation-branch-vs-worktree), the status registration and, on a tracker, the claim. Rerunning it changes nothing. Round workers and umbrella projects keep the step-by-step path; the verb refuses them.

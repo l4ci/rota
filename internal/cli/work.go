@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/l4ci/rota/internal/artifact"
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
@@ -307,8 +308,8 @@ func workClassify(ctx context.Context, r git.Repo, ids []string) (tool []string,
 		case cycle.ToolSibling:
 			tool = append(tool, p)
 		case cycle.Artifact:
-			base := strings.TrimSuffix(p[strings.LastIndex(p, "/")+1:], ".md")
-			artifacts[base] = append(artifacts[base], p)
+			id := artifact.ItemFileOwner(p, ids)
+			artifacts[id] = append(artifacts[id], p)
 		default:
 			user = append(user, p)
 		}

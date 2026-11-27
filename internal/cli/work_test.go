@@ -10,6 +10,7 @@ import (
 
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/plan"
 	"github.com/l4ci/rota/internal/status"
 )
 
@@ -126,9 +127,16 @@ func TestWorkStartSweepsSiblings(t *testing.T) {
 	write(t, filepath.Join(root, "Foo.gd.uid"), "uid://x\n")
 	write(t, filepath.Join(root, ".DS_Store"), "x")
 	write(t, filepath.Join(root, ".rota", "designs", "B01.md"), "design\n")
-	write(t, filepath.Join(root, ".rota", "plans", "B01.md"), "plan\n")
+	store := plan.Files(root)
+	ref, err := store.Resolve("M01-B01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(ref, func(string) string { return "plan\n" }); err != nil {
+		t.Fatal(err)
+	}
 	d := runOKWith(t, workDeps(""), root, 0, "work", "start", "B01")
-	want := []any{".DS_Store", "Foo.gd.uid", ".rota/designs/B01.md", ".rota/plans/B01.md"}
+	want := []any{".DS_Store", "Foo.gd.uid", ".rota/designs/B01.md", ".rota/plans/M01-B01.md"}
 	if !reflect.DeepEqual(list(d, "swept"), want) {
 		t.Fatalf("swept %v", get(d, "swept"))
 	}
@@ -141,6 +149,30 @@ func TestWorkStartSweepsSiblings(t *testing.T) {
 	}
 	if got := strings.TrimSpace(gittest.Run(t, root, "rev-parse", "--abbrev-ref", "HEAD")); got != "rota/b01-quick-switch-overlay" {
 		t.Fatalf("current branch %q", got)
+	}
+}
+
+func TestWorkStartRefusesUnrelatedPlans(t *testing.T) {
+	for _, key := range []string{"M01-B02", "M01-S01"} {
+		t.Run(key, func(t *testing.T) {
+			root := workRepo(t, "")
+			store := plan.Files(root)
+			ref, err := store.Resolve(key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := store.Create(ref, func(string) string { return "plan\n" }); err != nil {
+				t.Fatal(err)
+			}
+			d := runOKWith(t, workDeps(""), root, ExitFailed, "work", "start", "B01")
+			want := []any{".rota/plans/" + key + ".md"}
+			if !reflect.DeepEqual(list(d, "dirty"), want) {
+				t.Fatalf("dirty = %v, want %v", list(d, "dirty"), want)
+			}
+			if log := gittest.Run(t, root, "log", "--format=%s"); log != "seed" {
+				t.Fatalf("refusal made a commit: %s", log)
+			}
+		})
 	}
 }
 
