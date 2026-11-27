@@ -196,10 +196,12 @@ func (e Env) pickSlots(ctx context.Context, root string, reg worker.Registry, se
 
 // FreeSlot previews the slot a new assignment would select, without
 // parking or dispatching it. Advice uses the same active-slot, login and clean
-// worktree checks as assign rather than treating every done slot as free.
+// worktree checks as assign rather than treating every done slot as free. Like
+// assign it needs the project root and an env with account picking on, or the
+// login check judges a slot by an account it will not run under.
 // warnings name the slots skipped for an unresolved Core delivery.
-func (e Env) FreeSlot(ctx context.Context, reg worker.Registry, set roundcfg.Settings) (name string, ok bool, warnings []string) {
-	slots, _, unresolved := e.pickSlots(ctx, "", reg, set, "", 1)
+func (e Env) FreeSlot(ctx context.Context, root string, reg worker.Registry, set roundcfg.Settings) (name string, ok bool, warnings []string) {
+	slots, _, unresolved := e.pickSlots(ctx, root, reg, set, "", 1)
 	if len(unresolved) > 0 {
 		warnings = []string{"skipped slots with an unresolved delivery: " + strings.Join(unresolved, "; ")}
 	}
