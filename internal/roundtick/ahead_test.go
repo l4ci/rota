@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/round"
+	"github.com/l4ci/rota/internal/roundcfg"
 )
 
 // #4247 AC-1, AC-2: a done slot whose PR is a merge target takes the next
@@ -38,6 +39,93 @@ func TestAssignAheadFillsDoneTargetBeforeMerge(t *testing.T) {
 	}
 	if len(r.NeedsYou) != 0 {
 		t.Fatalf("needs you %+v", r.NeedsYou)
+	}
+}
+
+// An unreadable head keeps the done slot on its current issue, just as it
+// keeps that PR out of the gate. This also applies without a previous failure.
+func TestAssignAheadUnreadableHeadKeepsDoneSlot(t *testing.T) {
+	for _, readErr := range []error{errors.New("forge unavailable\nretry later"), nil} {
+		for _, failed := range []bool{false, true} {
+			name := "empty head"
+			if readErr != nil {
+				name = "read error"
+			}
+			if failed {
+				name += "/previous failure"
+			}
+			t.Run(name, func(t *testing.T) {
+				slot := Slot{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}
+				f := &fake{slots: []Slot{slot}, cands: []round.Candidate{cand("#5", true)}}
+				e := f.env()
+				f.withAhead(&e)
+				e.Head = func(context.Context, string) (string, error) { return "", readErr }
+				previous := FailedHead{Head: "old-head", Why: "verify-failed: tests failed"}
+				if failed {
+					e.FailedHeads = map[string]FailedHead{"wolf": previous}
+				}
+				r, err := Run(context.Background(), e)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(f.ahead)+len(f.assigned)+len(f.gated)+len(f.trained) != 0 || f.slots[0] != slot || len(f.queued) != 0 {
+					t.Fatalf("unreadable head changed assignment or landed: ahead=%v assigned=%v gated=%v trained=%v slots=%+v queued=%v", f.ahead, f.assigned, f.gated, f.trained, f.slots, f.queued)
+				}
+				why := "cannot read PR head; not retrying the gate"
+				if readErr != nil {
+					why += ": forge unavailable"
+				}
+				if want := []Item{{Kind: "gate-failed", Target: "wolf", Why: why}}; !reflect.DeepEqual(r.NeedsYou, want) {
+					t.Fatalf("needs you %+v, want %+v", r.NeedsYou, want)
+				}
+				if failed && r.FailedHeads["wolf"] != previous {
+					t.Fatalf("unreadable head forgot previous failure: %v", r.FailedHeads)
+				}
+			})
+		}
+	}
+}
+
+func TestAssignAheadSharesMergeReadiness(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		failed      map[string]FailedHead
+		trainFill   bool
+		bypass      bool
+		wantBlocked bool
+	}{
+		{name: "held slot head", failed: map[string]FailedHead{"wolf": {Head: "current", Why: "verify-failed"}}, wantBlocked: true},
+		{name: "held head follows PR", failed: map[string]FailedHead{"#11": {Head: "current", Why: "verify-failed"}}, wantBlocked: true},
+		{name: "new head clears failure", failed: map[string]FailedHead{"wolf": {Head: "old", Why: "verify-failed"}}},
+		{name: "not ready for fill", trainFill: true, wantBlocked: true},
+		{name: "fill bypass follows queued PR", trainFill: true, bypass: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &fake{
+				slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}},
+				cands: []round.Candidate{cand("#5", true)},
+			}
+			e := f.env()
+			f.withAhead(&e)
+			e.Head = func(context.Context, string) (string, error) { return "current", nil }
+			e.FailedHeads = tc.failed
+			if tc.trainFill {
+				e.TrainFill = roundcfg.TrainFill{Max: 4}
+				e.TrainReady = func(string) bool { return false }
+				e.FillBypass = func(target string) bool { return tc.bypass && target == "wolf" }
+			}
+			r, err := Run(context.Background(), e)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantBlocked {
+				if len(f.ahead)+len(f.gated)+len(f.trained) != 0 || len(r.NeedsYou) != 1 {
+					t.Fatalf("blocked target assigned or landed: ahead=%v gated=%v trained=%v needsYou=%+v", f.ahead, f.gated, f.trained, r.NeedsYou)
+				}
+			} else if !slices.Equal(f.ahead, []string{"#5->wolf"}) || !slices.Equal(f.gated, []string{"main:#11"}) || len(r.NeedsYou) != 0 {
+				t.Fatalf("due target not assigned and landed: ahead=%v gated=%v needsYou=%+v", f.ahead, f.gated, r.NeedsYou)
+			}
+		})
 	}
 }
 

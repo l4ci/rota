@@ -807,7 +807,10 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
    `round.autoBundle` on, strictly related small issues go to one slot as a bundle, see
    [Bundles](#bundles-one-worker-several-small-issues)). A done slot whose PR this tick lands gets
    its next issue first (assign-ahead), before the gate starts, and the PR then lands from the
-   review list. A refused assign leaves the slot a plain merge target; a PR the queue does not
+   review list. Merge and assign-ahead check the same PR-head holds and train readiness.
+   If the PR head cannot be read, the slot keeps its current issue and the tick reports
+   the read failure in `needsYou`; it tries again on the next tick.
+   A refused assign leaves the slot a plain merge target; a PR the queue does not
    hold after the assign is dropped from the tick and shows in `needsYou` as kind `assign-ahead`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling
    down from a usage limit, steps 3 to 5 are skipped and the tick says why (`capped`). Likewise
