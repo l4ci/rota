@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/l4ci/rota/internal/marker"
@@ -41,7 +42,12 @@ func (c claimComments) claims(ctx context.Context, key IssueKey) ([]Comment, err
 		return nil, err
 	}
 	out := slices.DeleteFunc(cs, func(c Comment) bool { _, ok := claimOf(c.Body); return !ok })
-	slices.SortStableFunc(out, func(a, b Comment) int {
+	sortClaimComments(out)
+	return out, nil
+}
+
+func sortClaimComments(cs []Comment) {
+	slices.SortStableFunc(cs, func(a, b Comment) int {
 		if c := a.CreatedAt.Compare(b.CreatedAt); c != 0 {
 			return c
 		}
@@ -50,22 +56,52 @@ func (c claimComments) claims(ctx context.Context, key IssueKey) ([]Comment, err
 		}
 		return strings.Compare(a.ID, b.ID)
 	})
-	return out, nil
+}
+
+// ClaimState reads plain claims and release markers. Marker claims on a
+// claim-store tracker are not authoritative ownership records.
+func (c claimComments) ClaimState(ctx context.Context, key IssueKey) (ClaimState, error) {
+	cs, err := c.list(ctx, key)
+	if err != nil {
+		return ClaimState{}, err
+	}
+	sortClaimComments(cs)
+	var history []Comment
+	var folded []marker.ClaimComment
+	var held []string
+	times := map[string]time.Time{}
+	for _, cm := range cs {
+		if id, ok := claimOf(cm.Body); ok {
+			history = append(history, Comment{ID: cm.ID, Body: marker.Claim(id), CreatedAt: cm.CreatedAt})
+			if !slices.Contains(held, id) {
+				held = append(held, id)
+				if !cm.CreatedAt.IsZero() {
+					times[id] = cm.CreatedAt
+				}
+			}
+		} else if verb, _, ok := marker.ParseClaim(cm.Body); ok && verb == marker.KindRelease {
+			history = append(history, cm)
+			if id, at, commentID, ok := marker.ParseClaimHistory(cm.Body); ok {
+				history = append(history, Comment{ID: commentID, Body: marker.Claim(id), CreatedAt: at})
+			}
+		}
+	}
+	sortClaimComments(history)
+	for _, cm := range history {
+		folded = append(folded, marker.ClaimComment{Body: cm.Body, At: cm.CreatedAt})
+	}
+	st := marker.FoldClaims(folded)
+	// Failed deletion can leave a released comment present. Presence remains
+	// authoritative until deletion completes, as it is for the id-only read.
+	st.Held, st.ClaimedAt = held, times
+	st.HandReleased = slices.DeleteFunc(st.HandReleased, func(id string) bool { return slices.Contains(held, id) })
+	return st, nil
 }
 
 // Claims lists the claim ids on key, earliest first, each once.
 func (c claimComments) Claims(ctx context.Context, key IssueKey) ([]string, error) {
-	cs, err := c.claims(ctx, key)
-	if err != nil {
-		return nil, err
-	}
-	var out []string
-	for _, cm := range cs {
-		if id, _ := claimOf(cm.Body); !slices.Contains(out, id) {
-			out = append(out, id)
-		}
-	}
-	return out, nil
+	st, err := c.ClaimState(ctx, key)
+	return st.Held, err
 }
 
 // PutClaim posts id's claim comment. A second one changes nothing: the
@@ -88,6 +124,12 @@ func (c claimComments) DropClaim(ctx context.Context, key IssueKey, id string, b
 	body := marker.Release(id)
 	if byHand {
 		body = marker.HandRelease(id)
+	}
+	for _, cm := range cs {
+		if got, _ := claimOf(cm.Body); got == id {
+			body += "\n" + marker.ClaimHistory(id, cm.CreatedAt, cm.ID)
+			break
+		}
 	}
 	if err := c.add(ctx, key, body); err != nil {
 		return err

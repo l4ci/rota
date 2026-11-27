@@ -357,6 +357,8 @@ type IssueTracker interface {
 // it (Jira, Linear and Itsaplan, as plain `Claimed by` comments) takes claims
 // this way. Releases retain markers so deliberate releases survive reconcile.
 type ClaimStore interface {
+	// ClaimState includes server claim times and ordered claim/release history.
+	ClaimState(ctx context.Context, key IssueKey) (ClaimState, error)
 	// Claims lists the claim ids held on key, earliest first.
 	Claims(ctx context.Context, key IssueKey) ([]string, error)
 	// PutClaim records id's claim on key; a claim already held keeps its place.

@@ -76,7 +76,7 @@ func TestSupportQueueMarksItemsUnknownWithoutItemStatus(t *testing.T) {
 // its tracker.
 type historyBoard struct {
 	*fakeRemote
-	comments []tracker.Comment
+	events []tracker.ClaimEvent
 }
 
 func (b *historyBoard) Capabilities() backlog.Capabilities {
@@ -85,8 +85,8 @@ func (b *historyBoard) Capabilities() backlog.Capabilities {
 	return c
 }
 
-func (b *historyBoard) ClaimComments(_ tracker.IssueKey) ([]tracker.Comment, bool, error) {
-	return b.comments, true, nil
+func (b *historyBoard) ClaimEvents(_ tracker.IssueKey) ([]tracker.ClaimEvent, bool, error) {
+	return b.events, true, nil
 }
 
 func reclaimedFixture(t *testing.T) (string, Env, *fakeRemote) {
@@ -98,10 +98,10 @@ func reclaimedFixture(t *testing.T) (string, Env, *fakeRemote) {
 
 func TestAdoptClaimBlocksOnReclaimedHistory(t *testing.T) {
 	root, e, fr := reclaimedFixture(t)
-	be := &historyBoard{fakeRemote: fr, comments: []tracker.Comment{
-		{Body: marker.Claim("ben@3")},
-		{Body: marker.Line(marker.KindRelease, "ben@3")},
-		{Body: marker.Claim("dana@7")},
+	be := &historyBoard{fakeRemote: fr, events: []tracker.ClaimEvent{
+		{Verb: marker.KindClaim, ID: "ben@3"},
+		{Verb: marker.KindRelease, ID: "ben@3"},
+		{Verb: marker.KindClaim, ID: "dana@7"},
 	}}
 	_, err := e.checkAdoptClaim(bg, root, be, "ben/12-thing", "12")
 	if err == nil || blockedBy(t, err) != blockedby.Claimed {
