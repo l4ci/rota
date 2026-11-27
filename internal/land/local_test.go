@@ -163,6 +163,9 @@ func TestLandLocalMergeFailure(t *testing.T) {
 	for _, abortFails := range []bool{false, true} {
 		t.Run(map[bool]string{false: "aborted", true: "cleanup failed"}[abortFails], func(t *testing.T) {
 			run := func(args ...string) (git.Result, error) {
+				if strings.Join(args, " ") == "diff --name-only -z --diff-filter=U" {
+					return git.Result{}, nil // the conflict's paths, read before the abort
+				}
 				if args[0] != "merge" {
 					t.Fatalf("read-back or cleanup ran after failed merge: %v", args)
 				}

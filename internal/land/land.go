@@ -23,9 +23,11 @@ var ErrUnpinned = errors.New("land: no commit to pin the merge to")
 type Git = git.Bound
 
 // ConflictError is a local merge that conflicted. Aborted reports whether
-// git confirmed the abort succeeded.
+// git confirmed the abort succeeded. Paths are the files git held unmerged
+// before the abort, byte-exact; empty when they could not be listed.
 type ConflictError struct {
 	Out     string
+	Paths   []string
 	Aborted bool
 }
 
@@ -86,6 +88,9 @@ func MergeLocal(run Git, commit, msg string, recover Git) error {
 	if err == nil {
 		if git.IsMergeConflict(out) {
 			conflict = &ConflictError{Out: out}
+			// Read before the abort clears the index. The list only words the
+			// report, so a failed read does not change the outcome.
+			conflict.Paths, _ = git.UnmergedPaths(run)
 			err = conflict
 		} else {
 			err = &MergeError{Code: res.ExitCode, Out: out}

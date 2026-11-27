@@ -7,7 +7,6 @@ import (
 )
 
 func TestClassifyRefusal(t *testing.T) {
-	conflictOut := "CONFLICT (content): Merge conflict in a.go\nCONFLICT (modify/delete): b.go deleted in HEAD"
 	w := Words{Failed: "merge failed", Conflict: "conflicts in: {paths}", ConflictHint: "fix {paths}"}
 	cases := []struct {
 		name     string
@@ -17,9 +16,9 @@ func TestClassifyRefusal(t *testing.T) {
 		hint     string
 		wantPath []string
 	}{
-		{"conflict", &ConflictError{Out: conflictOut, Aborted: true}, FailConflict, "conflicts in: a.go, b.go deleted in HEAD", "fix a.go, b.go deleted in HEAD", []string{"a.go", "b.go deleted in HEAD"}},
-		{"conflict without paths", &ConflictError{Out: "x"}, FailConflict, "conflicts in: (see git merge output)", "fix (see git merge output)", []string{"(see git merge output)"}},
-		{"wrapped conflict", fmt.Errorf("w: %w", &ConflictError{Out: "x"}), FailConflict, "conflicts in: (see git merge output)", "fix (see git merge output)", []string{"(see git merge output)"}},
+		{"conflict", &ConflictError{Paths: []string{"a.go", "b\n.go"}, Aborted: true}, FailConflict, `conflicts in: a.go, "b\n.go"`, `fix a.go, "b\n.go"`, []string{"a.go", "b\n.go"}},
+		{"conflict without paths", &ConflictError{Out: "x"}, FailConflict, "conflicts in: (see git merge output)", "fix (see git merge output)", nil},
+		{"wrapped conflict", fmt.Errorf("w: %w", &ConflictError{Out: "x"}), FailConflict, "conflicts in: (see git merge output)", "fix (see git merge output)", nil},
 		{"merge", &MergeError{Code: 128, Out: " no identity \n"}, FailMerge, "merge failed (exit 128): no identity", "", nil},
 		{"cleanup", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}, FailCleanup, "merge failed: " + (&CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}).Error(), "", nil},
 		{"wrapped cleanup over conflict", fmt.Errorf("w: %w", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}), FailCleanup, "merge failed: " + fmt.Errorf("w: %w", &CleanupError{Merge: &ConflictError{Out: "x"}, Cleanup: errors.New("locked")}).Error(), "", nil},

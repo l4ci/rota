@@ -446,6 +446,33 @@ func TestApplyNeverClosesATabAnAgentTookOver(t *testing.T) {
 	}
 }
 
+func TestApplyLeavesTabsOpenWhenRefreshedHostIsUnreadable(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		report *round.Report
+	}{
+		{"nil report", nil},
+		{"host unavailable", &round.Report{Unavailable: []string{round.SourceHost}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &fakeHost{tabs: []host.Tab{tab("w1:t1", "/r/.worktrees/old", true)}}
+			in := input(repo(nil, nil), nil, nil, h)
+			found := find(t, in, KindTab)
+			if len(found.Candidates) != 1 || found.Candidates[0].Held != "" {
+				t.Fatalf("expected an otherwise removable tab: %+v", found)
+			}
+			in.Refresh = func(context.Context) (*round.Report, error) { return tc.report, nil }
+			got := Apply(bg, in, found.Candidates)
+			if len(h.closed) != 0 || len(got.Reaped) != 0 {
+				t.Fatalf("unreadable host closed tabs: closed=%v result=%+v", h.closed, got)
+			}
+			if len(got.Failed) != 1 || !strings.Contains(got.Failed[0].Error, "host unavailable") {
+				t.Fatalf("expected host-unavailable refusal: %+v", got)
+			}
+		})
+	}
+}
+
 func TestApplyReprovesABranchBeforeDeleting(t *testing.T) {
 	g := repo(nil, []string{"kit/5-ok"}, "kit/5-ok")
 	in := input(g, nil, []host.Agent{}, nil)
@@ -469,13 +496,13 @@ func TestFindSelectsDiscoveryByKind(t *testing.T) {
 		hostCalls []string
 		leases    int
 	}{
-		{"omitted", nil, all, true, true, []string{"tabs"}, 1},
-		{"empty", []string{}, all, true, true, []string{"tabs"}, 1},
+		{"omitted", nil, all, true, true, []string{"tabs"}, 2},
+		{"empty", []string{}, all, true, true, []string{"tabs"}, 2},
 		{"worktree", []string{KindWorktree}, []string{"worktree:done"}, true, false, nil, 0},
 		{"branch", []string{KindBranch}, []string{"branch:kit/9-old"}, false, true, nil, 0},
 		{"tab", []string{KindTab}, []string{"tab:w1:t1"}, false, false, []string{"tabs"}, 0},
 		{"lease", []string{KindLease}, []string{"lease:round"}, false, false, nil, 1},
-		{"skillcache", []string{KindSkillCache}, []string{"skillcache:old"}, false, false, nil, 0},
+		{"skillcache", []string{KindSkillCache}, []string{"skillcache:old"}, false, false, nil, 1},
 		{"combined reversed with duplicate", []string{KindLease, KindTab, KindBranch, KindLease}, []string{"branch:kit/9-old", "tab:w1:t1", "lease:round"}, false, true, []string{"tabs"}, 1},
 		{"unknown", []string{"unknown"}, []string{}, false, false, nil, 0},
 	} {
@@ -745,6 +772,7 @@ func TestReapListsOnlyOrphanedExtractDirs(t *testing.T) {
 	}
 	in := input(repo(nil, nil), nil, nil, nil)
 	in.SkillCache, in.SkillCacheKeep = cache, "0.19.0"
+	in.Lease = &fakeLease{st: roundlease.Live} // orphan extraction cleanup is independent of rounds
 	res := find(t, in, KindSkillCache)
 	if got := strings.Join(ids(res.Candidates), ","); got != KindSkillCache+":"+skills.ExtractPrefix+"old" {
 		t.Fatalf("candidates %s, want only the stale .extract-* dir", got)
@@ -784,6 +812,61 @@ func TestReapPrunesOldSkillCache(t *testing.T) {
 	in.SkillCache = ""
 	if got := find(t, in, KindSkillCache); len(got.Candidates) != 0 {
 		t.Errorf("no cache dir must find nothing: %v", ids(got.Candidates))
+	}
+}
+
+func TestReapHoldsSkillCacheDuringRound(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lease *fakeLease
+	}{
+		{"live", &fakeLease{st: roundlease.Live}},
+		{"foreign", &fakeLease{st: roundlease.Foreign}},
+		{"unreadable", &fakeLease{readErr: errors.New("lease unreadable")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cache := t.TempDir()
+			path := filepath.Join(cache, "old")
+			if err := os.Mkdir(path, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			in := input(repo(nil, nil), nil, nil, nil)
+			in.SkillCache, in.SkillCacheKeep, in.Lease = cache, "current", tc.lease
+			found := find(t, in, KindSkillCache)
+			if len(found.Candidates) != 1 || found.Candidates[0].Held == "" {
+				t.Fatalf("round must hold the old skill tree: %+v", found)
+			}
+			got := Apply(bg, in, found.Candidates)
+			if len(got.Reaped) != 0 || len(got.Failed) != 0 {
+				t.Fatalf("held tree should be skipped: %+v", got)
+			}
+			if _, err := os.Stat(path); err != nil {
+				t.Fatalf("round's skill tree disappeared: %v", err)
+			}
+		})
+	}
+}
+
+func TestApplyRechecksRoundBeforeRemovingSkillCache(t *testing.T) {
+	cache := t.TempDir()
+	path := filepath.Join(cache, "old")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	l := &fakeLease{st: roundlease.None}
+	in := input(repo(nil, nil), nil, nil, nil)
+	in.SkillCache, in.SkillCacheKeep, in.Lease = cache, "current", l
+	found := find(t, in, KindSkillCache)
+	if len(found.Candidates) != 1 || found.Candidates[0].Held != "" {
+		t.Fatalf("expected removable old version before the round: %+v", found)
+	}
+	l.st = roundlease.Live
+	got := Apply(bg, in, found.Candidates)
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("new round's skill tree disappeared: %v; result=%+v", err, got)
+	}
+	if len(got.Reaped) != 0 || len(got.Failed) != 1 || !strings.Contains(got.Failed[0].Error, "round lease") {
+		t.Fatalf("expected round-lease refusal: %+v", got)
 	}
 }
 

@@ -113,8 +113,8 @@ type Input struct {
 	Roster []string
 	// SkillCache is the directory `rota skills get` extracts one tree per
 	// binary version into, and SkillCacheKeep the running version's directory
-	// name inside it. Every other directory there is a candidate. Empty
-	// SkillCache finds none.
+	// name inside it. Other version trees are held while the repo's round
+	// lease may be live. Empty SkillCache finds none.
 	SkillCache     string
 	SkillCacheKeep string
 	// TempRoot is the project temp root; each direct child but .gitignore is a
@@ -239,7 +239,7 @@ func (s *state) orphanExtract(name string) bool {
 // the orphaned `.extract-*` dirs of killed extractions. The running version's
 // tree is never listed, and neither is a younger dot directory (an extraction
 // still running).
-func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
+func findSkillCache(ctx context.Context, s *state) ([]Candidate, error) {
 	if s.in.SkillCache == "" {
 		return nil, nil
 	}
@@ -254,12 +254,29 @@ func findSkillCache(_ context.Context, s *state) ([]Candidate, error) {
 	for _, e := range ents {
 		switch {
 		case e.IsDir() && s.skillTree(e.Name()):
-			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "extracted skills of another rota version"})
+			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "extracted skills of another rota version", Held: s.heldSkillCache(ctx)})
 		case s.orphanExtract(e.Name()):
 			out = append(out, Candidate{ID: KindSkillCache + ":" + e.Name(), Kind: KindSkillCache, Name: e.Name(), Path: filepath.Join(s.in.SkillCache, e.Name()), Reason: "temp extract left by a killed `rota skills get`"})
 		}
 	}
 	return out, nil
+}
+
+// heldSkillCache keeps absolute paths in a running round's briefs and loaded
+// skills valid across a binary upgrade. The lease cannot tell which version
+// the round loaded, so every other version is held. Nil Lease means no lease.
+func (s *state) heldSkillCache(ctx context.Context) string {
+	if s.in.Lease == nil {
+		return ""
+	}
+	_, st, err := s.in.Lease.ReadLease(ctx, s.in.Root)
+	if err != nil {
+		return "round lease unavailable: " + err.Error()
+	}
+	if st == roundlease.None || st == roundlease.Stale {
+		return ""
+	}
+	return "round lease may still reference extracted skills (" + string(st) + ")"
 }
 
 // Find lists the candidates of the wanted kinds (all when kinds is empty).
@@ -603,6 +620,9 @@ func removeBranch(ctx context.Context, s *state, c Candidate) error {
 }
 
 func removeTab(ctx context.Context, s *state, c Candidate) error {
+	if !s.hostOK {
+		return fmt.Errorf("host unavailable; %s left open", c.Name)
+	}
 	if s.in.Host == nil {
 		return fmt.Errorf("no host")
 	}
@@ -624,6 +644,11 @@ func removeTab(ctx context.Context, s *state, c Candidate) error {
 func removeSkillCache(ctx context.Context, s *state, c Candidate) error {
 	if s.in.SkillCache == "" || !(s.skillTree(c.Name) || s.orphanExtract(c.Name)) {
 		return fmt.Errorf("%s is not a removable skills cache tree", c.Name)
+	}
+	if s.skillTree(c.Name) {
+		if held := s.heldSkillCache(ctx); held != "" {
+			return fmt.Errorf("%s is held: %s; left alone", c.Name, held)
+		}
 	}
 	return os.RemoveAll(filepath.Join(s.in.SkillCache, c.Name))
 }
