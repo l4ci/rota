@@ -1,8 +1,8 @@
 ---
 subsystem: gate-landing
 summary: manual-gate registry, landing adapters and freeze, post-gate bookkeeping, footprint overlap, ship and release domain logic
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -13,11 +13,11 @@ Depends on: review-verdicts (proof, flakeledger, testledger via landing), tracke
 - internal/gate/gate.go:46 — `Registry`, every manual gate (tag-push, release-publish, merge-approval, ...)
 - internal/gate/gate.go:104 — `Clear`, checks `--confirm`/`--confirm-note` and writes the audit line
 - internal/gate/gate.go:226 — `NewMergePolicy` (`ship.mergeApproval` none/all/paths)
-- internal/land/land.go:76 — `MergeLocal`, local merge with one abort attempt on failure
-- internal/land/land.go:146 — `MergeForge`, forge merge pinned to the verified head
+- internal/land/land.go:78 — `MergeLocal`, local merge with one abort attempt on failure
+- internal/land/land.go:152 — `MergeForge`, forge merge pinned to the verified head
 - internal/landfreeze/freeze.go:24 — freeze `Record`; `Decide` at :174 (the one admission rule)
 - internal/postgate/postgate.go:54 — `Gate` (per-item bounce accounting); `Train` at :82; `Book` port at :17
-- internal/landing/verdict.go:77 — `ClassifyVerdict`, the single verdict-to-meaning table
+- internal/landing/verdict.go:84 — `ClassifyVerdict`, the single verdict-to-meaning table
 - internal/ship/merge.go:39 — `MergeBranch`; `MergePR` at :110; undo: `PlanUndo` internal/ship/undo.go:51, `ApplyUndo` :171
 - internal/release/flow.go:157 — `PlanPush`; `Detect` internal/release/version.go:239, `Bump` :314
 
@@ -38,10 +38,11 @@ Go, stdlib only. Git and forge access through injected ports (`land.Git`, `ship.
 
 ## Conventions specific here
 - Invariants: a merge is pinned to a commit the caller verified (`land.ErrUnpinned`); gates (verdict, approval, proof, provenance, freshness) stay with the callers, run before landing.
+- Invariants: `landing.verdictMeanings` is the one table of what a gate or train verdict means (success, exit-4 refusal and its blockedBy, notify, hold, hold at head, route to a worker); postgate, roundtick, worker and cli read it through `ClassifyVerdict`, and `TestVerdictsAreClassified` fails on a verdict missing from it.
 - Invariants: a gate with `Verbs` refuses without `--confirm` plus a non-empty `--confirm-note`; one without is skill judgment, listed for inventory.
 - Invariants: landfreeze writers hold the worker landing lock; the state is never source-controlled and survives a failed gate.
 - Invariants: postgate is the single bounce rule for gate and train; a stale merge and a provenance failure count nothing and never park; no gate or train verdict counts a bounce (review bounces are counted by the round review verbs).
-- Invariants: overlap works on path lists only (callers own the git diff); `Clean` runs first everywhere; `Shared` takes config entries and reads `**` as one level only (`pathglob.SingleLevel`; shared-path exemptions must not widen); `Paths`/`Dirs` take footprints (only trailing `/` marks a directory). Recursive `**` and entry matching live in internal/pathglob (`Match`, `MatchEntry` with its `Flavour`, `MatchUnder`).
+- Invariants: overlap works on path lists only (callers own the git diff, and take it from `git.DiffFiles`, which lists both names of a rename so a file moved out of a protected path still counts; ship's merge approval, the gate and the train footprint all use it); `Clean` runs first everywhere; `Shared` takes config entries and reads `**` as one level only (`pathglob.SingleLevel`; shared-path exemptions must not widen); `Paths`/`Dirs` take footprints (only trailing `/` marks a directory). Recursive `**` and entry matching live in internal/pathglob (`Match`, `MatchEntry` with its `Flavour`, `MatchUnder`).
 - Invariants: `ship.Strategy` owns the landing rule (tracker backlog: pr; local forge: direct); `ship` resets only in `ApplyUndo`.
 
 ## Test commands

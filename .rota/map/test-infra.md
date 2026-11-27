@@ -1,8 +1,8 @@
 ---
 subsystem: test-infra
 summary: the merge gate, sharded smoke suite, doc lints, fakes, e2e scenarios, evals, test-cost audit and the shared Go test helpers
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -27,6 +27,7 @@ Depends on (by map file): foundations (`hostenv`, read by `testiso`), cli-dispat
 ## Key files / dirs
 - `test/sections/` — numbered `NN_name.sh` smoke sections (161), template in `test/section-template.sh`, helpers in `test/lib.sh`
 - `test/lib/` — `isolate.sh` (env and worktree isolation), `host-env-prefixes` (generated from `hostenv.Prefixes` by `internal/hostenv/gen`), `common.sh`, `forge_state.sh`, `project-tmp.sh`, `gate-lock.sh`, `checkout-guard.py`, `gate-lock-race.py`
+- `test/gate_sandbox.py` — the one owner of what a disposable gate or runner sandbox needs from the checkout (`gate_retry_test.py`, `runner_leak_test.py` build on it; a new runtime dependency of `test/gate.sh` or `test/runner.sh` is declared there only)
 - `test/gate-go.py`, `gate-smoke.py`, `gate-flake.py`, `gate-partition.py`, `shard-weights.txt` — gate parts and shard weights; `gate-smoke-markers.txt` (smoke markers); the Python harness tests (`gate_retry_test.py`, `runner_leak_test.py`, `fast_tree_scans_test.py`, `check_doc_stamps_test.py`, `grep_gate_test.py`, `site_sync_test.py`, `validate_skills_test.py`, `video_catalog_test.py`) are listed in `py-tests.txt` and run by `py-tests.sh`
 - `test/fakes/` — `gh`, `glab`, `tmux`, `herdr`, `codex`, `opencode`, `stub_worker`, `fake_forge.py`, `fake_tracker.py`, `codex_skill_worker.py`, `codex_quota_server.py`
 - `test/e2e/` — `run.sh`, `lib.sh`, `scenarios/*.sh` (6: watcher, dead worker, slow output, usage limit, train bisect, isolation)

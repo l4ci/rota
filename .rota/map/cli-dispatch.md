@@ -1,8 +1,8 @@
 ---
 subsystem: cli-dispatch
 summary: the rota command dispatcher, exit-code contract, error translation, per-verb gates and support fence, and the terminal UI (bare-rota palette, --ui screens)
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -38,6 +38,8 @@ Go 1.22, standard library only (`flag`, no cobra). `tui` and `palette` are stdli
 - Verb shape: `RunFunc func(c *Ctx, args []string) (Result, error)`; `Result.Data` fills the `--json` envelope, `Result.Text` is the plain output.
 - Invariants: verbs never print the envelope, stderr line or exit code themselves; `exitcode` imports nothing from rota (so cli, artifact and worker share it); `tui` Update and Render are pure, side effects go in a `Cmd`; `palette` core is pure and terminal work lives in `run.go` behind a `Config` tests fill with fakes.
 - Every verb sets its own `Command.Fence` (never inherited; `Gates` has no Fence field, cli.go:464 passes the verb's own `Fence` to `runGates`); a verb with none is `FenceUnclassified` and refused on a support machine, so a new verb fails safe. `gateDecls` names verb paths in the tree and `applyGates` panics on a path that is not there.
+- Branch review verbs share one span: `resolveReviewSpan` (internal/cli/review_span.go:39) returns a `reviewSpan` (branch target, `DefaultBase`, name, head, PR number, since); `review_package.go`, `review.go`, `change.go` and `ship_finish.go` read it. `worker.BranchIssue` and `tracker.BranchPR` are the branch-to-issue and branch-to-PR readers used in verdict and watch glue.
+- A state file that is unreadable (`fsio.ErrUnreadable`) is translated to exit 5 by `exitmap` (the `Unreadable` class), not 70.
 - Project root comes from `findRoot`; masked (a stray `.rota/` in a registered sub-repo) and missing roots are different errors (`rotatree.ErrMasked`, `ErrNoRoot`).
 - Verb families differ in which domain errors `exitmap.Translate` recognises (`Class` bit flags in `Options`).
 - Tests isolate from the real machine with `isolate_test.go` / `testiso` (blank import) so global config loads as absent.

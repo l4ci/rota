@@ -1,8 +1,8 @@
 ---
 subsystem: review-verdicts
 summary: typed verdict store and routing, review-depth and change-tier policy, proof rows, acceptance-criteria grammar, test and flake ledgers, the test-audit report, failing-test-name parsing, golden records, Go test-path rules
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -13,9 +13,9 @@ Depends on: backlog-items (backlog, artifact, section, only `followup` imports b
 - internal/verdict/verdict.go:248 — `ParseBody`, parses a recorded verdict body
 - internal/verdict/verdict.go:543 — `AddBranch`; `AddItem` at :554 (item verdicts, failed-fix counts)
 - internal/verdict/route.go:74 — `Route`, verdict to next step; `ProducerNext` :38, `DebugNext` :47
-- internal/verdict/missing.go:29 — `MissingReviews`, the missing-review-verdicts rule by review depth
+- internal/verdict/missing.go:96 — `CoverageAt`: what a head's recorded reviews leave missing for a `Need`; `missingReviews` :30 is the one owner of the missing-review-verdicts rule by review depth, `CoveredDepth` :42
 - internal/change/classify.go:88 — `Classify`, a diff to a `Tier`; `Policy` at :51
-- internal/reviewpolicy/reviewpolicy.go:71 — `Decide`, review depth; `MatchLenses` at :217
+- internal/reviewpolicy/reviewpolicy.go:73 — `Decide`, review depth; `MatchLenses` at :219
 - internal/proof/proof.go:64 — `Add`; `Proves` at :190, `Mark` at :198
 - internal/acceptance/acceptance.go:88 — `Parse`; `Coverage` at :203
 - internal/suiteaudit/inventory.go:64 — `Inventory`: test placement report; `ReadTelemetry` report.go:98 (recorded test costs); CLI internal/cli/testaudit.go:20 `rota test-audit`
@@ -42,6 +42,7 @@ Go 1.22, stdlib only. Verdict store is a jsonx file (`rotatree.Verdicts`), gitig
 - Invariants: verdict kinds and verdicts are fixed sets; verdicts order worst-of (`Worst`); the schema is `docs/contributing/contract/`, "B2: verdicts". `debug-reset` and `work-fix-reset` are written only by their reset verbs.
 - Invariants: proof rows are facts, not acceptance; `Add` skips an identical row (date ignored).
 - Invariants: acceptance is pure; a criterion is met by an `acceptance` item note mark, coverage read from body, marks and proof rows.
+- Invariants: a branch's review span (target branch, head, open PR, since-commit) is resolved once, by `resolveReviewSpan` (internal/cli/review_span.go:39) into a `reviewSpan` with `logSpan`/`diffSpan`; review preview, package, scan, change tier and depth read it and do not resolve a base themselves. The branch's leading issue key is read by `worker.BranchIssue` only (worker/branch.go:64), so review depth, scope, the follow-up guard and verdict reports agree for numeric and Jira/Linear keys.
 - Invariants: `change` and `reviewpolicy` do no I/O; callers read the diff, PR body and config and hand the facts in. Glob entries match through `pathglob`.
 - Invariants: an expired testledger entry fails the gate; each entry carries owner, receipt and expiry.
 - Invariants: flakeledger is kept separate from the tracked known-red ledger; one line is one command that passed its retry.
@@ -55,4 +56,4 @@ Go 1.22, stdlib only. Verdict store is a jsonx file (`rotatree.Verdicts`), gitig
 ## Concerns
 - verdict is ~2.0k non-test lines across 11 files; verdict.go still holds kinds, parsing, store and persistence together.
 - golden is imported by about a dozen packages' tests, so a change to its record format touches all their testdata.
-- Review depth is decided in two places: `reviewpolicy.Decide` (config-driven) and `verdict.MissingReviews` (what depth demands).
+- Review depth is decided in two places: `reviewpolicy.Decide` (config-driven) and `verdict.missingReviews` (what depth demands).

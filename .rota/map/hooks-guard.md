@@ -1,8 +1,8 @@
 ---
 subsystem: hooks-guard
 summary: Claude Code hooks: statusline state dump, Stop/prompt context guard, SessionStart handoff, PreToolUse worker guard, settings merge, plugin hooks/ dir
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose

@@ -1,8 +1,8 @@
 ---
 subsystem: backlog-items
 summary: backlog item model over file and issue backends, ID counters, plans, designs, spikes, milestones, status.json, debug counter and sessions, work-cycle rules, shared section/artifact helpers, blockedBy vocabulary
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -10,7 +10,7 @@ The item and planning state rota keeps. `backlog` presents items from either bac
 Depends on: tracker-issues (tracker, labels, marker, itembody), review-verdicts (acceptance), plus blockedby, config, counter, itemid, exitcode, frontmatter, fsio, git, jsonx, pystr, repos, rotastate, rotatree, roundcfg, stamp, strutil. Used by cli-dispatch (work, ship_finish verbs use `cycle`).
 
 ## Entry points
-- internal/backlog/backend.go:15 — `Backend` interface; `Capabilities` at :77, `Open` at :255
+- internal/backlog/backend.go:16 — `Backend` interface; `Capabilities` at :78, `Open` at :259
 - internal/backlog/workflow.go:14 — `Workflow` interface (Claim, Release, SetState, Status, Note*)
 - internal/backlog/model.go:15 — `Item`; backends `File` file.go:21, `Issues` issue.go:65
 - internal/itemid/itemid.go:40 — `ParseIssueRef`; `IDPattern` :116, `ValidID` :134, `ItemType` :165, `ResolveItemRef` :55
@@ -29,7 +29,7 @@ Depends on: tracker-issues (tracker, labels, marker, itembody), review-verdicts 
 - internal/design/ — design.go, files.go (`.rota/designs/<ID>.md`), notes.go, testdata/
 - internal/spike/ — spike.go (`.rota/spikes/`, `spike/<name>` branches; `Finish` stamps `finished` with `frontmatter.SetField`)
 - internal/milestone/ — milestone.go, store.go, items.go, children.go, check.go, audit.go, capabilities.go, kind.go, title.go (`Title`/`ParseTitle`: the "<id> — <title>" grammar), decisions.go, shipped.go; testdata/fixture, testdata/golden
-- internal/artifact/ — artifact.go (exit-coded Error, `Notes`), docs.go (`FileDocs`), verbs.go (`DocStore`), artifacttest/
+- internal/artifact/ — artifact.go (exit-coded Error, `Notes`), docs.go (`FileDocs`), item_files.go (`ItemFileOwner`, `ItemFiles`: an item's design and plan paths), verbs.go (`DocStore`), artifacttest/
 - internal/section/ — section.go (`Find`, `Replace`, `Append`, `Topics`, `Wrap`, `UpsertManaged`), testdata/
 - internal/status/ — status.go, repos.go
 - internal/cycle/ — branch.go, gate.go, siblings.go (pure; imports only rotatree)
@@ -46,6 +46,7 @@ Go 1.22, stdlib only. Markdown with front matter (`frontmatter`); status and cou
 - Invariants: `counter` sits below backlog and milestone so neither imports the other to mint an ID; `artifact` must not import internal/cli.
 - Invariants: plan/design stores are file (`Files`) or notes (`NewNotes`) behind one `Store`, same verbs for both; file docs read-modify-write through `artifact.FileDocs.Update`.
 - Invariants: status.json is a jsonx tree, so unknown keys and key order survive a round trip; `section` stays byte-identical with the old helpers.
+- Invariants: label tests on an item or issue use the rule of the tracker that supplied the labels (`tracker.LabelMatcher`): `Item.HasLabel` (model.go:35) through the item's `labelMatcher`, and `tracker.HasLabel(b.Tracker, ...)`/`tracker.LabelsFor(b.Tracker)` elsewhere in `backlog`; claim and closed-issue label helpers (claimlabel.go) take the matcher and never compare names with `==` or `EqualFold`.
 - Invariants: debugctr keeps the old snake_case keys; session name is the git branch with `/` replaced by `-`.
 - Invariants: blockedby strings are declared once, spelling kept as consumers quote them; `TestBlockedByIsClosed` checks them against the contract docs and the source tree.
 - `cycle` takes literals and callbacks (`tracked func(string) bool`), reads no state; the cli verbs feed it.

@@ -1,8 +1,8 @@
 ---
 subsystem: skills-packaging
 summary: the rota-* skill sources, their embedding in the binary, install into Claude Code and Codex, the plugin manifests, install.sh, the docs generators and the agent prompt-override store
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose

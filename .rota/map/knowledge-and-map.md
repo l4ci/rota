@@ -1,8 +1,8 @@
 ---
 subsystem: knowledge-and-map
 summary: project knowledge, decisions and glossary files, the external knowledge repo, topic-name matching, the subsystem map and QA indexes, staleness listing and the shared frontmatter parser
-touched: 2026-11-22
-last_mapped_commit: 9544e238cf1b73e8e121cbe5007c8993b37af7fd
+touched: 2026-11-27
+last_mapped_commit: f5d97a0faf3575c5fa31e8c2306bf31b0ca1562e
 ---
 
 ## Purpose
@@ -14,11 +14,11 @@ Depends on (by map file): foundations (fsio, git, jsonx, pystr, stamp, strutil, 
 ## Entry points
 - internal/knowledge/scope.go:30 — `Store`: locates the knowledge files of one project (root plus sub-repo map)
 - internal/knowledge/query.go:26 — `Store.Query`: topic read by scope with tier filtering
-- internal/knowledge/ops.go:73 — `Store.Add`: write a bullet (title, body, date, sha, paths)
+- internal/knowledge/ops.go:72 — `Store.Add`: write a bullet (title, body, date, sha, paths)
 - internal/extknowledge/fresh.go:127 — `Clone.Freshen`: bounded fetch and fast-forward before a read
-- internal/extknowledge/read.go:183 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:74
-- internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :55, `WriteIndex` :77, `Slugify` :14
-- internal/mapqa/mapqa.go:30 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :171
+- internal/extknowledge/read.go:191 — `Clone.QueryWith`: read external topics; write side is `Clone.Add` at write.go:74
+- internal/topicmatch/topicmatch.go:29 — `Headings`; `ReadIndex` :72, `WriteIndex` :94, `Slugify` :14
+- internal/mapqa/mapqa.go:39 — `Query`: bodies of named `.rota/map` or `.rota/qa` files; `Stats` at :211
 - internal/stale/stale.go:71 — `FindReport`: stale entries by kind (`Kinds` at :24: `map`, `knowledge`, `todo`) and the count of skipped undated todo items
 - internal/frontmatter/frontmatter.go:53 — `Parse`: frontmatter map, list keys and body; `Fence` at :28, `SetField` at :126
 
@@ -39,6 +39,7 @@ Go 1.22, standard library; markdown and JSON files on disk. `extknowledge` shell
 - A knowledge hit appends a JSON line to the gitignored `knowledge-hits.jsonl` instead of rewriting the tier sidecar; `rota knowledge tier fold` applies the buffer.
 - Glossary terms are canonical names and are never tiered (`GlossaryTopic`).
 - `Freshen` never resets: a dirty or diverged clone or an unreachable remote returns a one-line warning and the caller reads what is on disk. Hits for the external clone live in the state dir, never in the clone.
+- A source that exists but cannot be read or parsed (knowledge block, map/QA files, external topic files) returns `fsio.Unreadable(err)`, which the CLI exits 5 for; a topic indexed but not yet written is skipped, any other unreadable file is an error. `extknowledge` has one topic traversal (`Clone.walk`, walk.go:41) behind both query and match.
 - Scope errors wrap `ErrScope` so callers map them to the resolution exit code.
 - The map and QA index blocks are written with `section.UpsertManaged` (`mapqa.WriteIndex`).
 
