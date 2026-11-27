@@ -152,7 +152,7 @@ func TestHerdrFindsEverySlotAfterPanesChangeWorkspace(t *testing.T) {
 			if got := l.PaneOf(bg, slot, handle); got != pane[AgentName(slot, handle)] || got == "" {
 				t.Errorf("%s: PaneOf(%s) = %q", step, slot, got)
 			}
-			if got := h.Status(bg, slot, handle); got != "working" {
+			if got := h.Status(bg, slot, handle); got != (AgentStatus{State: "working"}) {
 				t.Errorf("%s: Status(%s) = %q", step, slot, got)
 			}
 		}

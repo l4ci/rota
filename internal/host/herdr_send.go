@@ -117,7 +117,7 @@ func (h *herdr) SubmitPending(ctx context.Context, slot, handle, file string) (b
 		return false, nil
 	}
 	name := AgentName(slot, handle)
-	if h.Status(ctx, slot, handle) != "idle" || !h.briefOnPrompt(ctx, name, strings.TrimRight(text, "\n")) {
+	if h.Status(ctx, slot, handle).State != StatusIdle || !h.briefOnPrompt(ctx, name, strings.TrimRight(text, "\n")) {
 		return false, nil
 	}
 	return true, h.submitTyped(ctx, name)
@@ -177,7 +177,7 @@ func (h *herdr) submitTyped(ctx context.Context, name string) error {
 		if timeout == 0 {
 			// Enter only into an idle prompt: on a dialog it would answer
 			// the dialog, which nobody approved.
-			status = h.statusOf(ctx, name)
+			status = h.statusOf(ctx, name).State
 		} else {
 			w := h.herdr(ctx, "agent", "wait", name, "--until", "working", "--until", "blocked",
 				"--timeout", strconv.FormatInt(timeout.Milliseconds(), 10))

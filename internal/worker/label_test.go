@@ -78,7 +78,7 @@ func TestPollRelabelsOnAStateChangeOnly(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 2, Base: "main"})
 	f := newLabelHost()
-	f.panes, f.status = map[string][]string{}, map[string]string{}
+	f.panes, f.status = map[string][]string{}, map[string]host.AgentStatus{}
 	f.panes["w1"] = []string{"static\n", "static\nROTA-DONE w1 https://github.com/o/r/pull/9\n"}
 	f.panes["w2"] = []string{"a\n", "a\n"} // idle, as recorded: no change
 	if _, err := envWith(f).Poll(bg, dir, PollOpts{Lines: 60}); err != nil {
@@ -106,7 +106,7 @@ func TestWaitRelabelsTheReturnedSlot(t *testing.T) {
 	dir := gittest.Project(t, `{}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
 	f := newLabelHost()
-	f.panes, f.status = map[string][]string{}, map[string]string{}
+	f.panes, f.status = map[string][]string{}, map[string]host.AgentStatus{}
 	if _, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "go\n"), Task: "#514"}); err != nil {
 		t.Fatal(err)
 	}

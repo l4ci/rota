@@ -3,6 +3,7 @@ package worker
 import (
 	"cmp"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/overlap"
 	"github.com/l4ci/rota/internal/tracker"
@@ -177,16 +178,9 @@ func (g *gateRun) staleReason() (why string, shared []string, brokeMsg string) {
 	if code != 0 || mb == "" {
 		return "", nil, fmt.Sprintf("git merge-base %s %s exited %d", g.baseRef, g.headRef, code)
 	}
-	changed := func(ref string) ([]string, bool) {
-		out, code := g.git(root, "diff", "--name-only", "--no-renames", mb, ref)
-		if code != 0 {
-			return nil, false
-		}
-		return strings.Split(out, "\n"), true
-	}
-	onBase, ok1 := changed(g.baseRef)
-	onHead, ok2 := changed(g.headRef)
-	if !ok1 || !ok2 {
+	onBase, err1 := git.DiffFiles(g.ctx, g.e.Git, root, mb+".."+g.baseRef)
+	onHead, err2 := git.DiffFiles(g.ctx, g.e.Git, root, mb+".."+g.headRef)
+	if err1 != nil || err2 != nil {
 		return "", nil, fmt.Sprintf("git diff --name-only against %s failed", mb)
 	}
 	return "", pairwisePaths(onBase, onHead, g.in.cfg.SharedPaths), ""

@@ -67,7 +67,7 @@ func (runner gateRun) stepPremerge(result landing.GateResult, target GateTarget,
 	}
 	if g.ci != nil {
 		run.CIChanged = func() ([]string, error) {
-			return g.e.ciDiffFiles(g.ctx, g.root, g.baseRef, g.verified)
+			return git.DiffFiles(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
 		}
 	}
 	if g.o.Approval != nil {
@@ -381,9 +381,10 @@ func (g *gateRun) confirmCITree() bool {
 	return true
 }
 
-// changedFiles lists the paths the merge changes, for the approval gate.
+// changedFiles lists the paths the merge changes, including both names of a
+// rename, for the approval gate (the same rule as the train footprint).
 func (g *gateRun) changedFiles() ([]string, error) {
-	return git.ChangedPaths(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
+	return git.DiffFiles(g.ctx, g.e.Git, g.root, g.baseRef+"..."+g.verified)
 }
 
 // stepVerify is stage 3. The merge result was verified before the merge

@@ -77,7 +77,7 @@ func TestStatusDrivenCompletionRejectsNewerWork(t *testing.T) {
 				if tc.absent {
 					return nil, nil
 				}
-				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: tc.native}}, nil
+				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: host.AgentStatus{State: tc.native}}}, nil
 			}
 			rep, err := f.env.Status(bg, f.root)
 			if err != nil {
@@ -148,7 +148,7 @@ func TestRelayCompletionWithoutCommitAllowsNextAssignment(t *testing.T) {
 				t.Fatal("text-only completion moved the head")
 			}
 			f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
-				return []host.Agent{{Tab: f.slot("ben").Handle(), Name: "ben", Cwd: f.wt("ben"), Status: "idle"}}, nil
+				return []host.Agent{{Tab: f.slot("ben").Handle(), Name: "ben", Cwd: f.wt("ben"), Status: host.AgentStatus{State: "idle"}}}, nil
 			}
 			status, err := f.env.Status(bg, f.root)
 			if err != nil {
@@ -192,7 +192,7 @@ func TestStatusDoneThenReassignedIsBusy(t *testing.T) {
 				t.Fatal(err)
 			}
 			f.env.Snapshot = func(context.Context) ([]host.Agent, error) {
-				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: native}}, nil
+				return []host.Agent{{Tab: handle, Name: "ben", Cwd: f.wt("ben"), Status: host.AgentStatus{State: native}}}, nil
 			}
 			rep, err := f.env.Status(bg, f.root)
 			if err != nil {

@@ -227,7 +227,7 @@ func (o *orca) readPane(ctx context.Context, v *orcaHandle, lines int) (string, 
 	return p, nil
 }
 
-func (o *orca) Status(context.Context, string, string) string { return "" }
+func (o *orca) Status(context.Context, string, string) AgentStatus { return AgentStatus{} }
 
 func (o *orca) terminals(ctx context.Context) ([]orcaTerminal, error) {
 	raw, e := o.call(ctx, "terminal", "list", "--json")

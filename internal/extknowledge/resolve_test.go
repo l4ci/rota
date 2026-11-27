@@ -92,3 +92,26 @@ func TestNewSubtopicPrefersTheExactParentName(t *testing.T) {
 		t.Fatalf("signals = %q", got)
 	}
 }
+
+// A title that differs only by surrounding spaces names the same bullet, and a
+// new one is written trimmed.
+func TestAddTrimsTheTitle(t *testing.T) {
+	f := newFixture(t, "")
+	add := func(title string) WriteResult {
+		t.Helper()
+		res, err := f.clone().Add(context.Background(), AddIn{Topic: "Go", Title: title, Body: "b.", Date: "2026-10-25"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+	add("  Padded ")
+	if got := readIn(t, f, "topics/go.md"); !strings.Contains(got, "- **Padded** — b.") {
+		t.Fatalf("topic = %q, want the trimmed title", got)
+	}
+	before := readIn(t, f, "topics/go.md")
+	add(" padded  ")
+	if got := readIn(t, f, "topics/go.md"); got != before {
+		t.Fatalf("repeat wrote a second bullet: %q", got)
+	}
+}

@@ -24,9 +24,13 @@ var ErrInvalid = errors.New("invalid bullet text")
 // titleRe reads the title of any titled bullet, dated or not.
 var titleRe = regexp.MustCompile(`^- \*\*([^*]+)\*\*`)
 
-// CheckTitle refuses a title no reader could find again: a line break, a
-// stamp closer or a "*", which titleRe cannot parse. Both stores' Add call it.
+// CheckTitle refuses a title no reader could find again: a blank one, a line
+// break, a stamp closer or a "*", which titleRe cannot parse. Both stores' Add
+// call it and then trim the title, as every reader does.
 func CheckTitle(title string) error {
+	if strings.TrimSpace(title) == "" {
+		return fmt.Errorf("%w: title must not be blank", ErrInvalid)
+	}
 	if strings.ContainsAny(title, "\r\n") {
 		return fmt.Errorf("%w: title must be a single line", ErrInvalid)
 	}
@@ -119,19 +123,21 @@ func Render(title, body, stamp string) string {
 	return fmt.Sprintf("- **%s** — %s <!-- %s -->", title, body, stamp)
 }
 
-// HasTitle reports whether any of the lines is a bullet titled title, ignoring
-// case.
-func HasTitle(lines []string, title string) bool {
-	lower := strings.ToLower(title)
-	for _, l := range lines {
-		if t, ok := Title(l); ok && strings.ToLower(t) == lower {
-			return true
+// FindTitle returns the stored title of a bullet of text (as Bullets lists
+// them) titled title, ignoring case; an exact match wins over a case variant.
+func FindTitle(text, title string) (stored string, ok bool) {
+	for _, b := range Bullets(text) {
+		if b.Title == title {
+			return b.Title, true
+		}
+		if !ok && strings.ToLower(b.Title) == strings.ToLower(title) {
+			stored, ok = b.Title, true
 		}
 	}
-	return false
+	return stored, ok
 }
 
-// HasSpanTitle is HasTitle over the spans of Spans.
+// HasSpanTitle reports whether a span of Spans is titled title, ignoring case.
 func HasSpanTitle(spans []Span, title string) bool {
 	lower := strings.ToLower(title)
 	for _, sp := range spans {

@@ -72,8 +72,10 @@ func (h *hostFake) Send(_ context.Context, slot, handle, file string) error {
 func (h *hostFake) ReadPane(context.Context, string, string, int) (string, error) {
 	return h.capture, nil
 }
-func (h *hostFake) Status(context.Context, string, string) string { return h.status }
-func (h *hostFake) Kill(context.Context, string, string) error    { return nil }
+func (h *hostFake) Status(context.Context, string, string) host.AgentStatus {
+	return host.AgentStatus{State: h.status}
+}
+func (h *hostFake) Kill(context.Context, string, string) error { return nil }
 
 // configLabels is the label fields of an Env a test builds by hand: the config
 // defaults, as defaultRoundEnv loads them, in Label, NeedsHuman, NeedsReview,

@@ -59,11 +59,14 @@ func TestCapabilitiesForKind(t *testing.T) {
 
 // Poll hands the host's native pane status to the same verdict function.
 func TestJudgeLivenessNative(t *testing.T) {
-	for _, c := range []struct{ native, state, reason string }{
-		{"gone", LivenessDead, ""},
-		{host.UnverifiablePrefix + "pane-unreadable", LivenessUnverifiable, "pane-unreadable"},
-		{"working", LivenessAlive, ""},
-		{"", LivenessAlive, ""},
+	for _, c := range []struct {
+		native        host.AgentStatus
+		state, reason string
+	}{
+		{host.AgentStatus{State: host.StatusGone}, LivenessDead, ""},
+		{host.AgentStatus{State: host.StatusUnverifiable, Reason: host.ReasonPaneUnreadable}, LivenessUnverifiable, "pane-unreadable"},
+		{host.AgentStatus{State: "working"}, LivenessAlive, ""},
+		{host.AgentStatus{}, LivenessAlive, ""},
 	} {
 		got := JudgeLiveness(LivenessEvidence{Native: c.native})
 		if got.State != c.state || got.Reason != c.reason {

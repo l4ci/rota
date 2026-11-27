@@ -13,7 +13,7 @@ type Agent struct {
 	Tab    string
 	Name   string
 	Cwd    string
-	Status string // the host's native state; "" when it has none (tmux)
+	Status AgentStatus // the host's native state and reason; zero when it has none
 	// Pane and TabPanes are herdr's: the agent's pane and how many panes its
 	// tab holds. Handle uses them to name a pane that shares its tab.
 	Pane     string
@@ -68,7 +68,7 @@ func (h *herdr) Snapshot(ctx context.Context) ([]Agent, error) {
 	}
 	out := []Agent{}
 	for _, a := range *doc.Result.Snapshot.Agents {
-		out = append(out, Agent{Tab: a.TabID, Name: a.Name, Cwd: a.Cwd, Status: a.Status, Pane: a.PaneID, TabPanes: panes[a.TabID]})
+		out = append(out, Agent{Tab: a.TabID, Name: a.Name, Cwd: a.Cwd, Status: AgentStatus{State: a.Status}, Pane: a.PaneID, TabPanes: panes[a.TabID]})
 	}
 	return out, nil
 }

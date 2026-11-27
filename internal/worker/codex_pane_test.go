@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"github.com/l4ci/rota/internal/host"
 	"os"
 	"testing"
 
@@ -20,7 +21,7 @@ func TestClassifyCodexTerminalWait(t *testing.T) {
 	pane := codexPaneFixture(t, "terminal-wait")
 	for _, native := range []string{"", "idle", "blocked", "unknown"} {
 		t.Run(native, func(t *testing.T) {
-			if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, native); state != StateBusy {
+			if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, host.AgentStatus{State: native}); state != StateBusy {
 				t.Fatalf("terminal wait: %s %q, want BUSY", state, evidence)
 			}
 		})
@@ -29,14 +30,14 @@ func TestClassifyCodexTerminalWait(t *testing.T) {
 
 func TestClassifyCodexTerminalWaitNarrow(t *testing.T) {
 	pane := codexPaneFixture(t, "terminal-wait-narrow")
-	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBusy {
+	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, host.AgentStatus{State: "blocked"}); state != StateBusy {
 		t.Fatalf("narrow terminal wait: %s %q, want BUSY", state, evidence)
 	}
 }
 
 func TestClassifyCodexTerminalWaitKeepsEarlierBlockedSentinel(t *testing.T) {
 	pane := codexPaneFixture(t, "blocked") + codexPaneFixture(t, "terminal-wait-narrow")
-	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBlocked {
+	if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, host.AgentStatus{State: "blocked"}); state != StateBlocked {
 		t.Fatalf("blocked before wait: %s %q, want BLOCKED", state, evidence)
 	}
 }
@@ -45,7 +46,7 @@ func TestClassifyCodexTerminalWaitTruncatedHints(t *testing.T) {
 	for _, duration := range []string{"1h", "14m", "38s"} {
 		for _, hint := range []string{"", " •", " • e…", " • esc t…", " • esc to interrupt)"} {
 			pane := "• Waiting for background terminal (" + duration + hint + "\n"
-			if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, "blocked"); state != StateBusy {
+			if state, evidence := ClassifyFor(harness.Codex, pane, false, 60, host.AgentStatus{State: "blocked"}); state != StateBusy {
 				t.Errorf("%q: %s %q, want BUSY", pane, state, evidence)
 			}
 		}
@@ -65,7 +66,7 @@ func TestClassifyCodexTerminalWaitKeepsAttentionStates(t *testing.T) {
 		"api failure":           {"\nAPI Error: 500 internal\n", "blocked", StateDead},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if state, evidence := ClassifyFor(harness.Codex, pane+c.tail, false, 60, c.native); state != c.want {
+			if state, evidence := ClassifyFor(harness.Codex, pane+c.tail, false, 60, host.AgentStatus{State: c.native}); state != c.want {
 				t.Fatalf("%s %q, want %s", state, evidence, c.want)
 			}
 		})
@@ -75,7 +76,7 @@ func TestClassifyCodexTerminalWaitKeepsAttentionStates(t *testing.T) {
 func TestClassifyCodexTerminalWaitIgnoresQuotesAndOtherHarnesses(t *testing.T) {
 	pane := codexPaneFixture(t, "terminal-wait")
 	for _, kind := range []string{"", harness.Claude, harness.OpenCode} {
-		if state, evidence := ClassifyFor(kind, pane, false, 60, "blocked"); state != StateNeedsPermission {
+		if state, evidence := ClassifyFor(kind, pane, false, 60, host.AgentStatus{State: "blocked"}); state != StateNeedsPermission {
 			t.Errorf("%q: %s %q, want NEEDS-PERMISSION", kind, state, evidence)
 		}
 	}
@@ -88,7 +89,7 @@ func TestClassifyCodexTerminalWaitIgnoresQuotesAndOtherHarnesses(t *testing.T) {
 		"--- ORCHESTRATOR (round 40) ---\nThe pane says Waiting for background terminal.\n--- ROTA-SIG abcdef ---\n",
 		"• Waited for background terminal · sleep 45\n",
 	} {
-		if state, evidence := ClassifyFor(harness.Codex, quote, false, 60, "blocked"); state != StateNeedsPermission {
+		if state, evidence := ClassifyFor(harness.Codex, quote, false, 60, host.AgentStatus{State: "blocked"}); state != StateNeedsPermission {
 			t.Errorf("quoted/completed wait: %s %q, want NEEDS-PERMISSION", state, evidence)
 		}
 	}
@@ -104,14 +105,14 @@ func TestClassifyCodexCapturedAttentionPanes(t *testing.T) {
 		{"approval", StateNeedsPermission},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if state, evidence := ClassifyFor(harness.Codex, codexPaneFixture(t, c.name), false, 60, "blocked"); state != c.want {
+			if state, evidence := ClassifyFor(harness.Codex, codexPaneFixture(t, c.name), false, 60, host.AgentStatus{State: "blocked"}); state != c.want {
 				t.Fatalf("%s %q, want %s", state, evidence, c.want)
 			}
 		})
 	}
 	approval := codexPaneFixture(t, "approval")
 	for _, native := range []string{"", "blocked"} {
-		if state, evidence := ClassifyFor(harness.Codex, codexPaneFixture(t, "terminal-wait")+approval, false, 60, native); state != StateNeedsPermission {
+		if state, evidence := ClassifyFor(harness.Codex, codexPaneFixture(t, "terminal-wait")+approval, false, 60, host.AgentStatus{State: native}); state != StateNeedsPermission {
 			t.Errorf("wait plus approval: %s %q, want NEEDS-PERMISSION", state, evidence)
 		}
 	}
@@ -131,7 +132,7 @@ func TestPollCodexCapturedPanes(t *testing.T) {
 			}
 			pane := codexPaneFixture(t, c.fixture)
 			h.panes["w1"] = []string{pane, pane}
-			h.status["w1"] = "blocked"
+			h.status["w1"] = host.AgentStatus{State: "blocked"}
 			res, err := envWith(h).Poll(bg, dir, PollOpts{Slot: "w1", Lines: 60})
 			if err != nil {
 				t.Fatal(err)

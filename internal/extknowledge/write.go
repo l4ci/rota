@@ -80,6 +80,7 @@ func (c Clone) Add(ctx context.Context, in AddIn) (res WriteResult, err error) {
 	if err := bulletfmt.CheckTitle(in.Title); err != nil {
 		return WriteResult{}, err
 	}
+	in.Title = strings.TrimSpace(in.Title)
 	if err := bulletfmt.CheckDate(in.Date); err != nil {
 		return WriteResult{}, err
 	}

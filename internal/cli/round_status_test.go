@@ -45,7 +45,7 @@ func TestRoundStatusAndReconcile(t *testing.T) {
 	deps.RoundEnv = func(_ context.Context, _ string, o RoundOpts) round.Env {
 		return withRoundOpts(round.Env{Worker: round.FromWorkerEnv(worker.Env{Config: worker.NoConfig}), Git: git.Exec, Base: "feat/x", HostName: "herdr", ForgeErr: "fake: no forge",
 			Snapshot: func(context.Context) ([]host.Agent, error) {
-				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: "working"}}, nil
+				return []host.Agent{{Tab: "w1:t1", Name: "dana", Cwd: filepath.Join(root, ".worktrees", "dana"), Status: host.AgentStatus{State: "working"}}}, nil
 			}}, o)
 	}
 	code, out, _ := rotaInWith(t, deps, root, "--json", "round", "status")

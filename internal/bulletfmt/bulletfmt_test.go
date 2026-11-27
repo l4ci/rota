@@ -31,13 +31,6 @@ func TestRender(t *testing.T) {
 	}
 }
 
-func TestHasTitle(t *testing.T) {
-	lines := []string{"prose", "- **Alpha** — x <!-- 2026-01-02 -->", "- plain"}
-	if !HasTitle(lines, "alpha") || HasTitle(lines, "beta") || HasTitle(lines, "plain") {
-		t.Error("HasTitle must match a bold title, ignoring case, and nothing else")
-	}
-}
-
 func TestEnd(t *testing.T) {
 	lines := []string{"- **A** — x", "  more", "\tand more", "", "  after blank", "- **B**", "prose"}
 	for i, want := range map[int]int{0: 3, 5: 6, 6: 7} {

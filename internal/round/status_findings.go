@@ -57,8 +57,8 @@ func (e Env) hostFindings(ctx context.Context, root string, rows []*Row, views m
 			if s := slotObj[r.Name]; s != nil {
 				sameSession[r.Name] = s.PaneHandle() != "" && s.PaneHandle() == agents[i].Handle()
 			}
-			r.Agent, r.HostState = agents[i].Name, agents[i].Status
-			if v := worker.JudgeLiveness(worker.LivenessEvidence{Native: r.HostState}); v.State == worker.LivenessUnverifiable {
+			r.Agent, r.HostState = agents[i].Name, agents[i].Status.State
+			if v := worker.JudgeLiveness(worker.LivenessEvidence{Native: agents[i].Status}); v.State == worker.LivenessUnverifiable {
 				r.HostState, r.Evidence = v.State, v.Reason
 			}
 			// An internal tool wait can look blocked to the host. Only
@@ -66,7 +66,7 @@ func (e Env) hostFindings(ctx context.Context, root string, rows []*Row, views m
 			// snapshots and other harnesses keep their existing state.
 			if r.HostState == "blocked" && e.ReadPane != nil && worker.ReadsWaitPane(r.Kind) {
 				pane, _ := e.ReadPane(ctx, r.Name, agents[i].Handle(), 60)
-				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, r.HostState); st == worker.StateBusy {
+				if st, ev := worker.ClassifyFor(r.Kind, pane, false, 60, agents[i].Status); st == worker.StateBusy {
 					r.HostState, r.Evidence = "working", ev
 				}
 			}
@@ -97,7 +97,7 @@ func (e Env) hostFindings(ctx context.Context, root string, rows []*Row, views m
 				continue
 			}
 			name := strutil.FirstNonEmpty(a.Name, a.Tab)
-			rows = append(rows, &Row{Name: name, Agent: a.Name, Tab: a.Tab, HostState: a.Status})
+			rows = append(rows, &Row{Name: name, Agent: a.Name, Tab: a.Tab, HostState: a.Status.State, Evidence: a.Status.Reason})
 			findings = append(findings, Finding{Kind: UnclaimedTab, Slot: name, Detail: fmt.Sprintf("live agent in %s matches no slot", a.Cwd)})
 		}
 	}

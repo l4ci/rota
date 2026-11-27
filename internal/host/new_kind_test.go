@@ -37,7 +37,7 @@ func TestNewRefusesSoloAndUnknownKinds(t *testing.T) {
 			if got, err := h.ReadPane(context.Background(), "ben", "h", 5); got != "" || !errors.Is(err, ErrUnknownKind) {
 				t.Fatalf("ReadPane = %q, %v, want empty and ErrUnknownKind", got, err)
 			}
-			if got := h.Status(context.Background(), "ben", "h"); got != "" {
+			if got := h.Status(context.Background(), "ben", "h"); got != (AgentStatus{}) {
 				t.Fatalf("Status = %q, want empty", got)
 			}
 			if h.InSession() || h.Where() != "" {

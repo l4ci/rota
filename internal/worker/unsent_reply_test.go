@@ -22,7 +22,7 @@ func TestPollReplyAcknowledgesUnsentRelay(t *testing.T) {
 	}
 	first := "--- ORCHESTRATOR (round 1) ---\n[relay 1]\n\n● ROTA-DONE w1 https://github.com/o/r/pull/9\n"
 	next := "● ROTA-DONE w1 https://github.com/o/r/pull/10\n"
-	f.status = map[string]string{"w1": "idle"}
+	f.status = map[string]host.AgentStatus{"w1": {State: "idle"}}
 	f.panes = map[string][]string{"w1": {first, first, next, next}}
 	for _, want := range []string{"https://github.com/o/r/pull/9", "https://github.com/o/r/pull/10"} {
 		res, err := e.Poll(bg, dir, PollOpts{Slot: "w1"})

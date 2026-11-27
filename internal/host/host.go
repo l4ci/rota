@@ -410,8 +410,10 @@ type Host interface {
 	// error says only that the read failed, which is not proof of anything.
 	// Text is "" whenever the error is non-nil.
 	ReadPane(ctx context.Context, slot, handle string, lines int) (string, error)
-	// Status is the backend's native agent state, "" when it has none.
-	Status(ctx context.Context, slot, handle string) string
+	// Status returns the backend's native state and separate reason. The
+	// zero value means no native status. StatusGone proves the session exited;
+	// StatusUnverifiable means the host could not establish whether it lives.
+	Status(ctx context.Context, slot, handle string) AgentStatus
 	// Kill destroys the slot's session and proves it gone.
 	Kill(ctx context.Context, slot, handle string) error
 }
@@ -451,8 +453,8 @@ func (r refused) Send(context.Context, string, string, string) error {
 func (r refused) ReadPane(context.Context, string, string, int) (string, error) {
 	return "", r.err()
 }
-func (r refused) Status(context.Context, string, string) string { return "" }
-func (r refused) Kill(context.Context, string, string) error    { return r.err() }
+func (r refused) Status(context.Context, string, string) AgentStatus { return AgentStatus{} }
+func (r refused) Kill(context.Context, string, string) error         { return r.err() }
 
 // presence is what a host query says about a target. Only presentGone proves
 // cleanup; presentUnknown (transport, execution or unreadable-response
