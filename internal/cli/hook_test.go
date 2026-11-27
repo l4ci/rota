@@ -636,6 +636,30 @@ func TestHookStopContextGuardAutoPassesOnBranchHandoff(t *testing.T) {
 	}
 }
 
+// A detached HEAD has no handoff note path, so neither guard mode asks for a
+// /rota-pause that could not write one; a branch brings the guard back.
+func TestHookContextGuardDetachedHeadIsSilent(t *testing.T) {
+	for _, mode := range []string{"warn", "auto"} {
+		dir := guardProject(t, mode)
+		gittest.Run(t, dir, "checkout", "-q", "--detach")
+		dumpAt(t, dir, 95)
+		if out := promptOut(t, dir); out != "" {
+			t.Errorf("%s: prompt on a detached HEAD: %q", mode, out)
+		}
+		if code, out, _ := rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop"); code != 0 || out != "" {
+			t.Errorf("%s: stop on a detached HEAD: %d %q", mode, code, out)
+		}
+		gittest.Run(t, dir, "checkout", "-q", "-b", "work/guard")
+		out := promptOut(t, dir)
+		if mode == "auto" {
+			_, out, _ = rotaStdin(t, dir, stopPayload(dir, false), "hook", "stop")
+		}
+		if !strings.Contains(out, "/rota-pause") {
+			t.Errorf("%s: on a branch again: %q", mode, out)
+		}
+	}
+}
+
 // A payload that names its directory only as workspace.current_dir resolves to
 // it in the statusline, from a process whose own cwd is not a project (AC-3;
 // the hook verbs and the guard share the same Payload rule, see

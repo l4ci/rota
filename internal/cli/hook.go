@@ -183,9 +183,9 @@ func hookSetupFor(c *Ctx, needLeaseFree, anySession bool) (hc hookContext, ok bo
 	switch {
 	case hc.who.Orchestrator || !anySession:
 		hc.handoff = hook.ResolveHandoff(orchestratorFacts(c.deps(), hc.root, hc.cfg))
-	case config.ContextGuard(hc.cfg) == hook.GuardAuto:
+	case config.ContextGuard(hc.cfg) == hook.GuardAuto || config.ContextGuard(hc.cfg) == hook.GuardWarn:
 		// A work session pauses to .rota/handoff/<its branch>.md, where
-		// /rota-pause writes it; only the auto guard reads it.
+		// /rota-pause writes it; both guard modes ask only when it resolves.
 		hc.handoff = hook.ResolveHandoff(workSessionFacts(c.deps(), hc.root, hc.cwd))
 	}
 	return hc, true
@@ -331,7 +331,7 @@ func guardPrompt(hc hookContext, sid string) string {
 		return ""
 	}
 	d, _ := hook.ApplySession(hook.SessionIn{Action: hook.GuardPrompt, CommonDir: hc.commonDir, SessionID: sid,
-		Settings: set, Now: hc.now})
+		Settings: set, HandoffPath: hc.handoff, Now: hc.now})
 	return d.Line
 }
 

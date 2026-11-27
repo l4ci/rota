@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/l4ci/rota/internal/git"
 )
 
 // Kind is what a MergeLocal error means to a caller.
@@ -26,7 +28,8 @@ type Failure struct {
 	Kind Kind
 	Code int
 	Out  string
-	// Paths are the conflicted paths of a FailConflict.
+	// Paths are the conflicted paths of a FailConflict, byte-exact: match on
+	// them, and show them through git.DisplayPaths.
 	Paths []string
 	Err   error
 }
@@ -44,7 +47,7 @@ func Classify(err error) Failure {
 	case errors.As(err, new(*CleanupError)):
 		f.Kind = FailCleanup
 	case errors.As(err, &ce):
-		f.Kind, f.Out, f.Paths = FailConflict, ce.Out, ConflictPaths(ce.Out)
+		f.Kind, f.Out, f.Paths = FailConflict, ce.Out, ce.Paths
 	case errors.As(err, &me):
 		f.Kind, f.Code, f.Out = FailMerge, me.Code, me.Out
 	}
@@ -69,7 +72,7 @@ func (f Failure) Refusal(w Words) (msg, hint string) {
 	case FailCleanup:
 		return fmt.Sprintf("%s: %s", w.Failed, f.Err), ""
 	case FailConflict:
-		paths := strings.Join(f.Paths, ", ")
+		paths := ConflictList(f.Paths)
 		sub := func(s string) string { return strings.ReplaceAll(s, "{paths}", paths) }
 		return sub(w.Conflict), sub(w.ConflictHint)
 	case FailMerge:
@@ -78,21 +81,11 @@ func (f Failure) Refusal(w Words) (msg, hint string) {
 	return fmt.Sprintf("%s (exit 127): %s", w.Failed, f.Err), ""
 }
 
-// ConflictPaths lists the paths git named in a merge's "CONFLICT (...)" lines.
-func ConflictPaths(out string) []string {
-	var paths []string
-	for _, l := range strings.Split(out, "\n") {
-		if !strings.HasPrefix(l, "CONFLICT") {
-			continue
-		}
-		if i := strings.LastIndex(l, " in "); i >= 0 && strings.Contains(l, "Merge conflict") {
-			paths = append(paths, strings.TrimSpace(l[i+4:]))
-		} else if i := strings.Index(l, "): "); i >= 0 { // modify/delete, rename and add/add forms
-			paths = append(paths, strings.TrimSpace(l[i+3:]))
-		}
-	}
+// ConflictList words a conflict's paths for a message. The list is empty when
+// git held no unmerged path or could not be asked.
+func ConflictList(paths []string) string {
 	if len(paths) == 0 {
-		return []string{"(see git merge output)"}
+		return "(see git merge output)"
 	}
-	return paths
+	return strings.Join(git.DisplayPaths(paths), ", ")
 }

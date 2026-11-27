@@ -274,3 +274,42 @@ func TestTrainIntegrationNoVerifySkipsConfiguredVerify(t *testing.T) {
 		t.Fatal("an unverified tip reached main")
 	}
 }
+
+// A modify/delete conflict names the merged member it collides with, also for
+// a name git would quote.
+func TestTrainIntegrationModifyDeleteNamesTheCollidingMember(t *testing.T) {
+	for _, name := range []string{"seed.txt", "sp ü.txt"} {
+		t.Run(name, func(t *testing.T) {
+			w := integrationWorld(t)
+			if name != "seed.txt" {
+				trainWrite(t, w, name, "base")
+				gittest.Run(t, w.dir, "push", "-q", "origin", "main")
+				gittest.Run(t, w.worker, "fetch", "-q", "origin")
+			}
+			// #7 modifies the file, #8 deletes it.
+			for _, m := range []struct{ branch, key string }{{"w1", "sha"}, {"w2", "sha#8"}} {
+				gittest.Run(t, w.worker, "checkout", "-q", m.branch)
+				if name != "seed.txt" {
+					gittest.Run(t, w.worker, "merge", "-q", "--no-edit", "origin/main")
+				}
+				if m.branch == "w1" {
+					gittest.Commit(t, w.worker, "modify", name, "changed\n")
+				} else {
+					gittest.Run(t, w.worker, "rm", "-q", name)
+					gittest.Run(t, w.worker, "commit", "-q", "-m", "delete")
+				}
+				gittest.Run(t, w.worker, "push", "-q", "origin", m.branch)
+				w.forge(m.key, gittest.Run(t, w.worker, "rev-parse", "HEAD"))
+			}
+			res, err := w.train(TrainOpts{Targets: []string{"7", "8"}, Order: []string{"7", "8"}, Integration: "a"})
+			if err != nil || res.Verdict != landing.GateInteraction || strings.Join(res.Interaction, ",") != "8,7" {
+				t.Fatalf("want 8 colliding with 7: %q %+v %v", res.Interaction, res, err)
+			}
+			reg, _ := LoadRegistry(w.dir)
+			rec, _ := reg.IntegrationByBranch("integration/r55-a")
+			if m, ok := rec.Member("8"); !ok || len(m.Conflicts) != 1 || m.Conflicts[0] != name {
+				t.Fatalf("conflicts = %q, want %q", m.Conflicts, name)
+			}
+		})
+	}
+}
