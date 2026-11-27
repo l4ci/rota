@@ -25,9 +25,9 @@ func TestHostFindingsOwnInputs(t *testing.T) {
 		ok     bool
 		want   []Finding
 	}{
-		{"moved", []host.Agent{{Name: host.AgentName("kit", "w1:t3"), Tab: "w2:t1", Cwd: wt}}, true,
+		{"moved", []host.Agent{{Name: "rota-kit-w1-t3", Tab: "w2:t1", Cwd: wt}}, true,
 			[]Finding{{Kind: TabMoved, Slot: "kit", Detail: "recorded tab w1:t3, pane is now in tab w2:t1", Repair: "record w2:t1", from: "w1:t3", to: "w2:t1"}}},
-		{"shared", []host.Agent{{Name: host.AgentName("kit", "w1:t3"), Tab: "w1:t3", Pane: "w1:p9", TabPanes: 2}}, true,
+		{"shared", []host.Agent{{Name: "rota-kit-w1-t3", Tab: "w1:t3", Pane: "w1:p9", TabPanes: 2}}, true,
 			[]Finding{{Kind: TabMoved, Slot: "kit", Detail: "recorded tab w1:t3 now holds other panes; pane w1:p9 is not alone in it", Repair: "record w1:p9", from: "w1:t3", to: "w1:p9"}}},
 		{"dead before unclaimed", []host.Agent{{Name: "ghost", Tab: "w3:t1", Cwd: filepath.Join(root, ".worktrees", "ghost")}}, true,
 			[]Finding{{Kind: DeadTab, Slot: "kit", Detail: "host has no live agent for tab w1:t3", Repair: "clear handle, set state dead"},
