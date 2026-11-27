@@ -60,8 +60,9 @@ func branchChange(c *Ctx, t branchTarget) change.Result {
 	switch {
 	case err == nil:
 		src.PRBody = func() (string, error) {
-			body, _, err := branchPRBody(c, f, t.Branch)
-			return body, err
+			prs, err := f.OpenPRs(c.Context())
+			pr, _ := tracker.BranchPR(prs, t.Branch)
+			return pr.Body, err
 		}
 	case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
 		// no forge, so no PR and no Door line to read

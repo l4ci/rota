@@ -270,7 +270,7 @@ func TestRoundBounceAdoptedSupportSlot(t *testing.T) {
 		e := re(ctx, r, o)
 		e.HostName = host.Tmux
 		e.Snapshot = func(context.Context) ([]host.Agent, error) { return nil, nil }
-		e.Forge = branchPRForge{returnForge{fake}, tracker.PR{Number: 71, Branch: "mac-kit/32-other", URL: "https://github.com/o/r/pull/71"}}
+		e.Forge = branchPRForge{returnForge{fake}, tracker.PR{Number: 71, SameRepository: true, Branch: "mac-kit/32-other", URL: "https://github.com/o/r/pull/71"}}
 		return e
 	}
 	if code, out, errOut := rotaInWith(t, deps, dir, "round", "reconcile", "--apply"); code != 0 {

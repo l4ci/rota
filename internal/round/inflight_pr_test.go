@@ -41,7 +41,7 @@ func (f *moveFx) withPR(files []string, err error) {
 
 // withPRFor gives a slot an open PR that changes files.
 func (f *moveFx) withPRFor(slot string, number int, files []string, err error) {
-	f.forge.prs = append(f.forge.prs, tracker.PR{Number: number, Branch: f.slot(slot).Branch()})
+	f.forge.prs = append(f.forge.prs, tracker.PR{Number: number, SameRepository: true, Branch: f.slot(slot).Branch()})
 	prs := map[int][]string{}
 	if pf, ok := f.env.Forge.(prFilesForge); ok {
 		prs = pf.files
@@ -144,7 +144,7 @@ func TestInFlightQueuedPRComparesPRFiles(t *testing.T) {
 	if len(q) != 1 {
 		t.Fatalf("one queued PR: %+v", q)
 	}
-	f.forge.prs = []tracker.PR{{Number: 7, Branch: q[0].Branch}}
+	f.forge.prs = []tracker.PR{{Number: 7, SameRepository: true, Branch: q[0].Branch}}
 	f.env.Forge = prFilesForge{Forge: f.forge.asForge(), files: map[int][]string{7: {"internal/cli/nudge.go"}}}
 	x := f.inFlightFor(t, "12")
 	if x.Slot != "queue:ben" || !x.FromPR || strings.Join(x.Paths, ",") != "internal/cli/nudge.go" {

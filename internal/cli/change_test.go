@@ -64,7 +64,7 @@ func TestChangeClassify(t *testing.T) {
 	}
 
 	// a one-way Door on the branch's open PR forces full
-	prs = `[{"number":9,"title":"t","headRefName":"nia/6-docs","url":"u","body":"Door: one-way. Blast radius: x."}]`
+	prs = `[{"number":9,"title":"t","isCrossRepository":false,"headRefName":"nia/6-docs","url":"u","body":"Door: one-way. Blast radius: x."}]`
 	if _, d, _ := classify("--json"); d["tier"] != "full" || !strings.Contains(d["reason"].(string), "Door: one-way") {
 		t.Errorf("one-way door: %v", d)
 	}

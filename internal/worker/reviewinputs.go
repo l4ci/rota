@@ -146,13 +146,11 @@ func BuildReviewInputs(ctx context.Context, o ReviewInputOptions) (*ReviewInputs
 				if err != nil {
 					return "", err
 				}
-				for _, pr := range prs {
-					if pr.Branch == o.Branch {
-						in.prFound = true
-						return pr.Body, nil
-					}
+				pr, found := tracker.BranchPR(prs, o.Branch)
+				if found {
+					in.prFound = true
 				}
-				return "", nil
+				return pr.Body, nil
 			}
 		case errors.Is(err, tracker.ErrLocalForge) || tracker.IsCLIMissing(err):
 			in.noForge = true

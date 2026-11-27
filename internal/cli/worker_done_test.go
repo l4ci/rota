@@ -111,7 +111,7 @@ type doneForge struct {
 }
 
 func (f doneForge) OpenPRs(context.Context) ([]tracker.PR, error) {
-	return []tracker.PR{{Branch: "feat/x", Body: f.body}}, f.err
+	return []tracker.PR{{SameRepository: true, Branch: "feat/x", Body: f.body}}, f.err
 }
 
 type terminalDoneForge struct{ worker.Forge }
