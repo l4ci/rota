@@ -146,7 +146,7 @@ func TestMissingKnowledgeAndMapSourcesStayEmpty(t *testing.T) {
 				if err != nil || !strings.Contains(string(raw), tc.want) {
 					t.Fatalf("empty block: %q (%v)", raw, err)
 				}
-			} else if !strings.Contains(got.stdout, tc.want) {
+			} else if (tc.want == "" && got.stdout != "") || !strings.Contains(got.stdout, tc.want) {
 				t.Fatalf("empty output: %+v", got)
 			}
 		})
