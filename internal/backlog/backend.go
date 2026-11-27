@@ -243,7 +243,8 @@ type Options struct {
 	// Today is the day clock of the file backend's dated rows and of milestone
 	// created dates; nil is time.Now.
 	Today func() time.Time
-	// Warn receives the file backend's post-write notices; nil drops them.
+	// Warn receives the backend's notices (post-write failures, duplicate
+	// tracking issues); nil drops them.
 	Warn func(string)
 }
 
@@ -270,6 +271,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 		u.LookupProof = opts.LookupProof
 		u.NoteLimit = opts.NoteLimit
 		u.Today = opts.Today
+		u.Warn = opts.Warn
 		u.Scope = opts.Scope
 		if opts.Cwd != "" {
 			u.CwdRepo = CwdSubRepo(opts.Cwd, u.Repos)
@@ -280,7 +282,7 @@ func Open(ctx context.Context, root string, cfg any, opts Options) (Backend, err
 	if err != nil {
 		return nil, err
 	}
-	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, LookupProof: opts.LookupProof, NoteLimit: opts.NoteLimit, Today: opts.Today}, nil
+	return &Issues{Cfg: cfg, Tracker: tr, Ctx: ctx, CountProof: opts.CountProof, LookupProof: opts.LookupProof, NoteLimit: opts.NoteLimit, Today: opts.Today, Warn: opts.Warn}, nil
 }
 
 var (
