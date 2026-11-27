@@ -844,6 +844,41 @@ func TestReleaseMilestoneCheckLine(t *testing.T) {
 	}
 }
 
+// Coverage counts closed features, not dropped ones, and is reported below the
+// three-feature threshold of `milestone check` (#4304).
+func TestReleaseMilestoneCheckUncovered(t *testing.T) {
+	serves := func(ids string) string { return "## Change\n\nADDED round.maxBounces\nServes: " + ids + "\n" }
+	cases := []struct {
+		name, served, dropped string
+		uncovered             float64
+		line                  string
+	}{
+		{"one of three served", "AC-1", "", 2, "check: 0 fault(s), 2 uncovered\n"},
+		{"dropped feature serves nothing", "AC-1", "AC-2, AC-3", 2, "check: 0 fault(s), 2 uncovered\n"},
+		{"all served", "AC-1, AC-2, AC-3", "", 0, "check: clean\n"},
+	}
+	for _, c := range cases {
+		f := a8Fixture()
+		f.Fake.Issues[2].Body = "---\nid: M01\ntitle: One\nstatus: active\n---\n\n# M01\n\n## Acceptance\n\n- [ ] AC-1: one\n- [ ] AC-2: two\n- [ ] AC-3: three\n"
+		for i := range f.Fake.Issues {
+			if i != 2 {
+				f.Fake.Issues[i].Labels, f.Fake.Issues[i].State, f.Fake.Issues[i].StateReason = []string{"type:task"}, "closed", "completed"
+			}
+		}
+		f.Fake.Issues[0].Labels, f.Fake.Issues[0].Body = []string{"type:feature"}, serves(c.served)
+		f.Fake.Issues[7].Labels, f.Fake.Issues[7].Body, f.Fake.Issues[7].StateReason = []string{"type:feature"}, serves(c.dropped), "not_planned"
+		root, deps := a8Project(t, f)
+		code, data, msg := a8RunWith(t, deps, root, "release", "milestone-check", "M01")
+		want := map[string]any{"faults": float64(0), "uncovered": c.uncovered, "ok": c.uncovered == 0}
+		if code != 0 || !reflect.DeepEqual(data["check"], want) {
+			t.Errorf("%s: exit %d check %v (%s)", c.name, code, data["check"], msg)
+		}
+		if o := trRunWith(t, deps, root, "", "release", "milestone-check", "M01"); !strings.HasSuffix(o.stdout, c.line) {
+			t.Errorf("%s: text %q", c.name, o.stdout)
+		}
+	}
+}
+
 func TestReleaseMilestoneCheckUnavailable(t *testing.T) {
 	f := a8Fixture()
 	f.Fake.Fail = map[string]error{"get": &tracker.Error{Kind: tracker.KindUnavailable, Code: 3, Message: "no gh"}} // the item bodies cannot be read

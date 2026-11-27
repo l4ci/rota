@@ -2,6 +2,7 @@ package backlog
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strconv"
 
@@ -307,6 +308,24 @@ type Blocker struct {
 	Label string
 }
 
+// ReleaseFeatures is the body of every feature of milestone mid, open or
+// closed, except those closed as not planned.
+func (b *Issues) ReleaseFeatures(mid string) ([]string, error) { return b.releaseFeatures(mid, false) }
+
+func (b *Issues) releaseFeatures(mid string, optional bool) ([]string, error) {
+	issues, err := b.releaseIssuesOpt(mid, optional)
+	if err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, is := range issues {
+		if b.Letter(is) == "F" && !(is.State == "closed" && is.StateReason == tracker.CloseNotPlanned) {
+			out = append(out, is.Body)
+		}
+	}
+	return out, nil
+}
+
 // ReleaseGate lists the open issues of milestone mid: those carrying an
 // in-progress, needs-review or changes-requested label block the release,
 // every other open one is a warning (IssueBackend.release_gate).
@@ -511,6 +530,28 @@ func (u *Umbrella) ReleaseGate(mid string) ([]Blocker, []Issue, error) {
 		return gate{blocked, warn}, err
 	})
 	return g.blocked, g.warn, err
+}
+
+// ReleaseFeatures covers every sub-repo, whatever --repo says: the
+// milestone's criteria are shared, so a feature in any of them may serve one.
+// A sub-repo without the milestone adds nothing.
+func (u *Umbrella) ReleaseFeatures(mid string) ([]string, error) {
+	var out []string
+	for _, r := range u.Repos {
+		s, err := u.sub(r.Name)
+		if err != nil {
+			return nil, err
+		}
+		bodies, err := s.releaseFeatures(mid, true)
+		if errors.Is(err, ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, bodies...)
+	}
+	return out, nil
 }
 
 // ReleaseNotes are the release notes of mid in the --repo sub-repo.

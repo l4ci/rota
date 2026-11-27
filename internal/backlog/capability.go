@@ -10,6 +10,7 @@ type IssueBackend interface {
 	ReviewQueue() ([]QueueEntry, error)
 	MergePRGated(pr int, items []string, approve MergeApprover, lander Lander) (MergeResult, error)
 	ReleaseGate(mid string) ([]Blocker, []Issue, error)
+	ReleaseFeatures(mid string) ([]string, error)
 	ReleaseNotes(mid string) ([]NoteSection, error)
 	ReleaseClose(mid, tag string) (int, bool, error)
 	// MilestoneStore is the backend's milestone store.

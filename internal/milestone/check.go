@@ -91,7 +91,6 @@ func Check(body string, children []Child, strict bool) Report {
 	for _, n := range CapabilityNames(Capabilities(body)) {
 		caps[n] = true
 	}
-	served := map[string]bool{}
 	for _, f := range feats {
 		c := itembody.ParseChange(f.Body)
 		if !c.OK {
@@ -103,9 +102,7 @@ func Check(body string, children []Child, strict bool) Report {
 		}
 		var unknown []string
 		for _, id := range c.Serves {
-			if known[id] {
-				served[id] = true
-			} else {
+			if !known[id] {
 				unknown = append(unknown, id)
 			}
 		}
@@ -136,10 +133,29 @@ func Check(body string, children []Child, strict bool) Report {
 			}
 		}
 	}
-	for _, id := range r.Criteria {
-		if !served[id] {
-			r.Uncovered = append(r.Uncovered, id)
+	r.Uncovered = Uncovered(body, feats)
+	return r
+}
+
+// Uncovered lists the criteria of body that no feature (Type F) among children
+// serves. Unlike Check it has no MinFeatures threshold. Never nil. Pure.
+func Uncovered(body string, children []Child) []string {
+	served := map[string]bool{}
+	for _, ch := range children {
+		if ch.Type != "F" {
+			continue
+		}
+		if c := itembody.ParseChange(ch.Body); c.OK {
+			for _, id := range c.Serves {
+				served[id] = true
+			}
 		}
 	}
-	return r
+	out := []string{}
+	for _, cr := range acceptance.IDs(body) {
+		if cr.ID != "" && !served[cr.ID] {
+			out = append(out, cr.ID)
+		}
+	}
+	return out
 }
