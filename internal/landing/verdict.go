@@ -5,7 +5,8 @@ import "github.com/l4ci/rota/internal/blockedby"
 // VerdictMeaning is what one gate or train verdict means to a caller: whether
 // it succeeds, whether the CLI turns it into an exit-4 refusal (and which
 // blockedBy it names), whether it sends the PR back to its worker uncounted,
-// and whether a refused target then waits for a person.
+// whether a refused target waits for a person, whether a tick holds it at the
+// PR head, and whether an automatic follow-up routes it to a worker.
 type VerdictMeaning struct {
 	// Success: the gate or train passed (fresh under CheckOnly, pass).
 	Success bool
@@ -25,6 +26,12 @@ type VerdictMeaning struct {
 	// Hold: a refused target waits for a person. False for a verdict that
 	// clears itself or goes back to a worker.
 	Hold bool
+	// HoldHead: round ticks keep this failure at the PR head until a push.
+	// Other failures can clear without changing the head and retry next tick.
+	HoldHead bool
+	// RouteToWorker: under round.reviewLoop auto, a queued PR with this verdict
+	// goes to a worker follow-up. Interactions remain the orchestrator's to fix.
+	RouteToWorker bool
 }
 
 // BlockedByVerdict is the blockedBy key the CLI treats specially when it builds a
@@ -37,13 +44,13 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateFreeze:             {Refusal: true, BlockedBy: blockedby.Freeze, Hold: true},
 	GateFresh:              {Success: true, Hold: true},
 	GatePass:               {Success: true, Hold: true},
-	GateStale:              {Notify: true},
+	GateStale:              {Notify: true, HoldHead: true, RouteToWorker: true},
 	GatePRMismatch:         {Hold: true},
-	GateProvenanceFail:     {Notify: true},
+	GateProvenanceFail:     {Notify: true, RouteToWorker: true},
 	GateNotMerged:          {Hold: true},
 	GateNotOnBase:          {Hold: true},
-	GateVerifyFailed:       {Hold: true},
-	GateInteraction:        {Hold: true},
+	GateVerifyFailed:       {Hold: true, HoldHead: true, RouteToWorker: true},
+	GateInteraction:        {Hold: true, HoldHead: true},
 	GateMergedRemotely:     {Hold: true},
 	GateMergeFailed:        {Hold: true},
 	GateCheckBroke:         {Hold: true},
@@ -54,7 +61,7 @@ var verdictMeanings = map[string]VerdictMeaning{
 	GateBaseMoved:          {Hold: true},
 	GateApprovalRequired:   {Refusal: true, ViaError: true, Hold: true},
 	GateVerdictBlocked:     {Refusal: true, ViaError: true, BlockedBy: BlockedByVerdict, Hold: true},
-	GateVacuousTests:       {Refusal: true, BlockedBy: blockedby.VacuousTests, Hold: true},
+	GateVacuousTests:       {Refusal: true, BlockedBy: blockedby.VacuousTests, Hold: true, HoldHead: true, RouteToWorker: true},
 	GateNoVerify:           {Refusal: true, BlockedBy: blockedby.NoVerify, Hold: true},
 	GateNotClosing:         {Refusal: true, BlockedBy: blockedby.Closes, Hold: true},
 	GateAssumptionsMissing: {Refusal: true, BlockedBy: blockedby.AssumptionsMissing, Hold: true},

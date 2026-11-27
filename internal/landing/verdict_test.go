@@ -79,6 +79,28 @@ func TestVerdictsAreClassified(t *testing.T) {
 	}
 }
 
+func TestVerdictTickTraits(t *testing.T) {
+	holdHead := map[string]bool{
+		GateStale: true, GateVerifyFailed: true, GateVacuousTests: true, GateInteraction: true,
+	}
+	routeToWorker := map[string]bool{
+		GateStale: true, GateProvenanceFail: true, GateVerifyFailed: true, GateVacuousTests: true,
+	}
+	verdicts := gateVerdictConsts(t)
+	verdicts["unknown verdict"] = "unheard-of"
+	for name, v := range verdicts {
+		t.Run(name, func(t *testing.T) {
+			m := ClassifyVerdict(v)
+			if m.HoldHead != holdHead[v] {
+				t.Errorf("%q HoldHead = %v, want %v", v, m.HoldHead, holdHead[v])
+			}
+			if m.RouteToWorker != routeToWorker[v] {
+				t.Errorf("%q RouteToWorker = %v, want %v", v, m.RouteToWorker, routeToWorker[v])
+			}
+		})
+	}
+}
+
 func TestVerdictMeaningsAreCoherent(t *testing.T) {
 	for v, m := range verdictMeanings {
 		if m.Success && m.Refusal {
