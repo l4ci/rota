@@ -13,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/rotastatetest"
 	"github.com/l4ci/rota/internal/roundlease"
 	"github.com/l4ci/rota/internal/roundwatch"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 // assignNudgeRepo is a file-backend repo whose only slot is done with a PR,
@@ -123,6 +124,22 @@ func TestTrainNudgeAssignsFreeSlotFirst(t *testing.T) {
 				t.Errorf("no-candidate nudge changed: %s", res.Text)
 			}
 		})
+	}
+}
+
+// With account placement on, a free slot whose old account has no login still
+// takes work, so the advice names it as assign would (#4320).
+func TestAssignFirstAdviceFollowsAccountPlacement(t *testing.T) {
+	dir := assignNudgeRepo(t, true)
+	write(t, filepath.Join(dir, ".rota", "config.json"),
+		`{"round":{"roster":["w1","w2"],"slots":2,"scope":"open","dispatch":"herdr","accounts":[{"name":"a","configDir":"/nowhere"}]}}`)
+	write(t, filepath.Join(dir, ".rota", "workers.json"), `{"slots":[{"name":"w1","state":"idle"},{"name":"w2","state":"idle"}]}`)
+	if _, err := worker.UpdateSlot(dir, "w1", func(s *worker.Slot) { s.SetAccountFor("", "work", t.TempDir()) }); err != nil {
+		t.Fatal(err)
+	}
+	n := freeSlotAssignment(&Ctx{Deps: testDeps(), ctx: context.Background()}, dir)
+	if n == nil || n.Slot != "w1" {
+		t.Errorf("advice = %+v, want slot w1", n)
 	}
 }
 
