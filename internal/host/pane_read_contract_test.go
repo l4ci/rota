@@ -6,6 +6,24 @@ import (
 	"testing"
 )
 
+func TestReadPaneEmptyHandleOnEveryPaneKind(t *testing.T) {
+	for _, kind := range PaneKinds {
+		t.Run(string(kind), func(t *testing.T) {
+			f := &fake{handler: func(string, []string) Result {
+				return Result{Stdout: "CALLER PANE"}
+			}}
+			h := New(kind, deps(f, nil, &clock{}))
+			text, err := h.ReadPane(context.Background(), "ben", "", 40)
+			if text != "" || err != nil {
+				t.Errorf("ReadPane = %q, %v; want empty text and nil error", text, err)
+			}
+			if len(f.calls) != 0 {
+				t.Errorf("empty handle must not read the caller's pane; ran %s", f.log())
+			}
+		})
+	}
+}
+
 // One read, one error rule: a pane the backend proves gone reads as empty text
 // plus ErrPaneGone, whichever backend carries the read (#3762).
 func TestReadPaneGonePaneIsErrPaneGoneOnEveryBackend(t *testing.T) {

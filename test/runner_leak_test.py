@@ -1,11 +1,12 @@
 """Exercise the real runner against disposable checkouts, never the dev tree."""
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
 import time
 import unittest
+
+import gate_sandbox
 
 
 class RunnerLeakTest(unittest.TestCase):
@@ -15,14 +16,9 @@ class RunnerLeakTest(unittest.TestCase):
         self.root = Path(self.scratch.name)
         self.repo = self.root / "repo"
         self.repo.mkdir()
-        source = Path(__file__).resolve().parent
         (self.repo / "test/sections").mkdir(parents=True)
-        shutil.copy(source / "runner.sh", self.repo / "test/runner.sh")
-        shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
-        shutil.copy(source / "gate-partition.py", self.repo / "test/gate-partition.py")
-        shutil.copy(source / "lib.sh", self.repo / "test/lib.sh")
-        shutil.copy(source / "lint-sections.py", self.repo / "test/lint-sections.py")
-        shutil.copytree(source / "lib", self.repo / "test/lib")
+        gate_sandbox.install_gate(self.repo)
+        gate_sandbox.install_runner(self.repo)
         (self.repo / ".rota").mkdir()
         self.paths = ["CLAUDE.md", "AGENTS.md", ".rota/KNOWLEDGE.md"]
         for path in self.paths:
