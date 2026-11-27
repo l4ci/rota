@@ -16,10 +16,11 @@ type Count struct {
 
 // Census is the read-only tally doctor reports of what a run left behind.
 type Census struct {
-	LeakedTemp Count    // systmp candidates reap lists and does not hold
-	StaleTmp   Count    // project temp root entries reap lists and does not hold
-	Prunable   Count    // .worktrees/ checkouts git marks prunable
-	Warnings   []string // what reap warns while listing tmp, so doctor can show it
+	LeakedTemp    Count    // systmp candidates reap lists and does not hold
+	StaleTmp      Count    // project temp root entries reap lists and does not hold
+	Prunable      Count    // .worktrees/ checkouts git marks prunable
+	Warnings      []string // what reap warns while listing tmp, so doctor can show it
+	CanReapSysTmp bool     // the systmp count came from a runnable project reap input
 }
 
 // CensusInput names where to count. Root "" skips the worktree class and an
@@ -44,7 +45,7 @@ func TakeCensus(ctx context.Context, in CensusInput) Census {
 	var c Census
 	if in.SystemTemp != "" {
 		var warn []string
-		c.LeakedTemp, warn = reclaimableSysTmp(ctx, in)
+		c.LeakedTemp, c.CanReapSysTmp, warn = reclaimableSysTmp(ctx, in)
 		c.Warnings = append(c.Warnings, warn...)
 	}
 	if in.Reap != nil && in.Reap.TempRoot != "" {
@@ -88,7 +89,7 @@ func unheld(cands []Candidate) (c Count) {
 // rules leave free to delete: what `rota reap --kind systmp --apply` would
 // remove. With a project it runs through Find, so a git worktree or host agent
 // under a dir holds it; without one the process table alone proves it free.
-func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
+func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, bool, []string) {
 	ri := Input{Root: in.Root, Git: in.Git, ProcessUses: in.ProcessUses}
 	if in.Reap != nil {
 		ri = *in.Reap
@@ -97,10 +98,10 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 	if in.ProcessUses != nil {
 		ri.ProcessUses = in.ProcessUses
 	}
-	bare := func() (Count, []string) {
+	bare := func() (Count, bool, []string) {
 		s := &state{in: ri, live: newOwnership(nil, "", "", nil)}
 		cands, _ := findSysTmp(ctx, s)
-		return unheld(cands), s.warnings
+		return unheld(cands), false, s.warnings
 	}
 	if in.Root == "" || ri.Git == nil {
 		return bare()
@@ -112,15 +113,16 @@ func reclaimableSysTmp(ctx context.Context, in CensusInput) (Count, []string) {
 		if strings.Contains(err.Error(), "not a git repository") {
 			return bare()
 		}
-		return Count{}, []string{"system temp dir not checked: " + err.Error()}
+		return Count{}, false, []string{"system temp dir not checked: " + err.Error()}
 	}
-	return unheld(res.Candidates), res.Warnings
+	return unheld(res.Candidates), in.Reap != nil, res.Warnings
 }
 
 // prunableWorktrees counts the worktree candidates reap lists that git marks
 // prunable and its held rules leave free: what `rota reap --kind worktree
 // --apply` would remove of them. With the host unreadable reap lists none.
 func prunableWorktrees(ctx context.Context, in Input) (c Count, warnings []string) {
+	in.PrunableOnly = true
 	res, err := Find(ctx, in, []string{KindWorktree})
 	if err != nil {
 		// A project dir that is no git repo has no checkouts to count.
@@ -130,7 +132,7 @@ func prunableWorktrees(ctx context.Context, in Input) (c Count, warnings []strin
 		return c, []string{"worktrees not checked: " + err.Error()}
 	}
 	for _, cd := range res.Candidates {
-		if cd.Prunable && cd.Held == "" {
+		if cd.Held == "" {
 			c.N++
 		}
 	}

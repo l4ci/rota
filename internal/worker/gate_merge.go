@@ -3,6 +3,7 @@ package worker
 import (
 	"errors"
 	"fmt"
+	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/land"
 	"github.com/l4ci/rota/internal/landing"
@@ -210,18 +211,17 @@ func (g *gateRun) mergedRemotely(why string) {
 // files the merge touches are told apart from real divergence: local main can
 // be purely behind and still refuse to move.
 func (g *gateRun) ffFailureCause(mergeOut string) string {
-	incoming, _ := g.git(g.root, "diff", "--name-only", "HEAD", g.baseRef)
+	incoming, _ := git.ChangedPaths(g.ctx, g.e.Git, g.root, "HEAD.."+g.baseRef)
 	in := map[string]bool{}
-	for _, p := range strings.Split(incoming, "\n") {
-		if p != "" {
-			in[p] = true
-		}
+	for _, p := range incoming {
+		in[p] = true
 	}
-	status, _ := g.git(g.root, "status", "--porcelain")
 	var clash []string
-	for _, l := range strings.Split(status, "\n") {
-		if len(l) > 3 && in[l[3:]] {
-			clash = append(clash, l[3:])
+	if res, err := g.e.Git(g.ctx, g.root, "status", "--porcelain", "-z", "-uall"); err == nil && res.ExitCode == 0 {
+		for _, p := range git.StatusPaths(res.Stdout) {
+			if in[p] {
+				clash = append(clash, p)
+			}
 		}
 	}
 	if len(clash) > 0 {

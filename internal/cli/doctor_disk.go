@@ -12,6 +12,7 @@ import (
 	"github.com/l4ci/rota/internal/reap"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/worker"
 )
 
 func statDisk(dir string) *doctor.Disk {
@@ -31,14 +32,20 @@ func doctorLeftovers(ctx context.Context, run git.Runner, root, temp string, tmp
 	c := reap.TakeCensus(ctx, reap.CensusInput{Root: root, SystemTemp: temp, Reap: tmp, ProcessUses: processUses, Git: run})
 	var out []string
 	if c.LeakedTemp.N > 0 {
-		out = append(out, fmt.Sprintf("%d leaked temp dirs under %s (%s) that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size))))
+		hint := fmt.Sprintf("%d leaked temp dirs under %s (%s)", c.LeakedTemp.N, temp, strutil.HumanBytes(uint64(c.LeakedTemp.Size)))
+		if c.CanReapSysTmp {
+			hint += " that `rota reap --kind systmp --apply` would remove; preview with `rota reap --kind systmp`"
+		} else {
+			hint += "; inspect these directories manually (cleanup is unavailable here)"
+		}
+		out = append(out, hint)
 	}
 	if c.StaleTmp.N > 0 {
 		out = append(out, fmt.Sprintf("%d entries under %s (%s) that `rota reap --kind tmp --apply` would remove; preview with `rota reap --kind tmp`", c.StaleTmp.N, tmp.TempRoot, strutil.HumanBytes(uint64(c.StaleTmp.Size))))
 	}
 	out = append(out, c.Warnings...)
 	if c.Prunable.N > 0 {
-		out = append(out, fmt.Sprintf("%d stale scratch worktrees (run: git worktree prune; rota reap lists the rest)", c.Prunable.N))
+		out = append(out, fmt.Sprintf("%d stale scratch worktrees that `rota reap --kind worktree --prunable --apply` would remove; preview with `rota reap --kind worktree --prunable`", c.Prunable.N))
 	}
 	return out
 }
@@ -69,19 +76,22 @@ func (d *Deps) doctorDiskInput(ctx context.Context, in *doctor.Input, cfg any, r
 }
 
 // doctorReapInput is the reap input doctor counts with: the one `rota reap`
-// builds, so both read the same held rules. Nil with no project; warn says why
-// the round status could not be read.
+// builds, so both read the same held rules. Nil when project cleanup is
+// unavailable; warn says which preflight failed.
 func (d *Deps) doctorReapInput(ctx context.Context, root string) (in *reap.Input, warn []string) {
 	if root == "" {
 		return nil, nil
 	}
-	roster := []string(nil)
-	if set, ok := d.tolerantRoundSettings(root); ok {
-		roster = set.Roster
+	if err := worker.CheckRegistry(root); err != nil {
+		return nil, []string{"cleanup unavailable: " + err.Error()}
+	}
+	set, err := d.roundSettings(root, roundConfigRequired)
+	if err != nil {
+		return nil, []string{"cleanup unavailable: " + err.Error()}
 	}
 	// Doctor's ledger read is not part of its output: reap warns about an
 	// unreadable ledger, and it only decides which branches reap offers.
-	ri, _, err := d.reapInput(ctx, root, roster)
+	ri, _, err := d.reapInput(ctx, root, set.Roster)
 	if err != nil {
 		// No temp root: the old doctor said nothing here, and still says nothing.
 		if tr, _ := rotatree.FindTempRoot(ctx, d.Git, root); tr == "" {
