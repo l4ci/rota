@@ -15,7 +15,7 @@ import (
 // least one sub-repo. umbrella.enabled plays no part.
 func Umbrella(base string) bool { return len(Load(base)) > 0 }
 
-// Errors of Which, from hv-resolve-repo. A missing .rota/ and a masked
+// Errors of Lookup and Which, from hv-resolve-repo. A missing .rota/ and a masked
 // umbrella are rotatree.ErrNoRoot and rotatree.ErrMasked.
 var (
 	// ErrGitMissing: no git binary on PATH.
@@ -58,21 +58,42 @@ func subs(root string) []rotatree.Sub {
 // whose checkout cwd belongs to. A Layout B worktree maps to its main repo
 // through git's common dir. The registry is the one of the umbrella that
 // FindRoot resolves from cwd.
-func Which(cwd string) (Repo, error) {
-	sub, ok, err := rotastate.MainCheckoutVia(context.Background(), git.Exec, cwd)
+func Which(run git.Runner, cwd string) (Repo, error) {
+	umb, rootErr := FindRoot(cwd)
+	var list []Repo
+	if rootErr == nil {
+		list = Load(umb)
+	}
+	r, err := Lookup(run, cwd, list)
+	// Preserve the git errors before root-resolution errors, and root errors
+	// before the unregistered fallback.
+	if errors.Is(err, ErrGitMissing) || errors.Is(err, ErrNotGit) {
+		return Repo{}, err
+	}
+	if rootErr != nil {
+		return Repo{}, rootErr
+	}
+	return r, err
+}
+
+// Lookup finds the first registered sub-repo whose main checkout holds cwd.
+// list is in registry order, with resolved paths as returned by Load. Linked
+// worktrees and symlinks resolve through the same git common directory.
+// A nil runner uses git.Exec.
+func Lookup(run git.Runner, cwd string, list []Repo) (Repo, error) {
+	if run == nil {
+		run = git.Exec
+	}
+	main, ok, err := rotastate.MainCheckoutVia(context.Background(), run, cwd)
 	if errors.Is(err, git.ErrNoGit) {
 		return Repo{}, ErrGitMissing
 	}
 	if err != nil || !ok {
 		return Repo{}, ErrNotGit
 	}
-	sub = Realpath(sub)
-	umb, err := FindRoot(cwd)
-	if err != nil {
-		return Repo{}, err
-	}
-	for _, r := range Load(umb) {
-		if r.Path == sub {
+	main = Realpath(main)
+	for _, r := range list {
+		if r.Path == main {
 			return r, nil
 		}
 	}
@@ -88,11 +109,11 @@ func str(o *jsonx.Object, key string) string {
 // VerdictRepo is the repo name that keys a branch's verdicts: flag when set,
 // else in the umbrella at root the sub-repo whose checkout dir belongs to,
 // else "" (a plain project, or a dir outside every registered sub-repo).
-func VerdictRepo(root, dir, flag string) string {
+func VerdictRepo(run git.Runner, root, dir, flag string) string {
 	if flag != "" || !Umbrella(root) {
 		return flag
 	}
-	if r, err := Which(dir); err == nil {
+	if r, err := Which(run, dir); err == nil {
 		return r.Name
 	}
 	return ""

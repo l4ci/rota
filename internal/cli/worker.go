@@ -940,7 +940,7 @@ func prepareGate(c *Ctx, ctx context.Context, root string, o gateRunOpts) (postg
 	if err != nil {
 		return postgate.Env{}, postgate.Request{}, err
 	}
-	opts := postgate.GateOpts{NoWait: o.NoWait, Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), VerdictRepo: repos.VerdictRepo(root, root, c.Repo), CheckReviews: true, ItemBody: lazyItemBody(c, root)}
+	opts := postgate.GateOpts{NoWait: o.NoWait, Slot: o.Slot, Base: o.Base, CheckOnly: o.CheckOnly, NoVerify: o.NoVerify, FinalSlice: o.FinalSlice, Prune: o.Prune, Approval: mergeApproval(c, policy, o.Confirm, o.Approval, nil), VerdictRepo: repos.VerdictRepo(c.deps().Git, root, root, c.Repo), CheckReviews: true, ItemBody: lazyItemBody(c, root)}
 	return landingEnv(c, ctx, root), postgate.Request{Gate: &opts}, nil
 }
 
