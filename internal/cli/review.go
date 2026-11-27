@@ -357,6 +357,10 @@ func reviewScaffolding(fs *flag.FlagSet) RunFunc {
 	return func(c *Ctx, args []string) (Result, error) {
 		t, err := resolveReviewSpan(c, args, *baseFlag, "")
 		if err != nil {
+			var e *Error
+			if errors.As(err, &e) && e.Message == noBaseMsg {
+				return Result{}, Resolution(noBaseMsg).WithHint("pass --base <ref>")
+			}
 			return Result{}, err
 		}
 		found, err := c.deps().Repo(t.Dir).Verify(c.Context(), t.Base+"^{commit}")

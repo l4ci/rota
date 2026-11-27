@@ -556,6 +556,16 @@ func TestReviewQueueUmbrella(t *testing.T) {
 	}
 }
 
+// reviewIssueDeps supplies both tracker boundaries: item intents and PR bases.
+func reviewIssueDeps(t *testing.T) *Deps {
+	t.Helper()
+	deps := withTracker(t, issueFixture())
+	deps.TrackerOptions = []tracker.Option{tracker.WithExec(func(_ context.Context, _ proc.Cmd) (proc.Result, error) {
+		return proc.Result{Stdout: "[]"}, nil
+	}, func(n string) (string, error) { return "/fake/" + n, nil })}
+	return deps
+}
+
 // Issue mode: refs come from closing keywords and the branch name, resolved
 // through the tracker; an unknown ref stays listed with no intent.
 func TestReviewScopeIssueMode(t *testing.T) {
@@ -568,7 +578,7 @@ func TestReviewScopeIssueMode(t *testing.T) {
 	write(t, filepath.Join(root, "a.txt"), "b\n")
 	gittest.Run(t, root, "add", "a.txt")
 	gittest.Run(t, root, "commit", "-q", "-m", "Add export", "-m", "Closes #9, closes #99. Mentions [B01].")
-	deps := withTracker(t, issueFixture())
+	deps := reviewIssueDeps(t)
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
 	if o.code != 0 {
@@ -858,7 +868,7 @@ func TestReviewScopeManualCommits(t *testing.T) {
 	write(t, filepath.Join(root, "a.txt"), "b\n")
 	gittest.Run(t, root, "add", "a.txt")
 	gittest.Run(t, root, "commit", "-q", "-m", "Tidy a by hand")
-	deps := withTracker(t, issueFixture())
+	deps := reviewIssueDeps(t)
 
 	o := trRunWith(t, deps, root, "", "review", "scope", "--json")
 	if o.code != 0 {
