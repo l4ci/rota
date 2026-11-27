@@ -9,7 +9,6 @@ import (
 
 	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -74,6 +73,7 @@ func (s Store) Add(scope, topic, title, body, date, sha string, paths ...string)
 	if err := bulletfmt.CheckTitle(title); err != nil {
 		return AddResult{}, err
 	}
+	title = strings.TrimSpace(title)
 	if err := bulletfmt.CheckDate(date); err != nil {
 		return AddResult{}, err
 	}
@@ -112,10 +112,10 @@ func (s Store) addLocked(scope, target, topic, title, body, date, sha string) (A
 	if !ok {
 		return AddResult{}, notFound("topic '%s' not found in %s", topic, target)
 	}
-	if bulletfmt.HasTitle(pystr.Splitlines(content[start:end]), title) {
-		// A repeat still registers the title in the
+	if stored, ok := bulletfmt.FindTitle(content[start:end], title); ok {
+		// A repeat still registers the stored title in the
 		// sidecar, so a bullet that predates tiering gets tracked.
-		return AddResult{}, s.initTierUnlessGlossary(scope, topic, title)
+		return AddResult{}, s.initTierUnlessGlossary(scope, topic, stored)
 	}
 	if tiered(topic) {
 		if err := s.preflightTier(scope, func(sc *Sidecar) error { return sc.checkIdentity(topic, title) }); err != nil {
