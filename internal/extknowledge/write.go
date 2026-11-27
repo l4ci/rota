@@ -208,10 +208,13 @@ func (c Clone) newSubtopic(name string) (parent Topic, sub string, ok bool, err 
 		return Topic{}, "", false, err
 	}
 	head := strings.TrimSpace(parts[0])
+	var roots []Topic
 	for _, t := range topics {
-		if t.Parent != "" || !(strings.EqualFold(t.Name, head) || t.Slug == Slugify(head)) {
-			continue
+		if t.Parent == "" {
+			roots = append(roots, t)
 		}
+	}
+	if t, ok := exact(head, roots); ok {
 		switch {
 		case len(parts) > 2:
 			return Topic{}, "", false, fmt.Errorf("%w: %q is two levels deep; subtopics nest one level (%s: <Subtopic>)", ErrNotFound, name, t.Name)
