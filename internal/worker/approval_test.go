@@ -14,6 +14,7 @@ import (
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -63,6 +64,36 @@ func TestGateMergeApprovalSequence(t *testing.T) {
 	}
 	if strings.Contains(w.logText(), "PRRequestMerge") {
 		t.Error("refused approval merged the PR")
+	}
+}
+
+func TestGateMergeApprovalCoversRenameSource(t *testing.T) {
+	w := newWorld(t, ghURL)
+	seedBoth(t, w, "old.txt")
+	gittest.Run(t, w.worker, "mv", "old.txt", "new.txt")
+	pushW1(t, w, "rename out of covered path")
+
+	esc := &fakeEscalator{}
+	ref := refusalWithData()
+	policy := gatepolicy.MergePolicy{Mode: gatepolicy.MergePaths, Paths: []string{"old*.txt"}}
+	res, err := w.gate(false, GateOpts{Approval: &MergeApproval{
+		Policy: policy, Escalate: true,
+		Clear: func(_ string, _ gatepolicy.Confirm, paths []string) (*exitcode.Refusal, error) {
+			if !reflect.DeepEqual(paths, []string{"old.txt"}) {
+				t.Errorf("approval paths = %q, want the covered rename source old.txt", paths)
+			}
+			return ref, nil
+		},
+		Escalation: &ApprovalEscalation{Esc: esc, Policy: policy, Warn: t.Errorf},
+	}})
+	if res.Verdict != landing.GateApprovalRequired || res.Refusal != ref || err != ref.Err || res.Changed {
+		t.Fatalf("rename out of a covered path did not hold the merge for approval: %+v, %v", res, err)
+	}
+	if len(esc.bodies) != 1 || !strings.Contains(esc.bodies[0], "- old.txt\n") {
+		t.Errorf("approval request does not name the rename source: %q", esc.bodies)
+	}
+	if strings.Contains(w.logText(), "PRRequestMerge") {
+		t.Error("unapproved rename merged the PR")
 	}
 }
 

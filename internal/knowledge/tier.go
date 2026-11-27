@@ -12,7 +12,6 @@ import (
 	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
-	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/section"
 )
 
@@ -552,14 +551,12 @@ func (s Store) effectiveBackfilled(scope string) (*Sidecar, error) {
 		if !tiered(t.Name) {
 			continue
 		}
-		for _, line := range pystr.Splitlines(t.Body) {
-			if title, ok := bulletfmt.Title(line); ok {
-				// An ambiguous legacy record owns this bullet: leave it
-				// unbackfilled so the error surfaces where that bullet is
-				// read (Get), not on every unrelated topic.
-				if _, err := sc.Init(t.Name, title, s.today()); err != nil && !errors.Is(err, ErrMultiMatch) {
-					return nil, err
-				}
+		for _, b := range bulletfmt.Bullets(t.Body) {
+			// An ambiguous legacy record owns this bullet: leave it
+			// unbackfilled so the error surfaces where that bullet is
+			// read (Get), not on every unrelated topic.
+			if _, err := sc.Init(t.Name, b.Title, s.today()); err != nil && !errors.Is(err, ErrMultiMatch) {
+				return nil, err
 			}
 		}
 	}
