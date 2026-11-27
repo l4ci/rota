@@ -29,6 +29,12 @@
 // with a scripted reader and a buffer. Run returns ErrNoRaw when the
 // terminal cannot take raw mode, and the caller falls back to plain output.
 //
+// Keys do not depend on where a read ends: an unfinished escape sequence or
+// UTF-8 character waits for the next read. A lone Esc is told from the start
+// of a sequence by a pause of 50ms (see Terminal.Tick for an In without a
+// read deadline). Input left unfinished when a Cmd takes over is dropped,
+// with its tail.
+//
 // # Widgets
 //
 // Widgets are values a screen embeds in its model: each has its own Update

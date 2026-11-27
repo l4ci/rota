@@ -1146,6 +1146,8 @@ Keys sit under their section (`orchestrator`, `work`, `ship`, `round`, ...). Eac
 | `/` | filter the rows by any part of the row; `Enter` ends typing, `Esc` clears |
 | `q` / `Esc` | back (`Esc` clears a filter first) |
 
+On this and every other screen, keys read the same however the terminal splits their bytes. To tell `Esc` from the start of an arrow or page key, rota waits 50 ms after it. If the terminal gives rota no read timeout, `Esc` acts at once, and a key sequence split right after its first byte is read as separate keys.
+
 While editing, a boolean is a toggle (`Space`), a key with choices is a picker (`←` `→`), and any other key is a text field. `Enter` saves and `Esc` cancels. The text is checked as `rota config set` checks it: JSON when it parses, else a string, and a project-relative path key such as `release.versionFile` refuses a path outside the project. The value must match the key's declared JSON type, so a number key refuses text and a list key requires a JSON list. `ship.review` also accepts its documented boolean and object forms. Every save is written at once, through the code behind `config set`, so leaving the screen never loses or half-applies a change. A key set in `config.local.json` still wins on this machine after a project edit; the screen says so.
 
 ## The global config dir

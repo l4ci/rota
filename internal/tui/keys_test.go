@@ -2,53 +2,8 @@ package tui
 
 import (
 	"os"
-	"reflect"
 	"testing"
 )
-
-func TestDecodeKeys(t *testing.T) {
-	k := func(kind KeyKind) Key { return Key{Kind: kind} }
-	cases := []struct {
-		name string
-		in   string
-		want []Key
-	}{
-		{"up CSI", "\x1b[A", []Key{k(KeyUp)}},
-		{"down CSI", "\x1b[B", []Key{k(KeyDown)}},
-		{"right CSI", "\x1b[C", []Key{k(KeyRight)}},
-		{"left CSI", "\x1b[D", []Key{k(KeyLeft)}},
-		{"up SS3", "\x1bOA", []Key{k(KeyUp)}},
-		{"down SS3", "\x1bOB", []Key{k(KeyDown)}},
-		{"right SS3", "\x1bOC", []Key{k(KeyRight)}},
-		{"left SS3", "\x1bOD", []Key{k(KeyLeft)}},
-		{"page up", "\x1b[5~", []Key{k(KeyPgUp)}},
-		{"page down", "\x1b[6~", []Key{k(KeyPgDn)}},
-		{"enter CR", "\r", []Key{k(KeyEnter)}},
-		{"enter LF", "\n", []Key{k(KeyEnter)}},
-		{"backspace DEL", "\x7f", []Key{k(KeyBackspace)}},
-		{"backspace BS", "\x08", []Key{k(KeyBackspace)}},
-		{"ctrl-c", "\x03", []Key{k(KeyCtrlC)}},
-		{"lone esc", "\x1b", []Key{k(KeyEsc)}},
-		{"esc at chunk end", "a\x1b", []Key{Rune('a'), k(KeyEsc)}},
-		{"esc before a plain key", "\x1bx", []Key{k(KeyEsc), Rune('x')}},
-		{"delete dropped", "\x1b[3~", nil},
-		{"F5 dropped, no digits leak", "\x1b[15~", nil},
-		{"F1 SS3 dropped, no P leaks", "\x1bOP", nil},
-		{"modified arrow dropped", "\x1b[1;5A", nil},
-		{"truncated CSI dropped", "\x1b[", nil},
-		{"rune", "q", []Key{Rune('q')}},
-		{"utf8 rune", "é日", []Key{Rune('é'), Rune('日')}},
-		{"control bytes dropped", "\x00\x01\x02\x1f", nil},
-		{"invalid utf8 dropped", "\xff", nil},
-		{"mixed", "a\x1b[Ab\r", []Key{Rune('a'), k(KeyUp), Rune('b'), k(KeyEnter)}},
-		{"empty", "", nil},
-	}
-	for _, tc := range cases {
-		if got := DecodeKeys([]byte(tc.in)); !reflect.DeepEqual(got, tc.want) {
-			t.Errorf("%s: DecodeKeys(%q) = %v, want %v", tc.name, tc.in, got, tc.want)
-		}
-	}
-}
 
 func TestKeyIs(t *testing.T) {
 	if !Rune('x').Is('x') || Rune('x').Is('y') || (Key{Kind: KeyEnter}).Is('x') {

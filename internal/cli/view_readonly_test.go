@@ -15,7 +15,7 @@ import (
 
 const vw, vh = 100, 30
 
-var keyBytes = map[string]string{"down": "\x1b[B", "up": "\x1b[A", "enter": "\r", "esc": "\x1b"}
+var namedKeys = map[string]tui.KeyKind{"down": tui.KeyDown, "up": tui.KeyUp, "enter": tui.KeyEnter, "esc": tui.KeyEsc}
 
 // viewIn is a golden's recorded input: the keys pressed and the frame size.
 type viewIn struct {
@@ -29,11 +29,15 @@ type viewIn struct {
 func viewDrive(t *testing.T, m tui.Model, names ...string) (tui.Model, bool) {
 	t.Helper()
 	for _, n := range names {
-		b, ok := keyBytes[n]
-		if !ok {
-			b = n
+		var keys []tui.Key
+		if kind, ok := namedKeys[n]; ok {
+			keys = []tui.Key{{Kind: kind}}
+		} else {
+			for _, r := range n {
+				keys = append(keys, tui.Rune(r))
+			}
 		}
-		for _, k := range tui.DecodeKeys([]byte(b)) {
+		for _, k := range keys {
 			var cmd tui.Cmd
 			m, cmd = m.Update(k)
 			if cmd.Exec != nil {
