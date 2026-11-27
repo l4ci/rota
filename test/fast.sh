@@ -48,6 +48,7 @@ FAST_PATH_MAP=(
   'test/lib.sh|infra'
   'test/gate.sh|infra'
   'test/gate-*.py|infra'
+  'test/gate_sandbox.py|infra'
   'test/gate-*.txt|infra'
   'internal/flakeledger/infrastructure-markers.txt|infra'
   'test/py-tests.*|infra'
