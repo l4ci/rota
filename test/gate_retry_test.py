@@ -2,10 +2,11 @@
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import tempfile
 import unittest
+
+import gate_sandbox
 
 
 class GateRetryTest(unittest.TestCase):
@@ -15,15 +16,7 @@ class GateRetryTest(unittest.TestCase):
         self.root = Path(scratch.name)
         self.repo = self.root / "repo"
         (self.repo / "test/sections").mkdir(parents=True)
-        source = Path(__file__).resolve().parent
-        shutil.copy(source / "gate.sh", self.repo / "test/gate.sh")
-        shutil.copytree(source / "lib", self.repo / "test/lib")
-        for helper in source.glob("gate-*.py"):
-            shutil.copy(helper, self.repo / "test" / helper.name)
-        shutil.copy(source / "gate-smoke-markers.txt", self.repo / "test/gate-smoke-markers.txt")
-        markers = Path("internal/flakeledger/infrastructure-markers.txt")
-        (self.repo / markers.parent).mkdir(parents=True)
-        shutil.copy(source.parent / markers, self.repo / markers)
+        gate_sandbox.install_gate(self.repo)
         (self.repo / "test/sections/01_stub.sh").touch()
         (self.repo / "go.mod").write_text("module github.com/l4ci/rota\n")
         (self.repo / "test/runner.sh").write_text(
@@ -137,9 +130,7 @@ raise SystemExit(int(os.environ.get("FAIL_EXIT", "1")) if failed else 0)
         return result, calls
 
     def run_real_section(self, section):
-        source = Path(__file__).resolve().parent
-        for name in ("runner.sh", "lib.sh", "lint-sections.py"):
-            shutil.copy(source / name, self.repo / "test" / name)
+        gate_sandbox.install_runner(self.repo)
         (self.repo / "test/sections/01_stub.sh").write_text(section)
         return subprocess.run(["bash", "test/runner.sh"], cwd=self.repo,
                               env=dict(self.env, ROTA_BIN="/bin/true", CODEX_HOME="",

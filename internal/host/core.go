@@ -479,6 +479,9 @@ func coreMissing(e error) bool {
 
 // ReadPane maps Core's not_found to ErrPaneGone, as every backend does.
 func (h *coreHost) ReadPane(ctx context.Context, slot, s string, lines int) (string, error) {
+	if s == "" {
+		return "", nil
+	}
 	text, e := h.readPane(ctx, s, lines)
 	if coreMissing(e) {
 		e = fmt.Errorf("%w: %w", ErrPaneGone, e)
