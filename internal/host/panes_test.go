@@ -131,16 +131,24 @@ func TestHerdrPaneOfResolvesTheAgentPane(t *testing.T) {
 }
 
 func TestTmuxSendPaneTypesLiterallyThenEnter(t *testing.T) {
-	f := &fake{handler: func(string, []string) Result { return Result{} }}
-	if err := New("tmux", deps(f, nil, &clock{})).(PaneHost).SendPane(context.Background(), "%3", "Continue -x."); err != nil {
-		t.Fatal(err)
-	}
-	want := "tmux send-keys -t %3 -l -- Continue -x.\ntmux send-keys -t %3 C-m"
-	if f.log() != want {
-		t.Errorf("calls:\n%s\nwant:\n%s", f.log(), want)
-	}
-	if err := New("tmux", deps(f, nil, &clock{})).(PaneHost).SendPane(context.Background(), "", "x"); err == nil {
-		t.Error("empty pane accepted")
+	for _, c := range []struct{ pane, target string }{
+		{"%3", "%3"},
+		{"rota:w1", "=rota:=w1"},
+	} {
+		t.Run(c.pane, func(t *testing.T) {
+			f := &fake{handler: func(string, []string) Result { return Result{} }}
+			h := New("tmux", deps(f, nil, &clock{})).(PaneHost)
+			if err := h.SendPane(context.Background(), c.pane, "Continue -x."); err != nil {
+				t.Fatal(err)
+			}
+			want := "tmux send-keys -t " + c.target + " -l -- Continue -x.\ntmux send-keys -t " + c.target + " C-m"
+			if f.log() != want {
+				t.Errorf("calls:\n%s\nwant:\n%s", f.log(), want)
+			}
+			if err := h.SendPane(context.Background(), "", "x"); err == nil {
+				t.Error("empty pane accepted")
+			}
+		})
 	}
 }
 
