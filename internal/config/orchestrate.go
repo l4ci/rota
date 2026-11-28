@@ -148,7 +148,7 @@ const (
 // test.full does not; it is non-empty only for Stale. A key the local overlay or the global config supplies is not missing.
 func Check(env cfgdir.Env, root string) (status string, missing []string) {
 	missing = []string{}
-	raw, err := os.ReadFile(configPath(root))
+	raw, err := ReadLayer(configPath(root))
 	if errors.Is(err, os.ErrNotExist) {
 		return Fresh, missing
 	}

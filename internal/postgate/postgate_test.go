@@ -51,7 +51,7 @@ func (b *fakeBook) ReleaseSlice(_, issue, slot string) error {
 	return nil
 }
 
-func (b *fakeBook) HasOrigin(context.Context, string) bool { return b.origin }
+func (b *fakeBook) Remote(context.Context, string) (string, bool) { return "origin", b.origin }
 
 func landedCalls(issue string) []string {
 	return []string{"start:" + issue, "bestof:" + issue, "bounces:" + issue}
