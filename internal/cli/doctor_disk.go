@@ -82,6 +82,7 @@ func (d *Deps) doctorReapInput(ctx context.Context, root string) (in *reap.Input
 	if root == "" {
 		return nil, nil
 	}
+	root = d.reapRoot(ctx, root)
 	if err := worker.CheckRegistry(root); err != nil {
 		return nil, []string{"cleanup unavailable: " + err.Error()}
 	}
