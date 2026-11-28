@@ -1075,7 +1075,7 @@ func TestTrainPlanTakesNoLandLock(t *testing.T) {
 	w := planWorld(t)
 	var res landing.TrainResult
 	var perr error
-	lockErr := w.env(false).WithDefaults().withLandLock(bg, w.dir, "", func(bool) error { // would block a train that tried the lock
+	lockErr := w.env(false).WithDefaults().withLandLock(bg, w.dir, nil, func(bool) error { // would block a train that tried the lock
 		ctx, cancel := context.WithTimeout(bg, 10*time.Second)
 		defer cancel()
 		res, perr = w.env(false).Train(ctx, w.dir, TrainOpts{Base: "main", Targets: []string{"b1", "b2", "b3"}, Plan: true})

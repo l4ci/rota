@@ -17,9 +17,8 @@ import (
 type fakeWorker struct {
 	Worker
 	now      time.Time
-	locked   bool
-	lockErr  error
-	holder   string
+	gate     worker.LandGate
+	gateErr  error
 	accounts *worker.Accounts
 }
 
@@ -30,26 +29,26 @@ func (f *fakeWorker) WithAccounts(a *worker.Accounts) Worker {
 	c.accounts = a
 	return &c
 }
-func (f *fakeWorker) LandLockHeld(context.Context, string) (bool, error) {
-	return f.locked, f.lockErr
+func (f *fakeWorker) LandGate(context.Context, string) (worker.LandGate, error) {
+	return f.gate, f.gateErr
 }
-
-func (f *fakeWorker) LandLockHolder(context.Context, string) string { return f.holder }
 
 // The refusal names what the gate holds the lock for and says a retry is safe.
 func TestRefuseWhileGateRunsNamesTheHolder(t *testing.T) {
-	err := Env{Worker: &fakeWorker{locked: true, holder: "#1900"}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
+	held := worker.LandGate{Held: true, All: true, Holder: "#1900"}
+	err := Env{Worker: &fakeWorker{gate: held}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
 	if err == nil {
 		t.Fatal("want a gate-running refusal")
 	}
-	for _, want := range []string{"#1900", "safe to retry"} {
+	for _, want := range []string{"for #1900 ", "safe to retry"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("refusal %q lacks %q", err, want)
 		}
 	}
-	err = Env{Worker: &fakeWorker{locked: true}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
-	if err == nil || !strings.Contains(err.Error(), "safe to retry") {
-		t.Errorf("refusal without a holder = %v, want the retry hint", err)
+	held.Holder = ""
+	err = Env{Worker: &fakeWorker{gate: held}}.refuseWhileGateRuns(bg, t.TempDir(), "assign")
+	if err == nil || !strings.Contains(err.Error(), "safe to retry") || strings.Contains(err.Error(), " for ") {
+		t.Errorf("refusal without a holder = %v, want the retry hint and no name", err)
 	}
 }
 
@@ -62,8 +61,8 @@ func TestRefuseWhileGateRunsReadsTheWorkerSeam(t *testing.T) {
 		wantErr string
 	}{
 		{"free", &fakeWorker{}, ""},
-		{"held", &fakeWorker{locked: true}, landing.GateRunning},
-		{"unreadable", &fakeWorker{lockErr: errors.New("boom")}, "boom"},
+		{"held", &fakeWorker{gate: worker.LandGate{Held: true, All: true}}, landing.GateRunning},
+		{"unreadable", &fakeWorker{gateErr: errors.New("boom")}, "boom"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,67 +106,32 @@ func TestEnvClockAndAccountsComeFromTheWorker(t *testing.T) {
 	}
 }
 
-// A slot-named holder reads as the slot's PR; a train's targets resolve one by
-// one; anything unknown stays as recorded.
-func TestRefuseWhileGateRunsNamesThePR(t *testing.T) {
-	root := t.TempDir()
-	err := worker.Update(root, func(d *worker.Doc) {
-		s := worker.NewSlot("ben", "ben/1-x", "/w/ben", "main", "h")
-		s.SetPR("https://github.com/l4ci/rota/pull/1987")
-		d.AppendSlot(s)
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := []struct{ holder, want string }{
-		{"ben", "#1987"},
-		{"ben, #2001", "#1987, #2001"},
-		{"dana", "dana"},
-	}
-	for _, tc := range cases {
-		err := Env{Worker: &fakeWorker{locked: true, holder: tc.holder}}.refuseWhileGateRuns(bg, root, "assign")
-		if err == nil || !strings.Contains(err.Error(), "for "+tc.want+" ") {
-			t.Errorf("holder %q: refusal %v lacks %q", tc.holder, err, "for "+tc.want)
-		}
-	}
-}
-
-// #2639: a held lock refuses only the slots its holder gates, by slot name or
-// by a PR a slot or its review-list record carries; an unreadable holder and a
-// call naming no slot still refuse everything.
-func TestRefuseWhileGateRunsOnlyForGatedSlots(t *testing.T) {
-	root := t.TempDir()
-	err := worker.Update(root, func(d *worker.Doc) {
-		ben := worker.NewSlot("ben", "ben/1-x", "/w/ben", "main", "h")
-		ben.SetPR("https://github.com/l4ci/rota/pull/304")
-		d.AppendSlot(ben)
-		d.AppendSlot(worker.NewSlot("dana", "dana/2-y", "/w/dana", "main", "h"))
-		d.AppendSlot(worker.NewSlot("kit", "park/kit", "/w/kit", "main", "h"))
-		d.QueuePR(worker.QueuedPR{Issue: "3", Branch: "nia/3-z", PR: "#306", From: "nia"})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+// #2639, #4248: a held lock refuses only the slots it gates; an unscoped
+// landing and a call naming no slot refuse everything, and unreadableOnly
+// refuses the unscoped one alone.
+func TestRefuseGateOnlyForGatedSlots(t *testing.T) {
+	scoped := worker.LandGate{Held: true, Slots: map[string]bool{"ben": true}}
+	unscoped := worker.LandGate{Held: true, All: true}
 	cases := []struct {
-		holder string
-		slots  []string
-		refuse bool
+		name           string
+		gate           worker.LandGate
+		unreadableOnly bool
+		slots          []string
+		refuse         bool
 	}{
-		{"304, 306, 307", []string{"kit"}, false},
-		{"304, 306, 307", []string{"ben"}, true},
-		{"#306", []string{"nia"}, true},
-		{"dana", []string{"dana"}, true},
-		{"dana", []string{"kit"}, false},
-		{"", []string{"kit"}, true},
-		{"freeze recovery", []string{"kit"}, true},
-		{"ben", nil, true},
+		{"ungated slot", scoped, false, []string{"kit"}, false},
+		{"gated slot", scoped, false, []string{"kit", "ben"}, true},
+		{"no slot named", scoped, false, nil, true},
+		{"unscoped", unscoped, false, []string{"kit"}, true},
+		{"unreadableOnly, gated slot", scoped, true, []string{"ben"}, false},
+		{"unreadableOnly, unscoped", unscoped, true, []string{"kit"}, true},
 	}
 	for _, tc := range cases {
-		err := Env{Worker: &fakeWorker{locked: true, holder: tc.holder}}.refuseWhileGateRuns(bg, root, "assign", tc.slots...)
+		err := Env{Worker: &fakeWorker{gate: tc.gate}}.refuseGate(bg, t.TempDir(), "assign", tc.unreadableOnly, tc.slots...)
 		var be *BlockedError
 		got := errors.As(err, &be) && be.By == landing.GateRunning
 		if got != tc.refuse || (!tc.refuse && err != nil) {
-			t.Errorf("holder %q slots %v: err = %v, want refuse=%v", tc.holder, tc.slots, err, tc.refuse)
+			t.Errorf("%s: err = %v, want refuse=%v", tc.name, err, tc.refuse)
 		}
 	}
 }

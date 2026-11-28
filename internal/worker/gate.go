@@ -368,7 +368,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (landing.GateRes
 		defer release()
 	}
 	land := func() error {
-		return e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) (err error) {
+		return e.withLandingRun(ctx, root, EncodeLandHolder(root, o.Slot), o.NoWait, func(bool) (err error) {
 			res, err = e.gate(ctx, root, o)
 			return err
 		})
@@ -385,7 +385,7 @@ func (e Env) Gate(ctx context.Context, root string, o GateOpts) (landing.GateRes
 		// again under both, and the verify skip decided there, so neither a
 		// train nor another landing can move what it was decided on.
 		err = e.WithIntegrationLock(ctx, root, rec.Name, func() error {
-			return e.withLandingRun(ctx, root, o.Slot, o.NoWait, func(bool) error {
+			return e.withLandingRun(ctx, root, EncodeLandHolder(root, o.Slot), o.NoWait, func(bool) error {
 				return e.landIntegration(ctx, root, o, rec.Branch, &res)
 			})
 		})

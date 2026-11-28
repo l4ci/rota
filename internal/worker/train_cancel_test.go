@@ -129,7 +129,7 @@ func TestTrainCancelWhileQueued(t *testing.T) {
 	w := trainWorld(t, "true", "b1")
 	env := w.env(false).WithDefaults()
 	held, release := make(chan struct{}), make(chan struct{})
-	go env.withLandLock(bg, w.dir, "other", func(bool) error {
+	go env.withLandLock(bg, w.dir, unscopedLandHolder("other"), func(bool) error {
 		close(held)
 		<-release
 		return nil

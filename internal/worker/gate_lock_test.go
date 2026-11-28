@@ -16,7 +16,7 @@ func TestGateTakesLandLockUnlessCallerHoldsIt(t *testing.T) {
 	env := w.env(false).WithDefaults()
 	done := make(chan error, 1)
 	early := false
-	err := env.withLandLock(bg, w.dir, "", func(bool) error {
+	err := env.withLandLock(bg, w.dir, nil, func(bool) error {
 		go func() {
 			res, err := w.gate(false, GateOpts{LandVerified: true})
 			if err == nil && res.Verdict != landing.GatePass {
@@ -52,7 +52,7 @@ func TestGateHoldsLandLockSkipsTheLock(t *testing.T) {
 	w := newWorld(t, ghURL)
 	env := w.env(false).WithDefaults()
 	done := make(chan error, 1)
-	err := env.withLandLock(bg, w.dir, "", func(bool) error {
+	err := env.withLandLock(bg, w.dir, nil, func(bool) error {
 		go func() {
 			res, err := w.gate(false, GateOpts{LandVerified: true, HoldsLandLock: true})
 			if err == nil && res.Verdict != landing.GatePass {

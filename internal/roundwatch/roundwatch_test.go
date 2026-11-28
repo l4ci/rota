@@ -203,7 +203,7 @@ func TestLocalSnapshotReportsTheLandLock(t *testing.T) {
 	path := rotastate.File(cd, "land")
 	var during, after Snapshot
 	err = fsio.Locked(path, 0, func() error {
-		if err := os.WriteFile(path+worker.LandHolderSuffix, []byte("#1900"), 0o644); err != nil {
+		if err := os.WriteFile(path+worker.LandHolderSuffix, worker.EncodeLandHolder(repo, "#1900"), 0o644); err != nil {
 			return err
 		}
 		defer os.Remove(path + worker.LandHolderSuffix)

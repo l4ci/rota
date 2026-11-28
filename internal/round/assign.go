@@ -255,117 +255,40 @@ func blocked(by, format string, a ...any) *BlockedError {
 // refuseWhileGateRuns refuses (blockedBy gate-running) a verb that switches a
 // slot worktree's branch while a gate or train holds the land lock for that
 // slot. The gate verifies in its own scratch tree, so only the slots it gates
-// (named by slot or by PR in the lock's holder) are at risk: their branch and
-// post-landing bookkeeping belong to it. With no slots given, or a holder that
-// names no slot or PR (an older rota, freeze recovery), every slot counts as
-// touched.
+// (worker.LandGate) are at risk: their branch and post-landing bookkeeping
+// belong to it. With no slots given, or a landing that cannot be scoped to
+// slots, every slot counts as touched.
 func (e Env) refuseWhileGateRuns(ctx context.Context, root, verb string, slots ...string) error {
 	return e.refuseGate(ctx, root, verb, false, slots...)
 }
 
-// refuseGate is refuseWhileGateRuns; unreadableOnly refuses just a holder that
-// names no slot or PR, for an assign whose PR moves to the review list first.
+// refuseGate is refuseWhileGateRuns; unreadableOnly refuses just an unscoped
+// landing, for an assign whose PR moves to the review list first.
 func (e Env) refuseGate(ctx context.Context, root, verb string, unreadableOnly bool, slots ...string) error {
-	held, err := e.Worker.LandLockHeld(ctx, root)
-	if err != nil {
+	g, err := e.Worker.LandGate(ctx, root)
+	if err != nil || !g.Held {
 		return err
 	}
-	if !held {
+	if len(slots) > 0 && !g.All && (unreadableOnly || !slices.ContainsFunc(slots, func(s string) bool { return g.Slots[s] })) {
 		return nil
 	}
-	h := e.Worker.LandLockHolder(ctx, root)
-	if len(slots) > 0 {
-		gated, all := gatedSlots(root, h)
-		if !all && (unreadableOnly || !slices.ContainsFunc(slots, func(s string) bool { return gated[s] })) {
-			return nil
-		}
-	}
 	forHolder := ""
-	if h != "" {
-		forHolder = " for " + holderPRs(root, h)
+	if g.Holder != "" {
+		forHolder = " for " + g.Holder
 	}
 	return blocked(landing.GateRunning, "a gate or train holds the land lock%s and %s would switch a worktree's branch under it: nothing was changed, safe to retry once it exits", forHolder, verb)
 }
 
 // gateBlocksSlot says whether a running gate or train blocks assigning to a
 // slot, as refuseWhileGateRuns decides it for an assign: nil when no gate holds
-// the land lock. Without a forge, or with a holder that names no slot or PR,
-// every slot is blocked (fail closed).
+// the land lock. Without a forge, or with an unscoped landing, every slot is
+// blocked (fail closed).
 func (e Env) gateBlocksSlot(ctx context.Context, root string, forge bool) (func(string) bool, error) {
-	held, err := e.Worker.LandLockHeld(ctx, root)
-	if err != nil || !held {
+	g, err := e.Worker.LandGate(ctx, root)
+	if err != nil || !g.Held {
 		return nil, err
 	}
-	if !forge {
-		return func(string) bool { return true }, nil
-	}
-	gated, all := gatedSlots(root, e.Worker.LandLockHolder(ctx, root))
-	if all {
-		return func(string) bool { return true }, nil
-	}
-	return func(s string) bool { return gated[s] }, nil
-}
-
-// gatedSlots resolves a land-lock holder (a slot, a PR or a train's
-// comma-separated targets) to the slots whose branch it gates: a named slot,
-// and every slot or queued PR's origin slot whose PR number a target names,
-// unless that origin slot has moved on to another branch.
-// all is true when the holder is empty or a target is neither, so the caller
-// cannot tell which slots are safe.
-func gatedSlots(root, holder string) (gated map[string]bool, all bool) {
-	if strings.TrimSpace(holder) == "" {
-		return nil, true
-	}
-	reg := worker.LoadRegistryTolerant(root)
-	gated = map[string]bool{}
-	for _, t := range strings.Split(holder, ",") {
-		t = strings.TrimSpace(t)
-		if s := reg.Slot(t); s != nil {
-			gated[t] = true
-			continue
-		}
-		n, ok := worker.PRRefNumber(t)
-		if !ok {
-			return nil, true
-		}
-		for _, s := range reg.Slots() {
-			if m, ok := worker.PRRefNumber(s.PR()); ok && m == n {
-				gated[s.Name()] = true
-			}
-		}
-		for _, q := range reg.PRs() {
-			if m, ok := worker.PRRefNumber(q.PR); ok && m == n && q.From != "" && !movedOn(reg, q) {
-				gated[q.From] = true
-			}
-		}
-	}
-	return gated, false
-}
-
-// movedOn reports whether a queued PR's origin slot now holds a different
-// branch. The gate merges the PR from its own record and scratch tree and
-// the landing bookkeeping drops only that record, so the slot's worktree is
-// not at risk, an idle slot included.
-func movedOn(reg worker.Registry, q worker.QueuedPR) bool {
-	s := reg.Slot(q.From)
-	return s != nil && s.Branch() != q.Branch
-}
-
-// holderPRs rewrites each comma-separated holder that names a slot with a
-// recorded PR as `#<PR>`; any other token stays as recorded.
-func holderPRs(root, holder string) string {
-	reg := worker.LoadRegistryTolerant(root)
-	parts := strings.Split(holder, ",")
-	for i, p := range parts {
-		p = strings.TrimSpace(p)
-		if s := reg.Slot(p); s != nil {
-			if n, ok := worker.PRRefNumber(s.PR()); ok {
-				p = "#" + strconv.Itoa(n)
-			}
-		}
-		parts[i] = p
-	}
-	return strings.Join(parts, ", ")
+	return func(s string) bool { return !forge || g.All || g.Slots[s] }, nil
 }
 
 func usage(format string, a ...any) error {
