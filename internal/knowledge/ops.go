@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/bulletfmt"
@@ -455,8 +456,9 @@ type ReplaceResult struct {
 // bullet is its "- " line plus indented continuations (see bulletfmt.End), so
 // wrapped bullets match as a whole and prose after them is never touched. It refuses with ErrMultiMatch when old sits in more
 // than one bullet and returns ErrNotFound when it sits in none. When the edit
-// changes the bullet's bold title, the tier entry is re-keyed to the new one;
-// a title another bullet of the topic holds is ErrExists.
+// changes the bullet's bold title, the tier entry is re-keyed to the new one, or
+// deleted when the edit removes the title; a title another bullet of the topic
+// holds is ErrExists.
 // old == new is a no-op.
 func (s Store) Replace(scope, topic, old, new string) (ReplaceResult, error) {
 	if err := bulletfmt.CheckLine("replacement", new); err != nil {
@@ -510,31 +512,43 @@ func (s Store) replaceLocked(scope, km, topic, old, new string) (ReplaceResult, 
 			return res, fmt.Errorf("%w (under '## %s' in %s)", err, topic, km)
 		}
 	}
-	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
-		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := sc.Retitle(topic, oldTitle, newTitle); return err }); err != nil {
+	newBody := strings.Join(append(append(lines[:h:h], edited...), lines[end:]...), "\n")
+	// What the edit does to the old title's tier record: it follows a new
+	// title, and goes with a removed one unless a twin on disk still holds it.
+	var retier func(*Sidecar) (bool, error)
+	switch {
+	case oldTitle == "" || oldTitle == newTitle:
+	case newTitle != "":
+		retier = func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle) }
+	case !slices.ContainsFunc(bulletfmt.Bullets(newBody), func(b bulletfmt.Bullet) bool { return b.Title == oldTitle }):
+		retier = func(sc *Sidecar) (bool, error) { return sc.Delete(topic, oldTitle) }
+	}
+	if retier != nil {
+		if err := s.preflightTier(scope, func(sc *Sidecar) error { _, err := retier(sc); return err }); err != nil {
 			return res, err
 		}
+		// Buffered hits are keyed by the old title: fold them before the write.
 		if _, err := s.FoldHits(scope); err != nil {
 			return res, err
 		}
 	}
-	next := content[:st] + strings.Join(append(append(lines[:h:h], edited...), lines[end:]...), "\n") + content[en:]
+	next := content[:st] + newBody + content[en:]
 	if err := writeText(km, next, fsio.WriteFileAtomic); err != nil {
 		return res, err
 	}
 	res.Changed = true
 
-	if oldTitle != "" && newTitle != "" && oldTitle != newTitle {
-		sidecar, err := s.TierPath(scope)
-		if err != nil {
-			return res, err
-		}
-		if fileExists(sidecar) {
-			err = Update(sidecar, func(sc *Sidecar) (bool, error) { return sc.Retitle(topic, oldTitle, newTitle) })
-		}
+	if retier == nil {
+		return res, nil
+	}
+	sidecar, err := s.TierPath(scope)
+	if err != nil {
 		return res, err
 	}
-	return res, nil
+	if fileExists(sidecar) {
+		err = Update(sidecar, retier)
+	}
+	return res, err
 }
 
 // RemoveResult reports Remove.
