@@ -270,6 +270,27 @@ func TestDoctorChecksProjectConnection(t *testing.T) {
 	}
 }
 
+// A store that cannot be opened (here: a legacy secrets file that cannot be
+// moved because the data dir is a file) is a fail line that says what to do.
+func TestDoctorConnectionStoreUnopenableHasHint(t *testing.T) {
+	e := newConnectEnv(t)
+	data := filepath.Join(t.TempDir(), "data")
+	if err := os.WriteFile(data, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_DATA_HOME", data)
+	if err := os.MkdirAll(filepath.Join(e.xdg, "rota"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(connections.SecretsFile(filepath.Join(e.xdg, "rota")), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	ok, c := doctorWithConnection(t, e, "work")
+	if ok || c["status"] != "fail" || c["detail"] == "" || c["hint"] == "" {
+		t.Errorf("unopenable store: ok=%v %v", ok, c)
+	}
+}
+
 // AC-5: no secret lands under .rota/, and no config key is a place to put one.
 func TestNoSecretUnderDotRota(t *testing.T) {
 	e := newConnectEnv(t)
