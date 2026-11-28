@@ -65,10 +65,10 @@ func TestRetentionKeepsCrossFailPerHarness(t *testing.T) {
 		r.Harness = harness
 		return r
 	}
-	addAll(t, root, cross(Fail, "codex"), cross(Pass, "claude"))
+	addAll(t, root, cross(Fail, "first"), cross(Pass, "second"))
 	bury(t, root)
-	if r, ok := BlockingAtHead(Load(root).Branches["feature"], headSha); !ok || r.Harness != "codex" {
-		t.Fatalf("codex cross FAIL at head no longer blocks: %+v %v", r, ok)
+	if r, ok := BlockingAtHead(Load(root).Branches["feature"], headSha); !ok || r.Harness != "first" {
+		t.Fatalf("first harness cross FAIL at head no longer blocks: %+v %v", r, ok)
 	}
 }
 
