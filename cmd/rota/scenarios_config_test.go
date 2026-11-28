@@ -422,7 +422,7 @@ func suiteConfig(t *testing.T) {
 		chk("corrupt-list", fx{config: `[1, 2]`}, 1, "corrupt"),
 		chk("corrupt-null", fx{config: `null`}, 1, "corrupt"),
 		chk("corrupt-scalar", fx{config: `7`}, 1, "corrupt"),
-		chk("corrupt-empty-file", fx{config: " "}, 1, "corrupt"),
+		chk("blank-file", fx{config: " "}, 1, "stale", allReq...),
 		chk("corrupt-truncated", fx{config: fullConfig()[:40]}, 1, "corrupt"),
 		chk("from-subdir", withFile("sub/x.txt", "x\n"), 1, "stale", allReq...),
 		scn{name: "config-check/no-hv", fx: fx{noHV: true}, argv: j("config", "check"), want: 3},
