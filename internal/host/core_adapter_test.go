@@ -79,6 +79,8 @@ type coreFake struct {
 	unreported         bool
 	sendError          string
 	sendErrorCode      int
+	failMethod         string
+	failAt, failCalls  int
 }
 
 func (f *coreFake) serve(c net.Conn) {
@@ -95,6 +97,14 @@ func (f *coreFake) serve(c net.Conn) {
 			return
 		}
 		f.mu.Lock()
+		if q.Method == f.failMethod {
+			f.failCalls++
+			if f.failAt == 0 || f.failCalls == f.failAt {
+				f.mu.Unlock()
+				e.Encode(map[string]any{"jsonrpc": "2.0", "id": q.ID, "error": map[string]any{"code": -32000, "message": "injected transport failure", "data": map[string]string{"kind": "internal_error"}}})
+				continue
+			}
+		}
 		var v any
 		term := func(addr string) map[string]any {
 			state := f.state
@@ -322,8 +332,8 @@ func TestCoreAdapterNeverReplaysUncertainSend(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "brief")
 	os.WriteFile(p, []byte("signed assignment\nROTA-END unique-1"), 0600)
 	f.lose = true
-	if h.Send(context.Background(), "dana", s, p) == nil {
-		t.Fatal("lost reply acknowledged")
+	if err := h.Send(context.Background(), "dana", s, p); !errors.Is(err, ErrDeliveryUnknown) || !errors.Is(err, ErrMaybeSubmitted) {
+		t.Fatalf("lost reply = %v, want unknown delivery", err)
 	}
 	f.lose = false
 	h.Send(context.Background(), "dana", s, p)
@@ -331,22 +341,84 @@ func TestCoreAdapterNeverReplaysUncertainSend(t *testing.T) {
 		t.Fatalf("resubmitted uncertain send: %d", f.sends)
 	}
 }
-func TestCoreAdapterRefusesDraftAndReplacedShell(t *testing.T) {
-	h, f := coreFixture(t)
-	s := coreSpawn(t, h)
-	p := filepath.Join(t.TempDir(), "brief")
-	os.WriteFile(p, []byte("hello"), 0600)
-	f.screen = "› my human draft\n"
-	if h.Send(context.Background(), "dana", s, p) == nil {
-		t.Fatal("draft overwritten")
-	}
-	f.screen = "› \n"
-	f.pid = 99
-	if h.Send(context.Background(), "dana", s, p) == nil {
-		t.Fatal("replacement accepted")
-	}
-	if f.sends != 0 {
-		t.Fatalf("sent %d", f.sends)
+func TestCoreSendPreInputFailures(t *testing.T) {
+	for _, receipt := range []string{"fresh", "submitted", "unknown"} {
+		for _, path := range []string{"bad handle", "ownership", "connect", "terminal", "program", "read", "readiness", "wait get", "wait read", "dialog", "draft"} {
+			if receipt != "fresh" && (path == "bad handle" || strings.HasPrefix(path, "wait ")) {
+				continue
+			}
+			t.Run(receipt+"/"+path, func(t *testing.T) {
+				h, f := coreFixture(t)
+				handle := coreSpawn(t, h)
+				file := coreBrief(t, "deliver this message")
+				if receipt != "fresh" {
+					f.lose = receipt == "unknown"
+					want := ErrSubmitted
+					if f.lose {
+						want = ErrDeliveryUnknown
+					}
+					if err := h.Send(bg, "dana", handle, file); !errors.Is(err, want) {
+						t.Fatalf("initial delivery = %v, want %v", err, want)
+					}
+					f.lose = false
+				}
+				want := ErrNotSubmitted
+				switch path {
+				case "bad handle":
+					handle = "invalid"
+				case "ownership":
+					hc := h.(*coreHost)
+					v, err := hc.owned(handle)
+					if err != nil {
+						t.Fatal(err)
+					}
+					p, err := hc.recordPath(v)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(p, []byte("{}"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				case "connect":
+					f.core = "replacement-core"
+				case "terminal":
+					f.missing = true
+				case "program":
+					f.pid = 99
+				case "read":
+					f.failMethod = "terminal.read"
+				case "readiness":
+					f.app = "unsupported"
+				case "wait get", "wait read":
+					f.status, f.failAt = "starting", 2
+					f.failMethod = "terminal." + strings.TrimPrefix(path, "wait ")
+				case "dialog":
+					f.status, want = "blocked", ErrDialogOpen
+				case "draft":
+					f.screen, want = "› my human draft\n", ErrDraftOnPrompt
+				}
+				if receipt != "fresh" {
+					want = ErrMaybeSubmitted
+					if path == "readiness" || path == "dialog" || path == "draft" {
+						want = ErrSubmitted
+						if receipt == "unknown" {
+							want = ErrDeliveryUnknown
+						}
+					}
+				}
+				err := h.Send(bg, "dana", handle, file)
+				if !errors.Is(err, want) || (receipt == "fresh" && errors.Is(err, ErrMaybeSubmitted)) || (receipt != "fresh" && errors.Is(err, ErrNotSubmitted)) {
+					t.Fatalf("Send = %v, want %v", err, want)
+				}
+				wantSends := 0
+				if receipt != "fresh" {
+					wantSends = 1
+				}
+				if f.sends != wantSends {
+					t.Fatalf("Send typed input: %d sends, want %d", f.sends, wantSends)
+				}
+			})
+		}
 	}
 }
 

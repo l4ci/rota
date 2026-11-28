@@ -31,14 +31,21 @@ func (e *classifiedSend) Unwrap() []error { return []error{e.err, e.class} }
 // pickup was seen, ErrDialogOpen) already say so, and clearDialog, the draft
 // check and the brief read run before anything is typed (ErrDialogOpen,
 // ErrDraftOnPrompt, ErrNotSubmitted). The wrap is for the plain error a future
-// path adds after typing.
+// path adds after typing. Orca and Core select ErrNotSubmitted for plain
+// failures before input when no earlier Core receipt leaves delivery uncertain.
 func classifySend(err error) error {
+	return classifySendAs(err, ErrMaybeSubmitted)
+}
+
+// classifySendAs preserves explicit delivery evidence and supplies the class
+// known at the adapter's current input boundary for an otherwise plain error.
+func classifySendAs(err, fallback error) error {
 	for _, known := range []error{nil, ErrNotSubmitted, ErrMaybeSubmitted, ErrQueued, ErrSubmitted, ErrDialogOpen, ErrDraftOnPrompt} {
 		if errors.Is(err, known) {
 			return err
 		}
 	}
-	return &classifiedSend{err: err, class: ErrMaybeSubmitted}
+	return &classifiedSend{err: err, class: fallback}
 }
 
 // readBrief reads the brief file a Send delivers. A failed read means nothing

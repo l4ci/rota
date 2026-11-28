@@ -160,7 +160,7 @@ func TestOrcaRelayReceiptAndBranchGuard(t *testing.T) {
 				if e != nil {
 					t.Fatal(e)
 				}
-			} else if e == nil || !strings.Contains(strings.ToLower(e.Error()), tc.want) {
+			} else if !errors.Is(e, ErrMaybeSubmitted) || !strings.Contains(strings.ToLower(e.Error()), tc.want) {
 				t.Fatalf("missing branch refusal: %v", e)
 			}
 			if sends != 1 {
@@ -202,22 +202,6 @@ func TestOrcaRelayIdentityUsesOnlyNativeHandle(t *testing.T) {
 		t.Fatalf("closed replacement terminal: closed=%v error=%v", closed, e)
 	}
 }
-func TestOrcaRelayPortableBriefLimit(t *testing.T) {
-	handle := orcaRelayHandle(t)
-	file := filepath.Join(t.TempDir(), "brief")
-	text := strings.Repeat("ö", 61441)
-	os.WriteFile(file, []byte(text), 0600)
-	calls := 0
-	h := New(Orca, Deps{Run: func(context.Context, proc.Cmd) (Result, error) {
-		calls++
-		return Result{Stdout: `{"screen":"Ask Codex to do anything\n› "}`}, nil
-	}})
-	e := h.Send(context.Background(), "ben", handle, file)
-	if e == nil || !strings.Contains(e.Error(), "122882") || !strings.Contains(e.Error(), "122880") || calls != 0 {
-		t.Fatalf("oversize send: calls=%d err=%v", calls, e)
-	}
-}
-
 func TestOrcaRelayCurrentPaneAny(t *testing.T) {
 	pane, kind := CurrentPaneAny(func(k string) string {
 		switch k {

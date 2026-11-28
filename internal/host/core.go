@@ -669,9 +669,11 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 	if text == "" {
 		return ErrNotSubmitted
 	}
-	v, e := h.owned(s)
+	// terminal checks ownership after we read the receipt, so stale ownership
+	// cannot disguise an earlier delivery as a safe-to-resend failure.
+	v, e := coreDecode(s)
 	if e != nil {
-		return e
+		return classifySendAs(e, ErrNotSubmitted)
 	}
 	p, e := h.recordPath(v)
 	if e != nil {
@@ -689,17 +691,21 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 		} else if !errors.Is(readErr, os.ErrNotExist) {
 			return readErr
 		}
+		preInputClass := ErrNotSubmitted
+		if prior.State != "" {
+			preInputClass = ErrMaybeSubmitted
+		}
 		v, c, t, e := h.terminal(ctx, s)
 		if e != nil {
-			return e
+			return classifySendAs(e, preInputClass)
 		}
 		defer c.Close()
 		if e = h.checkProgram(v, t); e != nil {
-			return e
+			return classifySendAs(e, preInputClass)
 		}
 		var screen struct{ Text string }
 		if e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); e != nil {
-			return e
+			return classifySendAs(e, preInputClass)
 		}
 		save := func(state string) error {
 			prior.State = state
@@ -731,17 +737,17 @@ func (h *coreHost) send(ctx context.Context, s, file string) error {
 			}
 			h.d.Sleep(time.Second)
 			if e = c.call("terminal.get", map[string]any{"terminal": v.Address}, &t); e != nil {
-				return e
+				return classifySendAs(e, preInputClass)
 			}
 			if e = c.call("terminal.read", map[string]any{"terminal": v.Address, "lines": 200}, &screen); e != nil {
-				return e
+				return classifySendAs(e, preInputClass)
 			}
 		}
 		if e != nil {
-			return e
+			return classifySendAs(e, preInputClass)
 		}
 		if e = h.guard(ctx, v, t, screen.Text); e != nil {
-			return e
+			return classifySendAs(e, preInputClass)
 		}
 		prior.Before = screen.Text
 		prior.State = "unknown"

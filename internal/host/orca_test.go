@@ -225,6 +225,55 @@ func TestOrcaEmptyKillAndRelayAfterBannerScrolls(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+func TestOrcaSendPreInputFailures(t *testing.T) {
+	for _, name := range []string{"oversize", "bad handle", "missing branch", "initial read", "draft check read", "input not ready"} {
+		t.Run(name, func(t *testing.T) {
+			f := newOrcaFake(t)
+			handle, text, wantText := f.handle(t), "do work", ""
+			d := f.deps()
+			switch name {
+			case "oversize":
+				text = strings.Repeat("ö", 61441)
+				wantText = "Orca brief is 122882 UTF-8 bytes; limit is 122880 bytes; shorten the brief before resending"
+			case "bad handle":
+				handle = "invalid"
+			case "missing branch":
+				meta, err := decodeOrca(handle)
+				if err != nil {
+					t.Fatal(err)
+				}
+				meta.Branch = ""
+				handle = encodeOrca(meta)
+			case "initial read":
+				f.readFails = true
+			case "draft check read":
+				d.Run = func(ctx context.Context, cmd proc.Cmd) (Result, error) {
+					if len(cmd.Args) > 1 && cmd.Args[1] == "read" && f.reads > 0 {
+						return Result{}, fmt.Errorf("read failed")
+					}
+					return f.run(ctx, cmd)
+				}
+			case "input not ready":
+				f.screens = []string{"Booting the agent…"}
+				wantText = "orca input is not ready; wait for the agent prompt in the Orca terminal, then retry"
+			}
+			err := New(Orca, d).Send(context.Background(), "ben", handle, orcaBrief(t, text))
+			if !errors.Is(err, ErrNotSubmitted) || errors.Is(err, ErrMaybeSubmitted) {
+				t.Fatalf("Send = %v, want not submitted", err)
+			}
+			if wantText != "" && err.Error() != wantText {
+				t.Fatalf("Send message = %q, want %q", err, wantText)
+			}
+			if f.sends != 0 {
+				t.Fatalf("refused send typed input: %d sends", f.sends)
+			}
+			if name == "oversize" && f.calls != 0 {
+				t.Fatalf("oversize brief called the host: %d calls", f.calls)
+			}
+		})
+	}
+}
+
 func TestOrcaGuardsAndFallback(t *testing.T) {
 	for _, tc := range []struct {
 		name, before, after, reply string
@@ -236,7 +285,6 @@ func TestOrcaGuardsAndFallback(t *testing.T) {
 		{"draft only", orcaEmptyReady, "model: gpt-5.3-codex\n› do work", "{}", ErrNotSubmitted, 1},
 		{"submitted echo", orcaEmptyReady, "do work\nresult follows\n› ", "{}", ErrNotSubmitted, 1},
 		{"busy evidence", orcaEmptyReady, "Working… esc to interrupt\n› ", "{}", nil, 1},
-		{"input not ready", "Booting the agent…", "", "{}", ErrMaybeSubmitted, 0},
 		{"malformed receipt", orcaEmptyReady, "", `not-json`, fmt.Errorf("malformed"), 1},
 		{"unchanged", orcaEmptyReady, orcaEmptyReady, "{}", ErrNotSubmitted, 1},
 	} {
