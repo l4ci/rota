@@ -287,5 +287,5 @@ func accountLabel(name string) string {
 // own choosing (and checks that account's login), so the login of the account
 // the slot ran under last no longer decides whether it can take work.
 func (e Env) placesAccounts(root string) bool {
-	return root != "" && e.AccountPicking && !worker.IsSolo(root) && poolConfigured(e.Worker.Config(root), e.Round)
+	return root != "" && e.AccountPicking && !worker.IsSoloHost(e.HostName) && poolConfigured(e.Worker.Config(root), e.Round)
 }

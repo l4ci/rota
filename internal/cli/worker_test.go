@@ -229,10 +229,17 @@ func (h *cliHost) Kind() host.Kind {
 	return host.Tmux
 }
 
-func (h *cliHost) Capabilities() host.Capabilities { return host.CapabilitiesOf(h) }
-func (h *cliHost) Require() error                  { return nil }
-func (h *cliHost) InSession() bool                 { return h.inSession }
-func (h *cliHost) Where() string                   { return "main" }
+func (h *cliHost) Capabilities() host.Capabilities {
+	c := host.CapabilitiesOf(h)
+	if h.herdr {
+		c.InSessionRule = &host.InSessionRule{Pane: "herdr pane", Env: "HERDR_ENV=1"}
+		c.LaunchKindBound = true
+	}
+	return c
+}
+func (h *cliHost) Require() error  { return nil }
+func (h *cliHost) InSession() bool { return h.inSession }
+func (h *cliHost) Where() string   { return "main" }
 func (h *cliHost) Spawn(_ context.Context, o host.SpawnOpts) (string, error) {
 	h.calls = append(h.calls, "spawn")
 	h.spawnOpts = o

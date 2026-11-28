@@ -39,6 +39,8 @@ type fakeHost struct {
 	spawnOpts   host.SpawnOpts
 	onSend      func() // runs inside Send, before it returns
 	receipts    bool   // advertise the DeliveryReconciler side (Core)
+	rule        *host.InSessionRule
+	kindBound   bool
 }
 
 // unconfirmed is a DeliveryReconciler that never confirms anything.
@@ -51,6 +53,7 @@ func (unconfirmed) ConfirmNotSubmitted(context.Context, string, string) error {
 func (f *fakeHost) Kind() host.Kind { return f.name }
 func (f *fakeHost) Capabilities() host.Capabilities {
 	c := host.CapabilitiesOf(f)
+	c.InSessionRule, c.LaunchKindBound = f.rule, f.kindBound
 	if f.receipts {
 		c.DeliveryReconciler = unconfirmed{}
 	}
@@ -425,13 +428,44 @@ func TestDispatchRelayWithoutASessionIsAResolutionError(t *testing.T) {
 func TestDispatchHerdrOutsideAPaneIsUnavailable(t *testing.T) {
 	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
 	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-	f := &fakeHost{name: "herdr", inSession: false}
+	f := herdrFake()
+	f.inSession = false
 	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
 	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "must run from inside a herdr pane") {
 		t.Errorf("err = %v", err)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("a herdr command ran outside a pane: %v", f.calls)
+	}
+}
+
+// The refusals follow the policy the host in hand declares, whatever its kind.
+func TestInSessionRefusalReadsTheHostsCapabilities(t *testing.T) {
+	dir := gittest.Project(t, `{}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := tmuxFake()
+	f.inSession = false
+	f.rule = &host.InSessionRule{Pane: "fake pane", Env: "FAKE=1"}
+	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1"})
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "must run from inside a fake pane (FAKE=1)") {
+		t.Errorf("err = %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %v", f.calls)
+	}
+}
+
+func TestLaunchKindRefusalReadsTheHostsCapabilities(t *testing.T) {
+	dir := gittest.Project(t, `{"round":{"commands":{"claude":"codex --x"}}}`)
+	goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+	f := tmuxFake()
+	f.kindBound = true
+	_, err := envWith(f).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "t"), Task: "T1", Kind: "claude"})
+	if exitOf(err) != exitcode.ExitUnavailable || !strings.Contains(err.Error(), "does not run claude") {
+		t.Errorf("err = %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("calls = %v", f.calls)
 	}
 }
 

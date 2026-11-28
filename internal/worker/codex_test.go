@@ -269,7 +269,8 @@ func accountEnv(o host.SpawnOpts) string {
 }
 
 func herdrFake() *fakeHost {
-	return &fakeHost{name: "herdr", inSession: true, where: "herdr workspace w9"}
+	return &fakeHost{name: "herdr", inSession: true, where: "herdr workspace w9",
+		rule: &host.InSessionRule{Pane: "herdr pane", Env: "HERDR_ENV=1"}, kindBound: true}
 }
 
 func TestDispatchCodexSpawnsOnTheDefaultHome(t *testing.T) {

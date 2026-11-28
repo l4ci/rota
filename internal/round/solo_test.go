@@ -100,6 +100,7 @@ func soloAssign(t *testing.T) *assignFixture {
 	t.Helper()
 	f := newAssignFixture(t)
 	setHost(t, f.root, host.Solo)
+	f.env.HostName = host.Solo
 	f.wire(func(w *worker.Env) {
 		w.NewHost = func(d host.Kind) host.Host {
 			t.Fatalf("solo assign reached host.New(%q)", d)

@@ -18,7 +18,7 @@ import (
 // rule or this process is in a pane. handoff is the session-ensure wording,
 // which offers a way in; otherwise it is the dispatch wording.
 func inSessionRefusal(h host.Host, handoff bool, cwd string) *exitcode.Error {
-	rule := host.CapabilitiesForKind(h.Kind()).InSessionRule
+	rule := h.Capabilities().InSessionRule
 	if rule == nil || h.InSession() {
 		return nil
 	}

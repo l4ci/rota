@@ -37,6 +37,7 @@ func TestReviewCompletionSeam(t *testing.T) {
 					}
 				} else {
 					setHost(t, f.root, host.Solo)
+					f.env.HostName = host.Solo
 					opts := ReportOpts{Slot: "ben", State: "done", Issues: tc.issues, Attempt: f.slot("ben").Attempt()}
 					if _, err := f.env.ReportSlot(bg, f.root, opts); err != nil {
 						t.Fatal(err)

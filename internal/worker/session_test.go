@@ -46,7 +46,8 @@ func TestSessionEnsureInsideNeedsNoHandoff(t *testing.T) {
 
 func TestSessionEnsureHerdrOutsideIsRefusedNotHandedOff(t *testing.T) {
 	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
-	f := &fakeHost{name: "herdr"}
+	f := herdrFake()
+	f.inSession = false
 	_, err := envWith(f).SessionEnsure(bg, dir, SessionOpts{})
 	we, ok := err.(*exitcode.Error)
 	if !ok || we.Exit != exitcode.ExitRefused || !strings.Contains(we.Message, "needs /rota-work to run inside a herdr pane") || !strings.Contains(we.Hint, "open herdr") {

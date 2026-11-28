@@ -214,7 +214,10 @@ func TestTransferThatSendsNoBriefLogsNoRelay(t *testing.T) {
 		"failed dispatch": {"dana", func(f *moveFx) {
 			f.wire(func(w *worker.Env) { w.NewHost = func(host.Kind) host.Host { return &failingHost{hostFake: f.host} } })
 		}, true},
-		"solo":     {"dana", func(f *moveFx) { setHost(t, f.root, host.Solo) }, false},
+		"solo": {"dana", func(f *moveFx) {
+			setHost(t, f.root, host.Solo)
+			f.env.HostName = host.Solo
+		}, false},
 		"to human": {HumanTarget, func(*moveFx) {}, false},
 	} {
 		t.Run(name, func(t *testing.T) {
