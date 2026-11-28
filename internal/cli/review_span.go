@@ -77,7 +77,7 @@ func openPRBase(c *Ctx, t *branchTarget, name string) int {
 	if err != nil {
 		return 0
 	}
-	f, err := c.deps().forge(c.Context(), c.projectConfig(root), "", root)
+	f, err := c.deps().forge(c.Context(), c.projectConfig(root), "", t.Dir)
 	if err != nil {
 		return 0
 	}
