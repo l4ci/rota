@@ -193,11 +193,3 @@ func cloneObject(o *jsonx.Object) *jsonx.Object {
 	c, _ := decodeObject(b)
 	return c
 }
-
-func compactJSON(v any) string {
-	b, err := jsonx.MarshalCompact(v)
-	if err != nil {
-		return ""
-	}
-	return string(b)
-}

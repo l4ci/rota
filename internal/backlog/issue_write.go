@@ -635,15 +635,6 @@ func commentRows(comments []tracker.Comment, kind string) []Comment {
 
 // ---- claim, release, state, status ------------------------------------------
 
-func indexOf(list []string, s string) int {
-	for i, x := range list {
-		if x == s {
-			return i
-		}
-	}
-	return -1
-}
-
 // applyState leaves only the want role's label (role "" for none) of
 // in-progress, needs-review and changes-requested, in one edit. It reports
 // whether it wrote (_apply_state).

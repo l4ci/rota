@@ -30,8 +30,6 @@ func docs(root string) artifact.FileDocs {
 	return artifact.FileDocs{Root: root, Dir: rotatree.DesignsDir, Kind: "design"}
 }
 
-func path(root, id string) string { return docs(root).Path(id) }
-
 func (s files) Create(id, text string) error {
 	_, err := docs(s.root).Create(id, func() (string, string) { return id, text })
 	return err

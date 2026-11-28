@@ -18,6 +18,8 @@ import (
 // testDay pins the clock the stubs are dated by.
 func testDay() time.Time { return time.Date(2031, 4, 5, 9, 0, 0, 0, time.UTC) }
 
+func path(root, id string) string { return docs(root).Path(id) }
+
 func TestAddStampsInjectedClock(t *testing.T) {
 	s := Files(t.TempDir())
 	if err := Add(s, "B07", "t", testDay); err != nil {
