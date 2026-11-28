@@ -491,7 +491,7 @@ herdr only; a tmux or solo round is skipped. Moves live panes without restarting
 
 | Usage | What it does |
 |---|---|
-| `rota hook install [--scope <project-local\|project\|user>] [--wrap-statusline]` | merge the hooks and the statusline into a Claude Code settings file; a symlinked file stays a link (its target is written) and keeps its mode |
+| `rota hook install [--scope <project-local\|project\|user>] [--wrap-statusline]` | merge the hooks and the statusline into a Claude Code settings file; a symlinked file stays a link (its target is written) and keeps its mode; in the project scopes a link that leaves the project or points into `.git` exits 5 |
 | `rota hook uninstall [--scope <project-local\|project\|user>]` | remove what install wrote and restore a wrapped statusline |
 | `rota hook stop` | Stop hook: block above the context threshold until a handoff is written, or while workers run with no watch armed |
 | `rota hook prompt` | UserPromptSubmit hook: one-line round digest and a missing-watch reminder |

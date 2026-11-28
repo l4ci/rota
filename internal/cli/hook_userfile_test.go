@@ -38,3 +38,26 @@ func TestHookInstallKeepsSymlinkedSettings(t *testing.T) {
 		}
 	}
 }
+
+// A project settings file linked out of the project is refused, not written.
+func TestHookInstallRefusesProjectSettingsLinkedOutside(t *testing.T) {
+	dir := orchProject(t, false)
+	t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+	target := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(target, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(dir, ".claude", "settings.json")); err != nil {
+		t.Fatal(err)
+	}
+	code, out, errOut := rotaIn(t, dir, "hook", "install", "--scope", "project", "--json")
+	if code != ExitResolution {
+		t.Errorf("exit %d, want %d: %s %s", code, ExitResolution, out, errOut)
+	}
+	if raw, _ := os.ReadFile(target); string(raw) != "{}\n" {
+		t.Errorf("target changed: %s", raw)
+	}
+}

@@ -32,3 +32,36 @@ func TestUpsertBlockWritesThroughSymlinkAndKeepsMode(t *testing.T) {
 		t.Errorf("mode = %o, want 600", fi.Mode().Perm())
 	}
 }
+
+// A link a repository carries must not send the write outside the project or
+// into .git: the block holds text the repository chose.
+func TestUpsertBlockRefusesLinkOutOfProject(t *testing.T) {
+	for name, dest := range map[string]string{"outside": "", "git dir": ".git/hooks/pre-commit"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			target := filepath.Join(t.TempDir(), "bashrc")
+			if dest != "" {
+				target = filepath.Join(dir, filepath.FromSlash(dest))
+				if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.WriteFile(target, []byte("mine\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			link := filepath.Join(dir, "AGENTS.md")
+			if err := os.Symlink(target, link); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := UpsertManaged(dir, "x", "body"); err == nil {
+				t.Error("wrote through the link")
+			}
+			if raw, _ := os.ReadFile(target); string(raw) != "mine\n" {
+				t.Errorf("target changed: %q", raw)
+			}
+			if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+				t.Errorf("link replaced: %v", err)
+			}
+		})
+	}
+}

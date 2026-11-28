@@ -236,7 +236,7 @@ const (
 func UpsertBlock(path, key, block string) (string, error) {
 	content, err := fsio.ReadText(path)
 	if os.IsNotExist(err) {
-		return Created, fsio.WriteUserFile(path, []byte(block+"\n"))
+		return Created, fsio.WriteUserFile(filepath.Dir(path), path, []byte(block+"\n"))
 	}
 	if err != nil {
 		return "", err
@@ -255,7 +255,7 @@ func UpsertBlock(path, key, block string) (string, error) {
 	if next == content {
 		return Unchanged, nil
 	}
-	return status, fsio.WriteUserFile(path, []byte(next))
+	return status, fsio.WriteUserFile(filepath.Dir(path), path, []byte(next))
 }
 
 // UpsertManaged wraps body in the key's markers and upserts it into the

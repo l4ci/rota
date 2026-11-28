@@ -34,7 +34,7 @@ func TestWriteUserFile(t *testing.T) {
 		link(t, filepath.Join("alias", "inner"), filepath.Join(root, "outer"))
 		// The chain dangles on the first write and exists on the second.
 		for _, want := range []string{"one", "two"} {
-			if err := WriteUserFile(filepath.Join(root, "outer"), []byte(want)); err != nil {
+			if err := WriteUserFile("", filepath.Join(root, "outer"), []byte(want)); err != nil {
 				t.Fatal(err)
 			}
 			if got := read(t, filepath.Join(root, "real", "file")); got != want {
@@ -53,7 +53,7 @@ func TestWriteUserFile(t *testing.T) {
 		a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
 		link(t, b, a)
 		link(t, a, b)
-		if err := WriteUserFile(a, []byte("x")); err == nil {
+		if err := WriteUserFile("", a, []byte("x")); err == nil {
 			t.Fatal("a symlink loop was written")
 		}
 	})
