@@ -97,7 +97,9 @@ type Cmd struct {
 // with ExitCode set and a nil error; err means it could not run at all (a
 // missing binary, matching exec.ErrNotFound) or ctx ended it, in which case it
 // is ctx.Err() and the Result holds only the output written before (no exit
-// code), so a caller can show where a command hung.
+// code), so a caller can show where a command hung. A completed command keeps
+// its exit code and captured output even if descendants hold its pipes past
+// WaitDelay.
 type Runner func(ctx context.Context, c Cmd) (Result, error)
 
 // Run is the production Runner.
@@ -153,6 +155,11 @@ func Run(ctx context.Context, c Cmd) (Result, error) {
 	}
 	if exited {
 		r.ExitCode, r.Signal = exitStatus(ee)
+		return r, nil
+	}
+	if c.Stdio == nil && errors.Is(err, exec.ErrWaitDelay) {
+		// WaitDelay only replaces a successful exit when descendants keep the
+		// output pipes open. The command itself finished with exit code 0.
 		return r, nil
 	}
 	return r, err

@@ -6,6 +6,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -16,6 +18,47 @@ func TestRunMapsExitCodeToResult(t *testing.T) {
 	res, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "echo out; echo err >&2; exit 3"}})
 	if err != nil || res.ExitCode != 3 || res.Stdout != "out\n" || res.Stderr != "err\n" {
 		t.Errorf("%+v %v", res, err)
+	}
+}
+
+func TestRunReportsExitWhileChildHoldsOutputPipes(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		code     int
+		group    bool
+		combined bool
+	}{
+		{name: "success"},
+		{name: "success combined group", group: true, combined: true},
+		{name: "failure", code: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Cleanup(func() {
+				b, err := os.ReadFile(filepath.Join(dir, "child.pid"))
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+				if err != nil || pid <= 0 {
+					t.Errorf("child pid %q: %v", b, err)
+					return
+				}
+				_ = syscall.Kill(pid, syscall.SIGKILL)
+			})
+			res, err := Run(context.Background(), Cmd{
+				Name: "sh", Args: []string{"-c", "sleep 30 & echo $! > child.pid; echo out; echo err >&2; exit " + strconv.Itoa(tc.code)},
+				Dir: dir, Group: tc.group, Combined: tc.combined, Grace: 20 * time.Millisecond,
+			})
+			out, stderr := "out\n", "err\n"
+			if tc.combined {
+				out, stderr = "out\nerr\n", ""
+			}
+			if err != nil || res.ExitCode != tc.code || res.Stdout != out || res.Stderr != stderr {
+				t.Fatalf("result %+v, err %v; want exit %d, stdout %q, stderr %q", res, err, tc.code, out, stderr)
+			}
+		})
 	}
 }
 
@@ -39,6 +82,35 @@ func TestRunTimeoutKeepsTheOutputSoFar(t *testing.T) {
 	res, err := Run(context.Background(), Cmd{Name: "sh", Args: []string{"-c", "echo before; sleep 5"}, Timeout: 300 * time.Millisecond, Combined: true, Group: true})
 	if !errors.Is(err, context.DeadlineExceeded) || res.Stdout != "before\n" {
 		t.Errorf("%+v %v", res, err)
+	}
+}
+
+func TestRunCancelKeepsTheOutputSoFar(t *testing.T) {
+	deadline, stop := context.WithTimeout(context.Background(), 5*time.Second)
+	defer stop()
+	ctx, cancel := context.WithCancel(deadline)
+	defer cancel()
+	dir := t.TempDir()
+	ready := make(chan struct{})
+	go func() {
+		defer close(ready)
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "ready")); err == nil {
+				cancel()
+				return
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(time.Millisecond):
+			}
+		}
+	}()
+	res, err := Run(ctx, Cmd{Name: "sh", Args: []string{"-c", "echo before; echo error >&2; touch ready; sleep 30"}, Dir: dir, Group: true})
+	cancel()
+	<-ready
+	if !errors.Is(err, context.Canceled) || res.Stdout != "before\n" || res.Stderr != "error\n" {
+		t.Fatalf("result %+v, err %v; want context.Canceled and partial output", res, err)
 	}
 }
 

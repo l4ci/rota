@@ -1060,6 +1060,11 @@ when set, and merges on a pass. After a PR lands (by `gate` or `train`) the outp
 names the issues and a read command for each (`rota item comment list <id> --kind learning`); fold them in at
 [`/rota-learn`](learning.md#rota-learn). It never changes the verdict or the exit code.
 
+A verification command that exits successfully still passes when a background child keeps its
+output pipes open. Rota drains output for up to five seconds after the command exits, then returns
+the captured output and the command's exit code. Background children are killed on cancellation;
+normal completion does not kill them.
+
 A worker's PR body carries four sections besides the closing keyword: `## Approvals` (the channel of each
 decision it acted on), `## Rulings` (its own calls, each with a cost if wrong), `## Assumptions` (each
 question the issue left open that it answered from the code, `None` if there were none) and the
