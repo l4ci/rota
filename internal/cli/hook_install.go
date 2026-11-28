@@ -52,9 +52,9 @@ func settingsTarget(c *Ctx, scopeFlag string) (hook.Scope, string, map[hook.Scop
 	return scope, p, paths, nil
 }
 
-// writeSettings rewrites a settings file. root bounds a symlinked one (see
-// fsio.WriteUserFile): the project root for the project scopes, "" for user.
-func writeSettings(root, path string, o *jsonx.Object) error {
+// writeSettings rewrites a settings file, through a symlink if it is one (see
+// fsio.WriteUserFile).
+func writeSettings(path string, o *jsonx.Object) error {
 	b, err := jsonx.Marshal(o)
 	if err != nil {
 		return err
@@ -62,22 +62,12 @@ func writeSettings(root, path string, o *jsonx.Object) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return err
 	}
-	return fsio.WriteUserFile(root, path, append(b, '\n'))
-}
-
-// settingsRoot is the bound writeSettings takes for scope. settingsTarget has
-// already required a project root for the project scopes.
-func settingsRoot(c *Ctx, scope hook.Scope) string {
-	if scope == hook.ScopeUser {
-		return ""
-	}
-	root, _ := c.Root()
-	return root
+	return fsio.WriteUserFile(path, append(b, '\n'))
 }
 
 func settingsWriteError(err error) error {
-	if errors.Is(err, fsio.ErrLinkOutside) {
-		return Resolution("%v", err)
+	if errors.Is(err, fsio.ErrLinkDirMissing) {
+		return &Error{Exit: ExitUnavailable, Message: err.Error()}
 	}
 	return &Error{Exit: ExitInternal, Message: err.Error()}
 }
@@ -117,7 +107,7 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 				"scope", string(scope), "settingsPath", path)
 		}
 		if out.Changed {
-			if err := writeSettings(settingsRoot(c, scope), path, files[scope]); err != nil {
+			if err := writeSettings(path, files[scope]); err != nil {
 				return Result{}, settingsWriteError(err)
 			}
 		}
@@ -153,7 +143,7 @@ func hookUninstall(fs *flag.FlagSet) RunFunc {
 			removed = []string{}
 		}
 		if len(removed) > 0 {
-			if err := writeSettings(settingsRoot(c, scope), path, o); err != nil {
+			if err := writeSettings(path, o); err != nil {
 				return Result{}, settingsWriteError(err)
 			}
 		}

@@ -62,7 +62,7 @@ func (s Store) InstructionsInit() ([]Action, error) {
 		return []Action{{Action: "skippedSymlink", File: "AGENTS.md"}}, nil
 	}
 	var acts []Action
-	write := func(p, text string) error { return fsio.WriteUserFile(s.Root, p, []byte(text)) }
+	write := func(p, text string) error { return fsio.WriteUserFile(p, []byte(text)) }
 	exists := func(p string) bool { _, err := os.Stat(p); return err == nil }
 
 	if !exists(agents) {
@@ -172,7 +172,7 @@ func (s Store) StripDeprecatedBlocks(write bool) ([]string, error) {
 	}
 	if next != content && write {
 		next = blankRuns.ReplaceAllString(next, "\n\n")
-		if err := fsio.WriteUserFile(s.Root, path, []byte(next)); err != nil {
+		if err := fsio.WriteUserFile(path, []byte(next)); err != nil {
 			return nil, err
 		}
 	}
