@@ -50,7 +50,7 @@ func branchChange(c *Ctx, t reviewSpan) change.Result {
 	}
 	cfg := c.projectConfig(root)
 	src.Policy, src.PolicyErr = config.ChangePolicyOf(cfg)
-	f, err := c.deps().forge(c.Context(), cfg, "", root)
+	f, err := c.deps().forge(c.Context(), cfg, "", t.Dir)
 	switch {
 	case err == nil:
 		src.PRBody = func() (string, error) {
