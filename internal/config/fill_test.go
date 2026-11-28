@@ -101,7 +101,7 @@ func TestFillKeepsPresentAndUnknownKeys(t *testing.T) {
 }
 
 func TestFillRefusesCorrupt(t *testing.T) {
-	for _, body := range []string{"{oops", "[1]", "null", "", "\xff{}", `{"a": NaN}`} {
+	for _, body := range []string{"{oops", "[1]", "null", "\xff{}", `{"a": NaN}`} {
 		root := project(t, "", "")
 		p := filepath.Join(root, ".rota", "config.json")
 		os.WriteFile(p, []byte(body), 0o644)

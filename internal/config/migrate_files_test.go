@@ -111,10 +111,7 @@ func TestMigrationFiles(t *testing.T) {
 				assertBytes(t, r, []string{step.old, step.old, step.conflict})
 			})
 			for _, layer := range []string{"config.json", "config.local.json"} {
-				for _, bad := range []string{`{"broken":`, `[]`, " \n"} {
-					if layer == "config.local.json" && bad == " \n" {
-						continue
-					}
+				for _, bad := range []string{`{"broken":`, `[]`} {
 					t.Run("corrupt "+layer+" "+bad, func(t *testing.T) {
 						bodies := []string{step.old, step.old, step.old}
 						if layer == "config.json" {

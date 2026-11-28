@@ -254,17 +254,22 @@ func LocalListMaskWarning(env cfgdir.Env, root, key string, value any) string {
 	return ""
 }
 
-// isBlank is whether the file at path exists and holds only whitespace: a
-// touched file, which reads as {} where a file that does not parse is refused.
-func isBlank(path string) bool {
+// ReadLayer is os.ReadFile for a project layer (config.json or
+// config.local.json), with the one rule every reader and writer of those two
+// shares: a blank file, one holding only whitespace, reads as {}. A file that
+// does not parse is returned as it is, for the caller to refuse.
+func ReadLayer(path string) ([]byte, error) {
 	raw, err := os.ReadFile(path)
-	return err == nil && len(bytes.TrimSpace(raw)) == 0
+	if err == nil && len(bytes.TrimSpace(raw)) == 0 {
+		return []byte("{}"), nil
+	}
+	return raw, err
 }
 
-// updateLayer is fsio.UpdateJSONStrict, except that a blank file starts from
-// {} as a missing one does.
+// updateLayer is fsio.UpdateJSONStrict for a project layer: a blank file
+// starts from def, as a missing one does.
 func updateLayer(path string, def any, mutate func(any) (any, error)) error {
-	if isBlank(path) {
+	if raw, err := ReadLayer(path); err == nil && string(raw) == "{}" {
 		return fsio.UpdateJSON(path, def, mutate)
 	}
 	return fsio.UpdateJSONStrict(path, def, mutate)
@@ -277,15 +282,12 @@ func updateLayer(path string, def any, mutate func(any) (any, error)) error {
 // carry on with defaults calls it first.
 func CheckLayer(root string, layer Layer) error {
 	path := layer.path(root)
-	raw, err := os.ReadFile(path)
+	raw, err := ReadLayer(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
 	if err != nil {
 		return fmt.Errorf("%w: %s: %v", fsio.ErrUnreadable, path, err)
-	}
-	if len(bytes.TrimSpace(raw)) == 0 {
-		return nil
 	}
 	doc, err := jsonx.Decode(raw)
 	if err != nil {

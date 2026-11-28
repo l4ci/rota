@@ -3,7 +3,6 @@ package roundcfg
 import (
 	"errors"
 	"io/fs"
-	"os"
 
 	"github.com/l4ci/rota/internal/config"
 	"github.com/l4ci/rota/internal/jsonx"
@@ -60,7 +59,7 @@ func (e *RoleError) Error() string { return e.Why }
 // skips a local layer it cannot read or decode, which would read as role main
 // and open the fence. load then returns the merged config for MachineRole.
 func SupportMachine(root string, load func(root string) any) (bool, *RoleError) {
-	if raw, err := os.ReadFile(rotatree.ConfigLocal(root)); err == nil {
+	if raw, err := config.ReadLayer(rotatree.ConfigLocal(root)); err == nil {
 		doc, err := jsonx.Decode(raw)
 		if err != nil {
 			return false, &RoleError{".rota/config.local.json does not decode: " + err.Error(), "fix the JSON in .rota/config.local.json, or remove the file on the main machine", true}
