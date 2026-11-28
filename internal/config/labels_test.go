@@ -18,15 +18,15 @@ func TestResolvedLabelsProjectConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, n := range []string{"doing", "effort/Major", "area:cli", "risk:custom", "audit:security", "audit:depth"} {
-		l, ok := labels.Find(entries, n)
+		l, ok := labels.Find(entries, n, nil)
 		if !ok || l.Description == "" {
 			t.Errorf("label %s absent/undescribed: %+v", n, l)
 		}
 	}
-	if l, _ := labels.Find(entries, "area:cli"); l.Description != "CLI work." {
+	if l, _ := labels.Find(entries, "area:cli", nil); l.Description != "CLI work." {
 		t.Errorf("extra description %+v", l)
 	}
-	if _, ok := labels.Find(entries, labels.InProgress); ok {
+	if _, ok := labels.Find(entries, labels.InProgress, nil); ok {
 		t.Fatal("old configured label remains known")
 	}
 	page := labels.ReferencePage(entries)

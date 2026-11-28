@@ -24,35 +24,35 @@ type Change struct {
 
 // Diff compares definitions, never issues. used is the complete set of names
 // on open issues. An unused claim is reported before considering its metadata.
-func Diff(entries []Entry, have []Label, used map[string]bool, metadata bool) []Change {
+func Diff(entries []Entry, have []Label, used map[string]bool, metadata bool, matcher NameMatcher) []Change {
+	matcher = nameMatcher(matcher)
 	var out []Change
-	byName := map[string]Label{}
+	var names []string
 	for _, l := range have {
-		byName[l.Name] = l
+		names = append(names, l.Name)
 	}
 	for _, e := range entries {
 		if e.Prefix {
 			continue
 		}
-		if _, ok := byName[e.Name]; !ok {
+		if !matcher.HasLabel(names, e.Name) {
 			out = append(out, Change{Kind: Missing, Label: e.Label})
 		}
 	}
 	for _, current := range have {
 		cur := current
-		if strings.HasPrefix(cur.Name, ClaimPrefix) && !used[cur.Name] {
+		if _, claim := matcher.CutPrefix(cur.Name, ClaimPrefix); claim && !used[cur.Name] {
 			out = append(out, Change{UnusedClaim, cur, &cur})
 			continue
 		}
-		if want, ok := Find(entries, cur.Name); ok {
+		if want, ok := Find(entries, cur.Name, matcher); ok {
 			if metadata && (cur.Description != want.Description || NormalizeColor(cur.Color) != NormalizeColor(want.Color)) {
 				out = append(out, Change{Metadata, want, &cur})
 			}
 			continue
 		}
 		kind := Unknown
-		switch cur.Name {
-		case "bug", "enhancement", "documentation":
+		if matcher.HasLabel([]string{"bug", "enhancement", "documentation"}, cur.Name) {
 			kind = DefaultOverlap
 		}
 		out = append(out, Change{kind, cur, &cur})

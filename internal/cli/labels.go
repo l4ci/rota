@@ -73,7 +73,7 @@ func labelsSync(fs *flag.FlagSet) RunFunc {
 			}
 		}
 		manager, writable := tr.(tracker.LabelManager)
-		changes := labels.Diff(entries, have, used, writable)
+		changes := labels.Diff(entries, have, used, writable, tracker.LabelsFor(tr))
 		changed := false
 		result := func() Result {
 			rows := make([]any, 0, len(changes))

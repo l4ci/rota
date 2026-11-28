@@ -38,9 +38,10 @@ The [label registry](../reference/labels.md) lists every label rota sets or read
 claim prefixes and review triggers. Configured names under `issues.labels.*` are respected.
 
 Issue label checks follow the issue tracker's matching rule: GitHub, Linear and It's a Plan
-ignore case; GitLab and Jira match exactly. This also applies to workflow labels, machine
-pins, review triggers and the gate's `partial-slice` check. When PRs and issues live on
-different services, the issue tracker supplies the rule. Labels keep their original spelling.
+ignore case; GitLab and Jira match exactly. This also applies to registry definitions in
+sync and doctor, workflow labels, machine pins, review triggers and the gate's `partial-slice`
+check. When PRs and issues live on different services, the issue tracker supplies the rule.
+Labels keep their original spelling.
 
 Declare project labels with descriptions in `issues.labels.extra`:
 

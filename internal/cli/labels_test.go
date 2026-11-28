@@ -36,7 +36,8 @@ func (f *labelSyncTracker) UpsertLabel(_ context.Context, label tracker.Label) e
 	}
 	f.upserts = append(f.upserts, label)
 	for i, existing := range f.definitions {
-		if existing.Name == label.Name {
+		if tracker.HasLabel(f, []string{existing.Name}, label.Name) {
+			label.Name = existing.Name
 			f.definitions[i] = label
 			return nil
 		}
@@ -131,6 +132,32 @@ func TestLabelsSyncDryRunAndApply(t *testing.T) {
 	code, env, stderr = rotaRunWith(t, deps, "--json", "-C", root, "labels", "sync", "--apply")
 	if code != 0 || issueGet(issueData(t, env), "changed") != false || len(fake.upserts) != before {
 		t.Fatalf("repeat apply wrote labels: exit %d: %s; %v", code, stderr, env)
+	}
+}
+
+func TestLabelsSyncCaseFoldedDefinition(t *testing.T) {
+	root := trackerProject(t, issuesConfig)
+	fake := syncFixture()
+	fake.ProviderName = "github"
+	fake.definitions = []tracker.Label{{Name: "In-Progress", Description: "old", Color: "ffffff"}}
+	code, env, stderr := rotaRunWith(t, withTracker(t, fake), "--json", "-C", root, "labels", "sync")
+	if code != 0 {
+		t.Fatalf("labels sync: exit %d: %s", code, stderr)
+	}
+	changes := syncChanges(t, env)
+	if changes["in-progress"] != "metadata" || changes["In-Progress"] != "" {
+		t.Fatalf("case variant should report only metadata drift: %v", changes)
+	}
+	deps := withTracker(t, fake)
+	if code, _, stderr := rotaRunWith(t, deps, "--json", "-C", root, "labels", "sync", "--apply"); code != 0 {
+		t.Fatalf("apply: exit %d: %s", code, stderr)
+	}
+	code, env, stderr = rotaRunWith(t, deps, "--json", "-C", root, "labels", "sync")
+	if code != 0 || len(syncChanges(t, env)) != 0 {
+		t.Fatalf("repeat sync: exit %d: %s; %v", code, stderr, env)
+	}
+	if fake.definitions[0].Name != "In-Progress" {
+		t.Fatalf("apply renamed case variant: %+v", fake.definitions[0])
 	}
 }
 

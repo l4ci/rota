@@ -78,7 +78,7 @@ func ResolvedLabels(cfg any) ([]labels.Entry, error) {
 		return nil, err
 	}
 	addRead := func(name, desc, key string) {
-		if _, ok := labels.Find(out, name); ok {
+		if _, ok := labels.Find(out, name, nil); ok {
 			return
 		}
 		out = append(out, labels.Entry{Label: labels.Label{Name: name, Description: desc, Color: "b60205"}, Group: "review", ConfigKey: key, Sets: "maintainer", Reads: key, Removed: "explicit removal"})
