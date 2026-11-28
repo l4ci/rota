@@ -811,7 +811,7 @@ func (g *GitHub) ClosingRefs(ctx context.Context, pr int) ([]int, bool, error) {
 		} `json:"data"`
 	}
 	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(pr)}
-	if err := g.json(ctx, args, &d); err != nil {
+	if err := g.readJSON(ctx, args, &d); err != nil {
 		return nil, false, err
 	}
 	if d.Data.Repository.PullRequest == nil {
@@ -1041,7 +1041,7 @@ func (g *GitHub) IssueAuthorship(ctx context.Context, key IssueKey) (Authorship,
 		} `json:"data"`
 	}
 	args := []string{"api", "graphql", "-f", "query=" + q, "-F", "owner={owner}", "-F", "repo={repo}", "-F", "n=" + strconv.Itoa(number)}
-	if err := g.json(ctx, args, &d); err != nil {
+	if err := g.readJSON(ctx, args, &d); err != nil {
 		return Authorship{}, err
 	}
 	i := d.Data.Repository.Issue

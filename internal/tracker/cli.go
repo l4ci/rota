@@ -288,27 +288,37 @@ func ProviderFromURL(url string) string {
 // stdin is read once, and only when an argument takes it (`-`, or ending in
 // `=-` or `@-`).
 func (c *CLI) Run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
+	return c.call(ctx, args, stdin, isRead(args))
+}
+
+// read is for adapter-owned calls whose read intent is known without inspecting
+// argv (notably GraphQL queries, which otherwise look like POST writes).
+func (c *CLI) read(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
+	return c.call(ctx, args, stdin, true)
+}
+
+func (c *CLI) call(ctx context.Context, args []string, stdin io.Reader, read bool) (Result, error) {
 	if c.Cache == nil || keepsCache(args) {
-		return c.run(ctx, args, stdin)
+		return c.run(ctx, args, stdin, read)
 	}
-	if !isRead(args) {
+	if !read {
 		// Drop before and after: a write that fails midway may still have landed.
 		c.Cache.Clear()
 		defer c.Cache.Clear()
-		return c.run(ctx, args, stdin)
+		return c.run(ctx, args, stdin, read)
 	}
 	key := cacheKey(c.cacheScope(), args)
 	if r, ok := c.Cache.get(key); ok {
 		return r, nil
 	}
-	r, err := c.run(ctx, args, stdin)
+	r, err := c.run(ctx, args, stdin, read)
 	if err == nil && r.ExitCode == 0 {
 		c.Cache.put(key, r)
 	}
 	return r, err
 }
 
-func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, error) {
+func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader, retryRead bool) (Result, error) {
 	cli := CLIName(c.Provider)
 	if _, err := c.lookPath(cli); err != nil {
 		return Result{}, cliMissing(cli)
@@ -349,7 +359,6 @@ func (c *CLI) run(ctx context.Context, args []string, stdin io.Reader) (Result, 
 
 	// A read that timed out or died on gh's own context error runs once more
 	// (#3159). A write does not: it may have landed.
-	retryRead := isRead(args)
 	r, err := attempt()
 	var te *Error
 	if retryRead && ctx.Err() == nil && ((errors.As(err, &te) && te.timedOut) || (err == nil && ctxFailure(r))) {

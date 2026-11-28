@@ -215,3 +215,18 @@ type caseClosingIssues struct {
 func (s *caseClosingIssues) LabelMatcher() tracker.LabelMatcher {
 	return (tracker.IssueActor{Source: s.provider}).LabelMatcher()
 }
+
+func TestClosingRefsFailureIsAlwaysVisible(t *testing.T) {
+	out := checkClosingItems(context.Background(), closesInput{
+		Slot: "sam", PR: "https://github.com/o/r/pull/7", Keys: keys(5),
+		Issues: &seamIssues{}, Source: tracker.ClosingSource{Body: "Closes #5"},
+		Forge: &seamReporter{err: errors.New("gh timed out after retry")},
+	})
+	if out.Verdict != "" || out.Broke != "" {
+		t.Fatalf("fallback policy changed: %+v", out)
+	}
+	if len(out.Notes) != 1 || !strings.Contains(out.Notes[0], "CLOSING-REFS-UNKNOWN") ||
+		!strings.Contains(out.Notes[0], "gh timed out after retry") || !strings.Contains(out.Notes[0], "slot") {
+		t.Fatalf("missing closing-reference failure diagnostic: %+v", out)
+	}
+}

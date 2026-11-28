@@ -205,7 +205,7 @@ Each sub-repo's items stay on that sub-repo's own tracker; the provider is detec
 
 ## Rate limits
 
-Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. On a primary rate limit `rota` waits 60 seconds and retries the call once, then stops with exit 6. A secondary rate limit stops at once, and other failures are not retried. There is no retry loop; wait, then re-run.
+Exit 5 means the tracker is unavailable; exit 6 means rate-limited. Both stop the run and report. On a primary rate limit `rota` waits 60 seconds and retries the call once, then stops with exit 6. A secondary rate limit stops at once. A read that times out or fails with the forge CLI's own context error retries once; this includes GitHub closing-reference and authorship queries, label listing and release lookup. Writes do not retry on timeout, since they may have landed. Other failures are not retried. If the tracker still fails, wait, then re-run.
 
 ## Migrating a file backlog
 
