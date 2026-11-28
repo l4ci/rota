@@ -75,18 +75,23 @@ func cacheKey(scope string, args []string) string {
 }
 
 // isRead reports whether args is a forge call that changes nothing and can be
-// repeated: list or view of an issue, PR or MR, or a plain GET through api.
+// repeated. Adapter-owned reads can state intent explicitly; this fallback
+// handles user argv conservatively, leaving GraphQL documents unclassified.
 func isRead(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
 	if args[0] == "api" {
-		return apiMethod(args) == "GET" && !hasFields(args)
+		return len(args) >= 2 && args[1] != "graphql" && apiMethod(args) == "GET" && !hasFields(args)
 	}
 	if len(args) < 2 {
 		return false
 	}
 	switch args[0] {
+	case "label":
+		return args[1] == "list"
+	case "release":
+		return args[1] == "view"
 	case "issue", "pr", "mr":
 		switch args[1] {
 		case "list", "ls", "view":

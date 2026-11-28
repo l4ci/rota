@@ -168,8 +168,12 @@ func checkClosingItems(ctx context.Context, in closesInput) stepOutcome {
 		}
 	}
 	if !known {
-		// Nothing to judge: say so once, and only when a slice PR made it matter.
+		// An unsupported capability stays optional, but a failed query must be
+		// visible even when none of the slot's own items is a partial slice.
 		if !partial {
+			if closingErr != nil {
+				return stepOutcome{Notes: []string{fmt.Sprintf("CLOSING-REFS-UNKNOWN %s — the forge could not report (%v) what %s closes; only slot items were checked for acceptance", in.Slot, closingErr, in.PR)}}
+			}
 			return stepOutcome{}
 		}
 		why := "the forge cannot report"
