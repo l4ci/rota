@@ -156,12 +156,12 @@ note: umbrella status is true iff `.rota/repos.json` holds at least one entry, a
 rota repo add <path> [--name <name>]
 repo: none (edits the umbrella registry)
 data: {"name": string, "path": string, "changed": bool}
-exit: 3 when `<path>` is missing, is not a directory, has no `.git` entry, or is not strictly below the umbrella root; 4 when the name is already registered for another directory or the directory under another name; 2 without exactly one `<path>`. Adding an entry that is already registered (same name, same directory) is exit 0 with `changed: false` and does not rewrite the file.
+exit: 3 when `<path>` is missing, is not a directory, has no `.git` entry, or is not strictly below the umbrella root; 4 when the name is already registered for another directory or the directory under another name; 6 when another process holds the registry lock for 10 s; 2 without exactly one `<path>`. Adding an entry that is already registered (same name, same directory) is exit 0 with `changed: false` and does not rewrite the file.
 note: `<path>` is relative to the working directory. `name` defaults to the directory's basename. The entry is written as `./<path relative to the root>`, the file stays sorted by name, and entries `repos.json` holds that `add` does not know are kept. A new entry also gets `.rota/knowledge/<name>/` and a `/<path>/` line in the umbrella's `.gitignore` when that is a git repo, as `rota init umbrella` leaves them. The sub-repo is never touched. `umbrella.enabled` is not changed.
 
 ### rota repo rm
 rota repo rm <name>
 repo: none (edits the umbrella registry)
 data: {"name": string, "path": string, "changed": true, "openItems": [string], "activeStreams": [string]}
-exit: 3 when `<name>` is not registered (so a second `rm` of the same name exits 3, not 0); 2 without exactly one `<name>`.
+exit: 3 when `<name>` is not registered (so a second `rm` of the same name exits 3, not 0); 6 when another process holds the registry lock for 10 s; 2 without exactly one `<name>`.
 note: only the registry entry goes. The sub-repo, its `.rota/knowledge/<name>/` and its `.gitignore` line stay. Before removing, `rm` lists the open items whose `Repos:` field names the repo (`openItems`, item IDs) and the active streams in `status.json` whose `repo` is the name (`activeStreams`, branches), and warns for each non-empty list; neither blocks. A backlog that cannot be read gives a warning and an empty `openItems`.
