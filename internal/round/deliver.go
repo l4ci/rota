@@ -123,7 +123,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	if solo {
 		// No pane: mark the slot busy and hand the brief back.
 		return append(steps, step{name: "solo hand-off", do: func() error {
-			b, wt, err := e.soloHandOff(root, d.Slot, text, d.Round)
+			b, wt, err := e.soloHandOff(ctx, root, d.Slot, text, d.Round)
 			if err != nil {
 				return d.wrap(err)
 			}

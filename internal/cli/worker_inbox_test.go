@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 
 func postMail(t *testing.T, dir, text string) {
 	t.Helper()
-	if _, err := worker.PostMail(dir, "ben", worker.MailReview, text, time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)); err != nil {
+	if _, err := (worker.Env{Config: worker.NoConfig}).PostMail(context.Background(), dir, "ben", worker.MailReview, text, time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,11 +24,11 @@ func inboxRoot(t *testing.T) string {
 func TestMailPostsUnreadAndAcksOnce(t *testing.T) {
 	root := inboxRoot(t)
 	now := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
-	m1, err := PostMail(root, "ben", "review", "REVIEW one", now)
+	m1, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "REVIEW one", now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m2, err := PostMail(root, "ben", "review", "REVIEW two", now)
+	m2, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "REVIEW two", now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +47,7 @@ func TestMailPostsUnreadAndAcksOnce(t *testing.T) {
 	if len(acked) != 2 || len(s.Unread()) != 0 || len(s.Inbox()) != 2 {
 		t.Fatalf("acked %d unread %d inbox %d", len(acked), len(s.Unread()), len(s.Inbox()))
 	}
-	m3, _ := PostMail(root, "ben", "review", "REVIEW three", now)
+	m3, _ := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "REVIEW three", now)
 	if m3.Seq != 3 {
 		t.Fatalf("seq after ack %d, want 3", m3.Seq)
 	}
@@ -55,8 +56,8 @@ func TestMailPostsUnreadAndAcksOnce(t *testing.T) {
 func TestRetractMailRemovesOnlyThatMail(t *testing.T) {
 	root := inboxRoot(t)
 	now := time.Date(2026, 10, 20, 9, 0, 0, 0, time.UTC)
-	m1, _ := PostMail(root, "ben", "review", "keep", now)
-	m2, _ := PostMail(root, "ben", "review", "drop", now)
+	m1, _ := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "keep", now)
+	m2, _ := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "drop", now)
 	if err := RetractMail(root, "ben", m2.Seq); err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +69,7 @@ func TestRetractMailRemovesOnlyThatMail(t *testing.T) {
 
 func TestTaskDispatchAndUnbindReturnPendingRequests(t *testing.T) {
 	root := inboxRoot(t)
-	_, _ = PostMail(root, "ben", "review", "old task mail", time.Now())
+	_, _ = (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "old task mail", time.Now())
 	if _, err := UpdateSlot(root, "ben", func(s *Slot) { s.Dispatch("h", "13", "", "") }); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func TestTaskDispatchAndUnbindReturnPendingRequests(t *testing.T) {
 	if got := s.Inbox(); len(got) != 1 || got[0].Disposition != "returned" || got[0].Task != "12" || got[0].Reason == "" || len(s.Waiting()) != 0 {
 		t.Fatalf("assignment replacement lost ownership or retained obligation: %+v", got)
 	}
-	_, _ = PostMail(root, "ben", "review", "x", time.Now())
+	_, _ = (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "review", "x", time.Now())
 	// A relay (no task) keeps the mail: it is the very thing a relay delivers.
 	if _, err := UpdateSlot(root, "ben", func(s *Slot) { s.Dispatch("h", "", "", "") }); err != nil {
 		t.Fatal(err)
@@ -102,7 +103,7 @@ func TestInboxAssignmentIdentityAndSequence(t *testing.T) {
 		}
 	}
 	update(func(s *Slot) { s.Bind(Binding{Task: "12", Attempt: "first"}) })
-	m, err := PostMail(root, "ben", MailBase, "retarget the PR", time.Now())
+	m, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", MailBase, "retarget the PR", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +124,7 @@ func TestInboxAssignmentIdentityAndSequence(t *testing.T) {
 	if err := RetractMail(root, "ben", m.Seq); err != nil {
 		t.Fatal(err)
 	}
-	next, err := PostMail(root, "ben", MailReview, "new request", time.Now())
+	next, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", MailReview, "new request", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +176,7 @@ func TestLegacyInformationalAndStaleInboxRecords(t *testing.T) {
 	if !strings.Contains(string(b), `"futureMail"`) || !strings.Contains(string(b), `"futureRegistry"`) {
 		t.Fatalf("unknown fields dropped: %s", b)
 	}
-	m, err := PostMail(root, "ben", "notice", "informational", time.Now())
+	m, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", "notice", "informational", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +232,7 @@ func TestPromoteBundleLeadKeepsPendingRequests(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	m, err := PostMail(root, "ben", MailReview, "REVIEW fix the bundle", time.Now())
+	m, err := (Env{Config: NoConfig}).PostMail(context.Background(), root, "ben", MailReview, "REVIEW fix the bundle", time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}

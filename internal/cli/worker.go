@@ -569,10 +569,11 @@ func workerDispatch(fs *flag.FlagSet) RunFunc {
 			return Result{}, err
 		}
 		if res.Relay {
-			n := worker.RoundOf(root)
+			override := 0
 			if opts.Round != nil {
-				n = *opts.Round
+				override = *opts.Round
 			}
+			n := workerEnvCtx(c, ctx).SigningRound(ctx, root, override)
 			if err := postSupportRelay(c, root, slot, path, n, opts.PR); err != nil {
 				c.Warn("the relay was sent but not posted on the issue (the main gate cannot see it): %v", err)
 			}

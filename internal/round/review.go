@@ -163,7 +163,7 @@ func (e Env) ReviewRelay(ctx context.Context, root string, o ReviewOpts) (Relaye
 		}
 		// The same text goes to the slot's inbox first: the pane copy can cross the
 		// worker's ROTA-DONE, and `worker done` refuses while mail is unread.
-		mail, err := worker.PostMail(root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
+		mail, err := e.Worker.PostMail(ctx, root, o.Slot, worker.MailReview, ReviewRelayText(batch), e.Worker.Now())
 		if err != nil {
 			return errors.Join(err, rollbackErr(unseen()))
 		}

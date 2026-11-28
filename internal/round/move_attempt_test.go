@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"github.com/l4ci/rota/internal/landing"
 	"os"
 	"path/filepath"
@@ -238,7 +239,7 @@ func TestTransferThatSendsNoBriefLogsNoRelay(t *testing.T) {
 func TestTransferReturnsPendingInboxToOrchestrator(t *testing.T) {
 	f := newMoveFx(t)
 	attempt := f.slot("ben").Attempt()
-	m, err := worker.PostMail(f.root, "ben", worker.MailReview, "resolve the review", f.now)
+	m, err := (worker.Env{Config: worker.NoConfig}).PostMail(context.Background(), f.root, "ben", worker.MailReview, "resolve the review", f.now)
 	if err != nil {
 		t.Fatal(err)
 	}

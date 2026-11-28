@@ -120,7 +120,7 @@ const (
 
 func TestDoneAckedRequestSurvivesInterruption(t *testing.T) {
 	r := newDoneRig(t, oneSlot, `{}`)
-	if _, err := PostMail(r.root, "ben", MailReview, "please address the review", time.Now()); err != nil {
+	if _, err := (Env{Config: NoConfig}).PostMail(context.Background(), r.root, "ben", MailReview, "please address the review", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := UpdateSlot(r.root, "ben", func(s *Slot) { s.AckUnread(0) }); err != nil {
@@ -365,7 +365,7 @@ func TestDoneFenceAndMail(t *testing.T) {
 	})
 	t.Run("unread mail refuses", func(t *testing.T) {
 		r := newDoneRig(t, oneSlot, fastCfg)
-		if _, err := PostMail(r.root, "ben", "review", "REVIEW x", r.deps.Env.WithDefaults().Now()); err != nil {
+		if _, err := (Env{Config: NoConfig}).PostMail(context.Background(), r.root, "ben", "review", "REVIEW x", r.deps.Env.WithDefaults().Now()); err != nil {
 			t.Fatal(err)
 		}
 		res, err := r.done(DoneRequest{})
@@ -666,7 +666,7 @@ func TestDoneFinalLockRefusesLateRequests(t *testing.T) {
 		t.Run(map[bool]string{false: "unread", true: "already read"}[ack], func(t *testing.T) {
 			r := newDoneRig(t, oneSlot, `{}`)
 			r.deps.RunTargeted = func(dir, command, base, head string, ids []string) (string, error) {
-				if _, err := PostMail(r.root, "ben", MailBase, "base changed during verification", time.Now()); err != nil {
+				if _, err := (Env{Config: NoConfig}).PostMail(context.Background(), r.root, "ben", MailBase, "base changed during verification", time.Now()); err != nil {
 					t.Fatal(err)
 				}
 				if ack {
@@ -701,7 +701,7 @@ func TestDoneLegacyAndInformationalMailKeepAcknowledgementSemantics(t *testing.T
 			}
 			r := newDoneRig(t, slot, `{}`)
 			if kind == "informational" {
-				if _, err := PostMail(r.root, "ben", "notice", "context only", time.Now()); err != nil {
+				if _, err := (Env{Config: NoConfig}).PostMail(context.Background(), r.root, "ben", "notice", "context only", time.Now()); err != nil {
 					t.Fatal(err)
 				}
 			}

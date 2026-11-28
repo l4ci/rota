@@ -136,17 +136,6 @@ func recordDispatch(root, slot, handle, task, kind string, round *int, turnSeq i
 	})
 }
 
-// RoundOf is the registry's round, else 1: the round a relay is signed with.
-func RoundOf(root string) int { return roundOf(root) }
-
-// roundOf is the registry's round, else 1.
-func roundOf(root string) int {
-	if n, ok := LoadRegistryTolerant(root).Round(); ok && n != 0 {
-		return n
-	}
-	return 1
-}
-
 // Dispatch sends a brief into a worker slot's Claude Code session, on the host
 // that round.dispatch selects.
 //
@@ -525,14 +514,14 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 		res.Warnings = append(res.Warnings, w)
 	}
 	syncLabel(ctx, h, root, o.Slot)
-	labelWorkspace(ctx, h, root)
+	e.labelWorkspace(ctx, h, root)
 
 	// A harness switch spawns a session whose input can come up after the host
 	// reports it: hold the brief until it accepts input (#3165).
 	if err := e.awaitInput(ctx, t, o.Slot); err != nil {
 		return res, err
 	}
-	out := signBrief(prompt, signKey, roundOf(root), 0, "", string(t.brief))
+	out := signBrief(prompt, signKey, e.SigningRound(ctx, root, intOr0(o.Round)), 0, "", string(t.brief))
 	// A task dispatch starts a fresh session and has nothing pending.
 	sendErr := e.sendTracked(ctx, root, o, t, out, false)
 	// Remember a stall so the next relay checks the prompt line first. Written
@@ -659,7 +648,7 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 	if err := e.baselineAndRecord(ctx, root, o, t, ""); err != nil {
 		return res, err
 	}
-	round := roundOf(root)
+	round := e.SigningRound(ctx, root, intOr0(o.Round))
 	// relaySeq numbers the relay in the slot's log. It rides on the relay
 	// element's opening line, which is how the classifier tells this relay's
 	// echo from an earlier one's (#1017).
@@ -720,6 +709,14 @@ func (e Env) DispatchRelay(ctx context.Context, root string, o DispatchOpts) (Di
 		}
 	}
 	return sendFailure(h, o.Slot, res, sendErr)
+}
+
+// intOr0 is *n, 0 when unset.
+func intOr0(n *int) int {
+	if n == nil {
+		return 0
+	}
+	return *n
 }
 
 // resetRefusal maps a reset-guard error onto dispatch's exits: a slot holding
