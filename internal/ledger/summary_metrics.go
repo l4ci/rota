@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // LeadTimeMetric describes a distribution in whole seconds. Unavailable values
@@ -56,7 +57,7 @@ func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 	firstMerge := map[int]time.Time{}
 	for _, e := range entries {
 		if e.Round == round && e.Kind == KindMerge {
-			if n := prNum(e.PR); n != 0 {
+			if n, ok := tracker.PRNumber(e.PR); ok {
 				if _, exists := firstMerge[n]; !exists {
 					firstMerge[n] = e.TS
 				}
@@ -66,7 +67,7 @@ func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 	merged := map[int]IssueRow{}
 	for _, r := range rows {
 		if r.Merged {
-			if n := prNum(r.PR); n != 0 {
+			if n, ok := tracker.PRNumber(r.PR); ok {
 				if _, exists := merged[n]; !exists {
 					if ts, exists := firstMerge[n]; exists {
 						r.MergedAt = &ts // metrics use first merge; existing row fields remain last-wins
@@ -108,7 +109,7 @@ func roundMetrics(rows []IssueRow, entries []Entry, round int) RoundMetrics {
 		reason = "no merged PRs"
 	}
 	for _, r := range rows {
-		if r.Merged && prNum(r.PR) == 0 {
+		if _, ok := tracker.PRNumber(r.PR); r.Merged && !ok {
 			reason = "merged PR reference missing"
 		}
 	}

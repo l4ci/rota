@@ -168,14 +168,22 @@ func TestSummaryExternalPR(t *testing.T) {
 }
 
 func TestSummaryGateMatchesRowByPRNumber(t *testing.T) {
-	es := []Entry{
-		{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "ben"},
-		{TS: at(9), Kind: KindDone, Round: 1, Issue: "12", Slot: "ben", PR: "https://h/o/r/pull/7"},
-		{TS: at(10), Kind: KindGate, Round: 1, PR: "#7", Detail: detail("verdict", "stale")}, // queued gate: no slot
-	}
-	s := Fold(es, nil, 1)
-	if len(s.Issues) != 1 || s.Issues[0].Gate != "stale" {
-		t.Fatalf("%+v", s.Issues)
+	for _, tc := range []struct{ name, row, gate string }{
+		{"#N matches a URL", "https://h/o/r/pull/7", "#7"},
+		{"URL matches #N", "#7", "https://h/o/r/pull/7"},
+		{"!N matches a merge request URL", "https://h/o/r/-/merge_requests/7", "!7"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			es := []Entry{
+				{TS: at(0), Kind: KindAssign, Round: 1, Issue: "12", Slot: "ben"},
+				{TS: at(9), Kind: KindDone, Round: 1, Issue: "12", Slot: "ben", PR: tc.row},
+				{TS: at(10), Kind: KindGate, Round: 1, PR: tc.gate, Detail: detail("verdict", "stale")}, // queued gate: no slot
+			}
+			s := Fold(es, nil, 1)
+			if len(s.Issues) != 1 || s.Issues[0].Gate != "stale" {
+				t.Fatalf("%+v", s.Issues)
+			}
+		})
 	}
 }
 

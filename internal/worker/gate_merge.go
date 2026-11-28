@@ -108,7 +108,7 @@ func (g *gateRun) mergeRemote() (done bool) {
 	// merge that reports success and merges nothing.
 	n, _ := strconv.Atoi(g.prNum)
 	if err := land.RequestForge(g.ctx, g.forge, n, g.verified, false); err != nil {
-		g.verdict(landing.GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, tailLines(err.Error(), 20)), "")
+		g.verdict(landing.GateMergeFailed, fmt.Sprintf("error: %s merge failed for %s:\n%s", g.cliName, g.pr, strutil.TailLines(err.Error(), 20)), "")
 		return true
 	}
 	sha, done := g.awaitMerged()
@@ -213,7 +213,7 @@ func (g *gateRun) fetchMerged() (cause string) {
 		case err != nil:
 			cause = err.Error()
 		case res.ExitCode != 0:
-			cause = cmp.Or(tailLines(strings.TrimSpace(res.Stderr), 1), fmt.Sprintf("exit %d", res.ExitCode))
+			cause = cmp.Or(strutil.TailLines(strings.TrimSpace(res.Stderr), 1), fmt.Sprintf("exit %d", res.ExitCode))
 		default:
 			return ""
 		}
@@ -257,7 +257,7 @@ func (g *gateRun) ffFailureCause(mergeOut string) string {
 			return fmt.Sprintf("diverged: %s ahead, %s behind %s", f[0], f[1], g.baseRef)
 		}
 	}
-	if m := tailLines(mergeOut, 3); m != "" {
+	if m := strutil.TailLines(mergeOut, 3); m != "" {
 		return "merge refused: " + m
 	}
 	return "merge refused, cause not found: no overlapping local changes, not ahead of " + g.baseRef

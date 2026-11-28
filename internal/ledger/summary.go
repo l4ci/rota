@@ -11,6 +11,8 @@ import (
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/stamp"
+	"github.com/l4ci/rota/internal/strutil"
+	"github.com/l4ci/rota/internal/tracker"
 )
 
 // Outcomes of an issue row beyond merged-or-not.
@@ -103,16 +105,6 @@ type IdleRow struct {
 // the cap.
 type CapReasons struct{ AmbiguousCriteria, Tier, Fresh int }
 
-// prNum is the number a PR reference ends in (#7, a /pull/7 URL), 0 for none.
-func prNum(pr string) int {
-	pr = strings.TrimRight(strings.TrimSpace(pr), "/")
-	if i := strings.LastIndexAny(pr, "/#"); i >= 0 {
-		pr = pr[i+1:]
-	}
-	n, _ := strconv.Atoi(pr)
-	return n
-}
-
 type folder struct{ rows []*IssueRow }
 
 // find resolves an entry to its row: the issue and slot, else the PR number,
@@ -125,9 +117,9 @@ func (f *folder) find(e Entry) *IssueRow {
 			}
 		}
 	}
-	if n := prNum(e.PR); n != 0 {
+	if n, ok := tracker.PRNumber(e.PR); ok {
 		for _, r := range f.rows {
-			if prNum(r.PR) == n {
+			if m, _ := tracker.PRNumber(r.PR); m == n {
 				return r
 			}
 		}
@@ -353,13 +345,6 @@ func totals(rows []IssueRow, key func(IssueRow) string) []Total {
 
 // ---- rendering --------------------------------------------------------------
 
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
-}
-
 func clock(t *time.Time) string {
 	if t == nil {
 		return "-"
@@ -420,8 +405,8 @@ func (s Summary) Text() string {
 	tw := tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
 	fmt.Fprintln(tw, "ISSUE\tSLOT\tHARNESS\tACCOUNT\tPR\tASSIGNED\tDONE\tWALL\tBOUNCES\tGATE\tMERGED\tQUOTA SHARE")
 	for _, r := range s.Issues {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n", orDash(r.Issue), orDash(r.Slot), orDash(r.Harness), orDash(r.Account),
-			orDash(r.PR), clock(r.AssignedAt), clock(r.DoneAt), wall(r.WallSeconds), r.Bounces, orDash(r.Gate), gateOutcome(r), share(r.QuotaShare))
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\t%s\n", strutil.OrDefault(r.Issue, "-"), strutil.OrDefault(r.Slot, "-"), strutil.OrDefault(r.Harness, "-"), strutil.OrDefault(r.Account, "-"),
+			strutil.OrDefault(r.PR, "-"), clock(r.AssignedAt), clock(r.DoneAt), wall(r.WallSeconds), r.Bounces, strutil.OrDefault(r.Gate, "-"), gateOutcome(r), share(r.QuotaShare))
 	}
 	tw.Flush()
 	fmt.Fprintln(&b, "\nquota share is the account headroom points spent between assign and done; n/a when no meter reads it (codex, unknown).")
@@ -456,7 +441,7 @@ func (s Summary) Text() string {
 	}
 	tw = tabwriter.NewWriter(&b, 0, 4, 2, ' ', 0)
 	for _, a := range s.Audit {
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", orDash(a.Target), a.TS.UTC().Format("01-02 15:04"), a.Gate, a.Verb, a.Note)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", strutil.OrDefault(a.Target, "-"), a.TS.UTC().Format("01-02 15:04"), a.Gate, a.Verb, a.Note)
 	}
 	tw.Flush()
 	return b.String()

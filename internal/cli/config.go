@@ -17,6 +17,7 @@ import (
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/status"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/update"
 )
 
@@ -61,19 +62,12 @@ func updateVerb(fs *flag.FlagSet) RunFunc {
 		data := jsonx.Obj("installType", r.InstallType, "installRoot", r.InstallRoot,
 			"currentVersion", r.CurrentVersion, "latestVersion", r.LatestVersion,
 			"status", r.Status, "updateCommand", r.UpdateCommand)
-		text := fmt.Sprintf("rota %s (%s), latest %s: %s", orDash(r.CurrentVersion), r.InstallType, orDash(r.LatestVersion), r.Status)
+		text := fmt.Sprintf("rota %s (%s), latest %s: %s", strutil.OrDefault(r.CurrentVersion, "-"), r.InstallType, strutil.OrDefault(r.LatestVersion, "-"), r.Status)
 		if r.Status == "behind" {
 			text += "\nupdate with: " + r.UpdateCommand
 		}
 		return Result{Data: data, Text: text}, nil
 	}
-}
-
-func orDash(s string) string {
-	if s == "" {
-		return "-"
-	}
-	return s
 }
 
 // ---- config ----------------------------------------------------------------------
