@@ -166,7 +166,7 @@ func setupVerb(fs *flag.FlagSet) RunFunc {
 			if !ok || (p.Optional && v == "") || p.Key == config.RoundRoleKey {
 				continue
 			}
-			if g, has := globalVals[p.Key]; has && fmt.Sprint(g) == v {
+			if g, has := globalVals[p.Key]; has && sameAnswer(g, v) {
 				// The project inherits the global value; copying it would pin it.
 				out.Set(p.Key, config.Coerce(v))
 				continue
@@ -304,10 +304,18 @@ func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string,
 	vals := map[string]string{}
 	out := jsonx.NewObject()
 	lines := []string{"support machine: answers go to .rota/config.local.json, this machine only"}
+	inherited := config.Load(c.deps().projectsEnv(), dir)
 	for _, p := range config.Prompts {
 		v, ok := answers[p.Key]
 		if !ok || (p.Optional && v == "") {
 			continue
+		}
+		// A list the clone already reads is not copied: that would pin it.
+		if cur, err := config.Value(inherited, p.Key); err == nil {
+			if _, list := cur.([]any); list && sameAnswer(cur, v) {
+				out.Set(p.Key, config.Coerce(v))
+				continue
+			}
 		}
 		vals[p.Key] = v
 		out.Set(p.Key, config.Coerce(v))
@@ -440,6 +448,24 @@ func setupValue(p config.Prompt, raw string) string {
 	return string(b)
 }
 
+// answerText is a config value as setup's answer text: a list in compact JSON,
+// the form --set takes and `config` shows, anything else as Go prints it.
+func answerText(v any) string {
+	if list, ok := v.([]any); ok {
+		return compact(list)
+	}
+	return fmt.Sprint(v)
+}
+
+// sameAnswer is whether the answer text names the config value v. A list
+// answer is compared as JSON, so its spacing does not matter.
+func sameAnswer(v any, answer string) bool {
+	if _, ok := v.([]any); ok {
+		return answerText(config.Coerce(answer)) == answerText(v)
+	}
+	return answerText(v) == answer
+}
+
 // setupSuggestions settles what each question starts from. Precedence per
 // question: --set (given), then the value the checkout already holds in
 // .rota/config.local.json or .rota/config.json (a clone on the support path),
@@ -470,8 +496,8 @@ func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs m
 			vals[config.AutonomyLevelKey] = "roundtrip"
 		}
 		for _, p := range config.Prompts {
-			if v, ok := vals[p.Key]; ok && p.Valid(fmt.Sprint(v)) {
-				globals[p.Key] = fmt.Sprint(v)
+			if v, ok := vals[p.Key]; ok && p.Valid(answerText(v)) {
+				globals[p.Key] = answerText(v)
 			}
 		}
 	}
@@ -485,8 +511,8 @@ func setupSuggestions(c *Ctx, dir, proj string, given map[string]string) (defs m
 			if _, seen := existing[p.Key]; seen {
 				continue
 			}
-			if v, ok := config.Lookup(vals, p.Key); ok && p.Valid(fmt.Sprint(v)) {
-				existing[p.Key] = setupSignal{fmt.Sprint(v), rotatree.DirName + "/" + file}
+			if v, ok := config.Lookup(vals, p.Key); ok && p.Valid(answerText(v)) {
+				existing[p.Key] = setupSignal{answerText(v), rotatree.DirName + "/" + file}
 			}
 		}
 	}
@@ -545,7 +571,7 @@ func globalCandidates(answers map[string]string, global map[string]any) []config
 		if !ok || p.Free || (p.Optional && v == "") || p.Key == config.RoundRoleKey {
 			continue
 		}
-		if g, has := global[p.Key]; len(global) > 0 && has && fmt.Sprint(g) == v {
+		if g, has := global[p.Key]; len(global) > 0 && has && sameAnswer(g, v) {
 			continue
 		}
 		out = append(out, p)
