@@ -31,7 +31,7 @@ cannot be read or parsed (`registry`): both fail the run instead of passing on s
 | `stop-hook` | a `Stop` and a `SessionStart` entry marked `# rota-hook`, and the command resolves | hooks not installed (opt-in) |
 | `guard-hook` | a `PreToolUse` entry marked `# rota-hook` in project (`.claude/settings.json`) or user scope, and the command resolves; warns when Codex tiers are set (Codex workers are not guarded) | hooks not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: the Stop hook and two accounts with a `dir` | the key is off |
-| `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
+| `skills` | every installed skills root (user and project, Claude and Codex) matches the binary's skill set, and has no missing, edited or unmanaged files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `config dir` | the global config dir in use and where it came from (`ROTA_CONFIG_DIR` override, `XDG_CONFIG_HOME` or the default). Warns when a relative `ROTA_CONFIG_DIR` was ignored | never |
 | `state dir` | the state dir that holds the project registry (`projects.json`) | never |
 | `external knowledge` | the path in `knowledge.external` is a git clone with a remote and a `rota-knowledge.json`. Fails when the path is missing, not a git repository or has no remote; warns when the policy file is missing (writes then default to push). See [External knowledge](external-knowledge.md) | nothing to report: the line appears only when `knowledge.external` is set |

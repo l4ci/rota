@@ -381,12 +381,16 @@ func skillsStatus(c *Ctx, a skillsArgs) (Result, error) {
 		o.Set("current", r.Current)
 		o.Set("edited", jsonx.Strings(r.Edited))
 		o.Set("missing", jsonx.Strings(r.Missing))
+		o.Set("unmanaged", jsonx.Strings(r.Unmanaged))
 		text = append(text, line)
 		for _, p := range r.Edited {
 			text = append(text, "  edited  "+p)
 		}
 		for _, p := range r.Missing {
 			text = append(text, "  missing "+p)
+		}
+		for _, p := range r.Unmanaged {
+			text = append(text, "  unmanaged "+p)
 		}
 		rootsData = append(rootsData, o)
 	}

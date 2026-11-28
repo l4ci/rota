@@ -679,3 +679,23 @@ func TestSkillsFilesListsLoadClosure(t *testing.T) {
 		t.Error("files without a dir exited 0")
 	}
 }
+
+func TestSkillsStatusNamesUnmanagedFile(t *testing.T) {
+	home, work := t.TempDir(), t.TempDir()
+	mine := filepath.Join(home, ".claude", "skills", "rota-pause", "SKILL.md")
+	os.MkdirAll(filepath.Dir(mine), 0o755)
+	os.WriteFile(mine, []byte("mine\n"), 0o644)
+	if code, env, _ := skillsRun(t, home, work, "skills", "install"); code != ExitRefused {
+		t.Fatalf("install %d %v", code, env)
+	}
+	_, env, _ := skillsRun(t, home, work, "skills", "status")
+	var got []any
+	for _, r := range skData(env)["roots"].([]any) {
+		if m := r.(map[string]any); m["agent"] == "claude" && m["scope"] == "user" {
+			got, _ = m["unmanaged"].([]any)
+		}
+	}
+	if len(got) != 1 || got[0] != "rota-pause/SKILL.md" {
+		t.Errorf("unmanaged %v", got)
+	}
+}

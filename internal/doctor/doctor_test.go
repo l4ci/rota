@@ -379,6 +379,7 @@ func TestSkillsCheck(t *testing.T) {
 			r.Mode, r.Current, r.Changed = "stub", false, []string{"rota-new (added)", "rota-work (stub changed)"}
 		})), Fail, "changed: rota-new (added), rota-work (stub changed)", "run: rota skills update"},
 		{"edited", rep(root(func(r *skills.RootStatus) { r.Edited = []string{"rota-work/SKILL.md"} })), Fail, "1 edited (rota-work/SKILL.md)", "run: rota skills update --overwrite"},
+		{"unmanaged", rep(root(func(r *skills.RootStatus) { r.Unmanaged = []string{"rota-work/SKILL.md"} })), Fail, "1 unmanaged (rota-work/SKILL.md)", "move the unmanaged files aside, then run: rota skills update"},
 		{"missing", rep(root(func(r *skills.RootStatus) { r.Missing = []string{"rota-work/SKILL.md", "rota-ship/SKILL.md"} })), Fail, "2 missing", "run: rota skills update"},
 		{"second root only", rep(root(func(r *skills.RootStatus) { r.Installed = false }), root(func(r *skills.RootStatus) { r.Path = "/h/.agents/skills" })), Pass, "1 roots", ""},
 		{"plugin current", rep(plugin(nil)), Pass, "1 roots match rota 5.0.0", ""},

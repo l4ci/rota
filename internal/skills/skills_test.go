@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -957,5 +958,35 @@ func TestStatusAndInstallAgreeOnAdoptedBytes(t *testing.T) {
 	}
 	if got := status(t, res, "rota-a/SKILL.md"); got != Unchanged {
 		t.Errorf("install status = %q, want %q", got, Unchanged)
+	}
+}
+
+// A user file standing where a skill belongs is kept by install and left out of
+// the manifest, so Status has to ask about wanted paths the manifest never
+// listed (#4457).
+func TestStatusReportsUnmanagedWantedPaths(t *testing.T) {
+	for _, mode := range []string{ModeFull, ModeStub} {
+		t.Run(mode, func(t *testing.T) {
+			s := loadFake(t, map[string]string{"rota-a/SKILL.md": "---\nname: rota-a\n---\n# a\n", "rota-b/SKILL.md": "---\nname: rota-b\n---\n# b\n"})
+			roots := oneRoot(t)
+			mine := filepath.Join(roots[0].Path, "rota-a", "SKILL.md")
+			os.MkdirAll(filepath.Dir(mine), 0o755)
+			os.WriteFile(mine, []byte("mine\n"), 0o644)
+			res, err := s.Install(roots, Options{Mode: mode})
+			if err != nil || res[0].BlockedBy != Unmanaged {
+				t.Fatalf("install: %+v %v", res, err)
+			}
+			rep, err := s.Status(roots, nil, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			st := rep.Roots[0]
+			if !slices.Equal(st.Unmanaged, []string{"rota-a/SKILL.md"}) || len(st.Edited)+len(st.Missing) != 0 {
+				t.Errorf("unmanaged %v edited %v missing %v", st.Unmanaged, st.Edited, st.Missing)
+			}
+			if !st.Damaged() || !rep.NeedsUpdate() {
+				t.Error("a shadowed skill must not read as healthy")
+			}
+		})
 	}
 }
