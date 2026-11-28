@@ -551,7 +551,11 @@ func TestUpdateCommandSkipsSkillsUpdateForCurrentStubs(t *testing.T) {
 // definition the footer and test/validate-skills.py share.
 func TestSkillsLinks(t *testing.T) {
 	home, work := t.TempDir(), t.TempDir()
-	body := "[a](a.md) [r](references/r.md#sec) `[c](code.md)`\n```\n[f](fenced.md)\n```\n[web](https://x.io/w.md)\n"
+	body := "See [a](a.md), [r](references/r.md#sec) and [up](../rota-b/SKILL.md \"title\").\n" +
+		"Not links: `[x](code.md)` inline, [web](https://example.com/x.md), [m](mailto:a@b.c), [h](#here), [abs](/etc/x.md), [e]().\n" +
+		"```\n[f](fenced.md)\n```\n" +
+		"~~~\n[t](tilde.md)\n~~~\n" +
+		"Again [a](a.md) and [both `code` text](b.md).\n"
 	if err := os.WriteFile(filepath.Join(work, "SKILL.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -567,19 +571,48 @@ func TestSkillsLinks(t *testing.T) {
 		t.Fatalf("%v", skData(env))
 	}
 	first := files[0].(map[string]any)
-	if first["file"] != "SKILL.md" || fmt.Sprint(first["links"]) != "[a.md references/r.md]" {
+	if first["file"] != "SKILL.md" || fmt.Sprint(first["links"]) != "[a.md references/r.md ../rota-b/SKILL.md b.md]" {
 		t.Errorf("SKILL.md links = %v", first)
 	}
 	if l, _ := files[1].(map[string]any)["links"].([]any); len(l) != 0 {
 		t.Errorf("empty.md links = %v", l)
 	}
 	// siblings: the flat-sibling subset, decided by the binary (skills.FlatSibling).
-	if fmt.Sprint(first["siblings"]) != "[a.md]" {
+	if fmt.Sprint(first["siblings"]) != "[a.md b.md]" {
 		t.Errorf("SKILL.md siblings = %v", first["siblings"])
 	}
 	for _, args := range [][]string{{"skills", "links"}, {"skills", "links", "missing.md"}} {
 		if code, _, _ = skillsRun(t, home, work, args...); code == 0 {
 			t.Errorf("%v exited 0", args)
+		}
+	}
+}
+
+func TestSkillsLinksNestedFences(t *testing.T) {
+	for _, char := range []string{"`", "~"} {
+		for _, closeLen := range []int{4, 5} {
+			t.Run(fmt.Sprintf("%s/close%d", char, closeLen), func(t *testing.T) {
+				home, work := t.TempDir(), t.TempDir()
+				other := "~"
+				if char == "~" {
+					other = "`"
+				}
+				body := "[before](before.md)\n" + strings.Repeat(char, 4) + "markdown\n" +
+					strings.Repeat(char, 3) + "\n[inner](missing.md)\n" +
+					strings.Repeat(other, 5) + "\n[mixed](mixed.md)\n" +
+					strings.Repeat(char, closeLen) + "\n[after](after.md)\n"
+				if err := os.WriteFile(filepath.Join(work, "example.md"), []byte(body), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				code, env, errOut := skillsRun(t, home, work, "skills", "links", "example.md")
+				if code != 0 {
+					t.Fatalf("links %d %s", code, errOut)
+				}
+				first := skData(env)["files"].([]any)[0].(map[string]any)
+				if got := fmt.Sprint(first["links"]); got != "[before.md after.md]" {
+					t.Errorf("links = %s, want [before.md after.md]", got)
+				}
+			})
 		}
 	}
 }

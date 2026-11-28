@@ -29,7 +29,11 @@ func Links(body []byte) []string {
 			continue
 		}
 		if strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~") {
-			fence = t[:3]
+			n := 3
+			for n < len(t) && t[n] == t[0] {
+				n++
+			}
+			fence = t[:n]
 			continue
 		}
 		line = codeSpan.ReplaceAllString(line, "")
