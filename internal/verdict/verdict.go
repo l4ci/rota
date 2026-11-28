@@ -114,7 +114,8 @@ const IronLaw = 3
 // dispatches no more and hands the item to /rota-debug.
 const WorkFixCap = 3
 
-// keep is the history limit, extended for items with older active failures.
+// keep is the history limit. appendCapped and appendItem each extend it for
+// the older records that still count.
 const keep = 20
 
 // KnownKind reports whether kind is a branch kind or debug-fix.
@@ -511,12 +512,45 @@ func toJSONX(v any) any {
 	return out
 }
 
+// retained is what one record can answer for another in a branch list: the
+// newest record of each is never cut. Cross records count per harness, as
+// latestPerHarness reads them, and recovered reports apart from local verdicts,
+// as ForHead can hide them.
+type retained struct {
+	kind, harness string
+	fromReport    bool
+}
+
+func retainedAs(r Record) retained {
+	k := retained{kind: r.Kind, fromReport: r.FromReport}
+	if r.Kind == ReviewCross {
+		k.harness = r.Harness
+	}
+	return k
+}
+
+// appendCapped appends r to a branch list and cuts it to the latest keep
+// records, plus any older record that is still the newest of its kind, so an
+// unanswered FAIL keeps blocking.
 func appendCapped(list []Record, r Record) []Record {
 	list = append(list, r)
-	if len(list) > keep {
-		list = list[len(list)-keep:]
+	cut := len(list) - keep
+	if cut <= 0 {
+		return list
 	}
-	return list
+	seen := map[retained]bool{}
+	newest := make([]bool, len(list))
+	for i := len(list) - 1; i >= 0; i-- {
+		k := retainedAs(list[i])
+		newest[i], seen[k] = !seen[k], true
+	}
+	var out []Record
+	for i, rec := range list {
+		if i >= cut || newest[i] {
+			out = append(out, rec)
+		}
+	}
+	return out
 }
 
 // combine sets r.Combined against the records already stored before it. A
