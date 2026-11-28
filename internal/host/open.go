@@ -137,8 +137,8 @@ func (t *tmux) OpenTab(ctx context.Context, o TabOpts) (string, error) {
 	if win == "" {
 		return "", fmt.Errorf("tmux new-window returned no window id")
 	}
-	if s := t.tmux(ctx, "send-keys", "-t", win, o.Command, "C-m"); s.ExitCode != 0 {
-		t.tmux(ctx, "kill-window", "-t", win)
+	if s := t.tmux(ctx, "send-keys", "-t", tmuxTarget(win), o.Command, "C-m"); s.ExitCode != 0 {
+		t.tmux(ctx, "kill-window", "-t", tmuxTarget(win))
 		return "", fmt.Errorf("tmux send-keys failed (window %s closed): %s", win, strings.TrimSpace(s.Stderr))
 	}
 	return win, nil
