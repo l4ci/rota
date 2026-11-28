@@ -36,7 +36,7 @@ type migrationFile struct {
 // its own, so a run cut short between two writes is finished by the next, and
 // a step that moves keys down into config.local.json lands them before it
 // deletes them from config.json. Unusable global config is skipped, as Load
-// does; an empty config.local.json reads as absent.
+// does; a blank project layer reads as {}.
 func migrateLayerFiles(files []*migrationFile, apply bool, plan func([]*migrationFile) error) error {
 	var lock func(int) error
 	lock = func(i int) error {
@@ -127,10 +127,10 @@ func layerFiles(root, globalDir string, create bool) []*migrationFile {
 }
 
 // readMigrationTarget follows Load's global skip policy and the migration
-// reader's project/local error and blank-local policy.
+// reader's project/local error policy.
 func readMigrationTarget(f *migrationFile) (*jsonx.Object, error) {
 	if f.layer == layerGlobal {
 		return readObject(f.path), nil
 	}
-	return readMigrateTarget(f.path, f.name, f.layer == layerLocal)
+	return readMigrateTarget(f.path, f.name)
 }
