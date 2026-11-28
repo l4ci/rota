@@ -968,10 +968,7 @@ func itemCommentAdd(fs *flag.FlagSet) RunFunc {
 			if c.WorkerSlot() != "" {
 				return workerRefusal("--kind relay is the orchestrator's: a worker slot (ROTA_SLOT set) cannot post one", "")
 			}
-			n := *relayRound
-			if n < 0 {
-				n = worker.RoundOf(root)
-			}
+			n := c.deps().workerEnvFor(c.Context()).SigningRound(c.Context(), root, *relayRound)
 			text = marker.RelayLine(n) + "\n" + text
 			// The stamp goes last so the relay marker stays the first line and
 			// the summary the gate reads stays the relayed text (#1869).

@@ -395,7 +395,7 @@ func (e Env) Poll(ctx context.Context, root string, o PollOpts) (PollResult, err
 	if rowErr != nil {
 		return PollResult{}, rowErr
 	}
-	syncChanged(ctx, h, root, rows, targets)
+	e.syncChanged(ctx, h, root, rows, targets)
 	return PollResult{Slots: rows, Notes: notes, Changed: ChangeCount(root) != before}, nil
 }
 

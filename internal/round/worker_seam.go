@@ -48,6 +48,9 @@ type Worker interface {
 	Poll(ctx context.Context, root string, o worker.PollOpts) (worker.PollResult, error)
 
 	ClearLabel(ctx context.Context, root, slot string)
+	// SigningRound and PostMail name the round signed text carries.
+	SigningRound(ctx context.Context, root string, override int) int
+	PostMail(ctx context.Context, root, slot, kind, text string, now time.Time) (worker.Mail, error)
 	SweepSlot(ctx context.Context, root, slot string)
 	KillSlot(ctx context.Context, root, slot string) error
 	ResetTo(root, slot, task, newBranch string, checkOnly bool) (worker.ResetResult, error)

@@ -124,7 +124,7 @@ func (e Env) retarget(ctx context.Context, root string, f Finding) error {
 	}
 	text := fmt.Sprintf("BASE %s\nThe base of your PR changed: it now targets %s. Before the PR merges: `git fetch %s %s`, then `git merge %s/%s` into your branch (a merge, never a rebase), resolve every conflict, re-run your targeted checks, record proof at the merged head, push and run `rota worker done %s` again.\n",
 		s.PR(), want, remote, want, remote, want, f.Slot)
-	if _, err := worker.PostMail(root, f.Slot, worker.MailBase, text, e.Worker.Now()); err != nil {
+	if _, err := e.Worker.PostMail(ctx, root, f.Slot, worker.MailBase, text, e.Worker.Now()); err != nil {
 		return err
 	}
 	if s.PaneHandle() == "" {

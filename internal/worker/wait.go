@@ -366,7 +366,7 @@ wait:
 				if rowErr != nil {
 					return WaitResult{}, rowErr
 				}
-				syncChanged(ctx, h, root, []PollRow{r}, targets)
+				e.syncChanged(ctx, h, root, []PollRow{r}, targets)
 				return WaitResult{Slot: r.Name, State: r.State, Evidence: r.Evidence, Note: notes[r.Name],
 					Source: source, Waited: e.Now().Sub(start)}, nil
 			}

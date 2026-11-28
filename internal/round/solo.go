@@ -1,6 +1,7 @@
 package round
 
 import (
+	"context"
 	"github.com/l4ci/rota/internal/stamp"
 	"path/filepath"
 
@@ -11,21 +12,12 @@ import (
 // C8: a solo round runs its workers as in-harness subagents, so no verb here
 // drives a pane. assign and transfer hand the brief back instead of sending it.
 
-// soloBrief is the text dispatch would send into the pane: the pointer brief
-// inside dispatch's rota-relay element.
-func soloBrief(text string, round int) string {
-	if round == 0 {
-		round = 1 // dispatch's roundOf default
-	}
-	return harness.WrapRelay(round, 0, text)
-}
-
 // soloHandOff marks the slot busy the way a dispatch does (state, activeAt,
 // the task's PR and relay log cleared), with no handle, session or account,
 // and returns the signed brief and the slot's absolute worktree. The caller
 // launches the subagent with the one as its prompt and the other as its
 // working directory.
-func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree string, err error) {
+func (e Env) soloHandOff(ctx context.Context, root, agent, text string, round int) (brief, worktree string, err error) {
 	now := e.Worker.Now
 	at := stamp.Format(now())
 	reg, err := worker.LoadRegistry(root)
@@ -48,5 +40,6 @@ func (e Env) soloHandOff(root, agent, text string, round int) (brief, worktree s
 		s.ResetRelays()
 		return nil
 	})
-	return soloBrief(text, round), worktree, err
+	// The text dispatch would send into the pane, inside its rota-relay element.
+	return harness.WrapRelay(e.Worker.SigningRound(ctx, root, round), 0, text), worktree, err
 }

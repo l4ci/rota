@@ -58,7 +58,7 @@ func syncLabel(ctx context.Context, h host.Host, root, name string) {
 
 // syncChanged relabels the slots of rows whose state differs from the one the
 // poll started from, then the workspace token.
-func syncChanged(ctx context.Context, h host.Host, root string, rows []PollRow, targets []pollTarget) {
+func (e Env) syncChanged(ctx context.Context, h host.Host, root string, rows []PollRow, targets []pollTarget) {
 	if h.Capabilities().Labeler == nil {
 		return
 	}
@@ -74,12 +74,12 @@ func syncChanged(ctx context.Context, h host.Host, root string, rows []PollRow, 
 		}
 	}
 	if changed {
-		labelWorkspace(ctx, h, root)
+		e.labelWorkspace(ctx, h, root)
 	}
 }
 
 // workspaceToken is the round token: `r10 3 slots: 2 working, 1 blocked, 0 done`.
-func workspaceToken(root string) string {
+func (e Env) workspaceToken(ctx context.Context, root string) string {
 	var n, working, blocked, done int
 	for _, s := range LoadRegistryTolerant(root).Slots() {
 		n++
@@ -92,12 +92,12 @@ func workspaceToken(root string) string {
 			done++
 		}
 	}
-	return fmt.Sprintf("r%d %d slots: %d working, %d blocked, %d done", roundOf(root), n, working, blocked, done)
+	return fmt.Sprintf("r%d %d slots: %d working, %d blocked, %d done", e.SigningRound(ctx, root, 0), n, working, blocked, done)
 }
 
-func labelWorkspace(ctx context.Context, h host.Host, root string) {
+func (e Env) labelWorkspace(ctx context.Context, h host.Host, root string) {
 	if l := h.Capabilities().Labeler; l != nil {
-		l.LabelWorkspace(ctx, workspaceToken(root))
+		l.LabelWorkspace(ctx, e.workspaceToken(ctx, root))
 	}
 }
 

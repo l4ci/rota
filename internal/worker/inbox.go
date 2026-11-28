@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -258,8 +259,8 @@ func (s *Slot) retractMail(seq int) {
 
 // PostMail appends an unread mail to the slot's inbox under the registry lock.
 // The round is the one the relay is signed with, so the worker can cite it.
-func PostMail(root, slot, kind, text string, now time.Time) (Mail, error) {
-	m := Mail{Round: roundOf(root), At: stamp.Format(now), Kind: kind, Text: text}
+func (e Env) PostMail(ctx context.Context, root, slot, kind, text string, now time.Time) (Mail, error) {
+	m := Mail{Round: e.SigningRound(ctx, root, 0), At: stamp.Format(now), Kind: kind, Text: text}
 	var posted Mail
 	found, err := UpdateSlot(root, slot, func(s *Slot) { posted = s.postMail(m) })
 	if err == nil && !found {

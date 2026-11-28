@@ -104,7 +104,7 @@ exit: 2 for an empty body or an invalid kind; 3 item unknown; 4 for `--kind rela
 old: hv-item-comment <ID> --kind <kind> --body-file <path|->
 shim: `commentId` is the printed id (issue mode only), `changed` true.
 note: split from the old `--list` mode, because read and write have different data.
-note: (#1827) `--kind relay` puts `<!-- rota:relay round=<n> -->` on the first line of the text (after the tracker's own comment header), `<n>` being `--round` or the round state's; `--round` with another kind is exit 2. The support split's gate reads these comments as the orchestrator's relays (see `worker gate`). With the support split active (#1827, #1869) a comment of any kind except `harvested` carries a `<!-- rota:from ... -->` stamp for the machine's role: first line for ordinary kinds, last line for `relay` so the relay marker stays first.
+note: (#1827) `--kind relay` puts `<!-- rota:relay round=<n> -->` on the first line of the text (after the tracker's own comment header), `<n>` being a positive `--round`, else the signing round (see `worker dispatch`); `--round` with another kind is exit 2. The support split's gate reads these comments as the orchestrator's relays (see `worker gate`). With the support split active (#1827, #1869) a comment of any kind except `harvested` carries a `<!-- rota:from ... -->` stamp for the machine's role: first line for ordinary kinds, last line for `relay` so the relay marker stays first.
 
 ### rota item comment list
 rota item comment list <ID> [--kind <question|answer|decision|feedback|scope|finding|learning|harvested|relay>]
