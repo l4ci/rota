@@ -93,9 +93,11 @@ assert d['failedFixes'] == 3, f\"failedFixes={d['failedFixes']}\"
   rc=0; hvj debug counter record-attempt --hypothesis "no-commit" >/dev/null 2>&1 || rc=$?
   [ "$rc" = "2" ] || { echo "FAIL: record-attempt without --commit should exit 2, got $rc"; exit 1; }
 
-  # ── (e) summary renders Iron Law markdown ─────────────────────────────────
+  # ── (e) summary renders markdown ─────────────────────────────────
   SUMMARY="$(hvj debug counter summary | jget data.markdown)" || vfail
-  grep -q "Iron Law triggered for \[F02\]" <<<"$SUMMARY" || { echo "FAIL: summary missing Iron Law header"; exit 1; }
+  # counter fail records no verdict, so the item is not halted and the note says so
+  grep -q "Fix attempts for \[F02\]" <<<"$SUMMARY" || { echo "FAIL: summary missing header"; exit 1; }
+  grep -q "Failed fixes recorded for this item: 0\." <<<"$SUMMARY" || { echo "FAIL: summary wrong item count"; exit 1; }
   grep -q "abc1111" <<<"$SUMMARY" || { echo "FAIL: summary missing commit abc1111"; exit 1; }
   grep -q "abc2222" <<<"$SUMMARY" || { echo "FAIL: summary missing commit abc2222"; exit 1; }
   grep -q "abc3333" <<<"$SUMMARY" || { echo "FAIL: summary missing commit abc3333"; exit 1; }

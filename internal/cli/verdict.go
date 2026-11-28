@@ -658,7 +658,7 @@ func debugReset(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return backlogFail(err)
 		}
-		failed := verdict.FailedFixes(verdict.Load(root).Items[bug])
+		failed := itemFailedFixes(root, bug)
 		if failed == 0 {
 			d := jsonx.NewObject()
 			d.Set("bugId", bug)
