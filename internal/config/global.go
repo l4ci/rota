@@ -35,7 +35,7 @@ func notGlobal(key string) bool {
 // delete inherited values. It returns the keys it saved, in schema order, and
 // whether any of them held a different value in the global config before.
 func SaveGlobal(root, dir string) ([]string, bool, AutonomyMigration, error) {
-	raw, err := os.ReadFile(configPath(root))
+	raw, err := ReadLayer(configPath(root))
 	if err != nil {
 		return nil, false, AutonomyMigration{}, fmt.Errorf("no .rota/config.json to save: %w", err)
 	}
