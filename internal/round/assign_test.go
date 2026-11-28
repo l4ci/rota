@@ -1641,14 +1641,14 @@ func TestAssignWhileGateHoldsAnotherSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	holdLandLock(t, f.root, func() {
-		if err := os.WriteFile(holder, []byte("ben"), 0o644); err != nil {
+		if err := os.WriteFile(holder, worker.EncodeLandHolder(f.root, "ben"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		_, err := f.assign("12", "ben", nil)
 		if by := blockedBy(t, err); by != landing.GateRunning {
 			t.Errorf("lock held for ben: %v", err)
 		}
-		if err := os.WriteFile(holder, []byte("#999"), 0o644); err != nil {
+		if err := os.WriteFile(holder, worker.EncodeLandHolder(f.root, "#999"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := f.assign("12", "ben", nil); err != nil {
@@ -1692,7 +1692,7 @@ func TestAssignPickSkipsGatedSlot(t *testing.T) {
 				agent = roster[0]
 			}
 			holdLandLock(t, f.root, func() {
-				if err := os.WriteFile(holder, []byte(tc.holder(roster)), 0o644); err != nil {
+				if err := os.WriteFile(holder, worker.EncodeLandHolder(f.root, strings.Split(tc.holder(roster), ",")...), 0o644); err != nil {
 					t.Fatal(err)
 				}
 				res, err := f.assign("12", agent, nil)
@@ -1746,7 +1746,7 @@ func TestAssignQueuedOriginMovedOnWhileGateHolds(t *testing.T) {
 				t.Fatal(err)
 			}
 			holdLandLock(t, f.root, func() {
-				if err := os.WriteFile(holder, []byte(tc.holder), 0o644); err != nil {
+				if err := os.WriteFile(holder, worker.EncodeLandHolder(f.root, tc.holder), 0o644); err != nil {
 					t.Fatal(err)
 				}
 				_, err := f.assign("12", "ben", nil)
@@ -1892,7 +1892,7 @@ func holdGate(t *testing.T, root, holder string, fn func()) {
 		t.Fatal(err)
 	}
 	holdLandLock(t, root, func() {
-		if err := os.WriteFile(path, []byte(holder), 0o644); err != nil {
+		if err := os.WriteFile(path, worker.EncodeLandHolder(root, strings.Split(holder, ",")...), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		fn()

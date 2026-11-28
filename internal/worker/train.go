@@ -168,7 +168,7 @@ func (e Env) Train(ctx context.Context, root string, o TrainOpts) (landing.Train
 		}
 	}
 	lock := func(fn func(bool) error) error {
-		return e.withLandingRun(ctx, root, strings.Join(o.Targets, ", "), o.NoWait, fn)
+		return e.withLandingRun(ctx, root, EncodeLandHolder(root, o.Targets...), o.NoWait, fn)
 	}
 	if o.Integration != "" { // it moves no base, so it does not take the land lock
 		lock = func(fn func(bool) error) error {

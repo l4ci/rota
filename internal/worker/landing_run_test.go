@@ -62,7 +62,7 @@ func landingHoldLock(t *testing.T, e Env, root string) func() {
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- e.withLandLock(bg, root, "test holder", func(bool) error {
+		done <- e.withLandLock(bg, root, unscopedLandHolder("test holder"), func(bool) error {
 			close(held)
 			<-release
 			return nil

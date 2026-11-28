@@ -33,8 +33,7 @@ type Worker interface {
 
 	GateConfig(root string) worker.GateConfig
 	Verify(ctx context.Context, cfg worker.GateConfig, root, dir string) (worker.VerifyResult, error)
-	LandLockHeld(ctx context.Context, root string) (bool, error)
-	LandLockHolder(ctx context.Context, root string) string
+	LandGate(ctx context.Context, root string) (worker.LandGate, error)
 	BounceStore(root string) (worker.BounceStore, error)
 
 	PoolInit(ctx context.Context, root string, o worker.InitOpts, acc *worker.Accounts) (worker.InitResult, error)

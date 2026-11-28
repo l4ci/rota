@@ -37,7 +37,7 @@ func (e Env) Freeze(ctx context.Context, root string, o FreezeOpts) (r *landfree
 		}
 		return r, err
 	}
-	err = e.withLandLock(ctx, root, "freeze recovery", func(bool) error {
+	err = e.withLandLock(ctx, root, unscopedLandHolder("freeze recovery"), func(bool) error {
 		return e.updateFreeze(ctx, root, func(rec *landfreeze.Record, readErr error) (*landfreeze.Record, error) {
 			r = rec
 			out, err := e.freezeRecovery(ctx, root, o, r, readErr)

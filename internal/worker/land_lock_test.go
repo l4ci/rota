@@ -27,7 +27,7 @@ func TestLandLockHeld(t *testing.T) {
 		repo := gittest.NewRepo(t, "main")
 		var during bool
 		var duringErr error
-		err := env.withLandLock(bg, repo, "", func(bool) error {
+		err := env.withLandLock(bg, repo, nil, func(bool) error {
 			during, duringErr = env.LandLockHeld(bg, repo)
 			return nil
 		})
@@ -61,7 +61,7 @@ func TestLandLockHolder(t *testing.T) {
 		t.Fatalf("holder with a free lock = %q, want empty", got)
 	}
 	var during string
-	err := env.withLandLock(bg, repo, "ben", func(bool) error {
+	err := env.withLandLock(bg, repo, unscopedLandHolder("ben"), func(bool) error {
 		during = env.LandLockHolder(bg, repo)
 		return nil
 	})
@@ -96,7 +96,7 @@ func TestLandLockHolderPublishesNewFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer snapshot.Close()
-	err = env.withLandLock(bg, repo, "next", func(bool) error {
+	err = env.withLandLock(bg, repo, unscopedLandHolder("next"), func(bool) error {
 		var b [16]byte
 		n, err := snapshot.Read(b[:])
 		if err != nil || string(b[:n]) != "previous" {
@@ -118,7 +118,7 @@ func TestInterruptedLandingRunReleasesLock(t *testing.T) {
 	env := Env{Config: diskConfig}.WithDefaults()
 	repo := gittest.NewRepo(t, "main")
 	ctx, cancel := context.WithCancel(bg)
-	err := env.withLandingRun(ctx, repo, "slot", false, func(bool) error {
+	err := env.withLandingRun(ctx, repo, unscopedLandHolder("slot"), false, func(bool) error {
 		cancel()
 		return ctx.Err()
 	})

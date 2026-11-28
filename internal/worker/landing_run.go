@@ -19,7 +19,7 @@ var errLandingBusy = errors.New("a gate or train is running or queued; retry aft
 // Admission shares a short lock so a manual registration cannot slip between
 // the autopilot's idle check and its registration. Unique markers also cover
 // concurrent callers in one process; PID/start-time checks recover crashes.
-func (e Env) withLandingRun(ctx context.Context, root, holder string, noWait bool, fn func(bool) error) error {
+func (e Env) withLandingRun(ctx context.Context, root string, holder []byte, noWait bool, fn func(bool) error) error {
 	common, err := rotastate.CommonDirVia(ctx, e.Git, root)
 	if err != nil {
 		return err
