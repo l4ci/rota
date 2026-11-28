@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/l4ci/rota/internal/bulletfmt"
 	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/pystr"
 	"github.com/l4ci/rota/internal/rotatree"
@@ -265,6 +266,10 @@ func (s Store) glossaryTarget(scope string) (path, text string, start, end int, 
 // Entries are rewritten sorted by name. It regenerates the scope's knowledge
 // block afterwards.
 func (s Store) GlossaryWrite(scope string, t Term, touch, notsProvided bool) (name string, changed bool, err error) {
+	if err := bulletfmt.CheckTitle(t.Name); err != nil {
+		return "", false, err
+	}
+	t.Name = strings.TrimSpace(t.Name)
 	km, err := s.KnowledgePath(scope)
 	if err != nil {
 		return "", false, err
@@ -335,6 +340,9 @@ func ParseManifest(text string) ([]Term, error) {
 		term, def := strings.TrimSpace(cells[0]), strings.TrimSpace(cells[1])
 		if term == "" || def == "" {
 			return nil, fmt.Errorf("%w: manifest line %d: term and def are required (got term='%s', def='%s')", ErrManifest, lineno, term, def)
+		}
+		if err := bulletfmt.CheckTitle(cells[0]); err != nil {
+			return nil, fmt.Errorf("manifest line %d: %w", lineno, err)
 		}
 		k := strings.ToLower(term)
 		if first, dup := seen[k]; dup {
