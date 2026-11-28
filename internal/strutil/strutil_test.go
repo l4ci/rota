@@ -179,3 +179,20 @@ func TestSameSHA(t *testing.T) {
 		}
 	}
 }
+
+func TestTailLines(t *testing.T) {
+	for _, tc := range []struct {
+		in   string
+		n    int
+		want string
+	}{
+		{"", 3, ""},
+		{"a", 3, "a"},
+		{"a\nb\nc\n\n", 2, "b\nc"},
+		{"a\n\nc", 2, "\nc"},
+	} {
+		if got := TailLines(tc.in, tc.n); got != tc.want {
+			t.Errorf("TailLines(%q, %d) = %q, want %q", tc.in, tc.n, got, tc.want)
+		}
+	}
+}

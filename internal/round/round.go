@@ -98,7 +98,8 @@ type Env struct {
 	inspectReads bool
 	Git          git.Runner
 	// Snapshot lists the host's live agents; HostName is "herdr" or "tmux", or
-	// "solo" with no Snapshot when the round has no terminal host.
+	// "solo" with no Snapshot when the round has no terminal host. It is what the
+	// round reads for solo mode.
 	Snapshot func(ctx context.Context) ([]host.Agent, error)
 	// ReadPane reads a pane when the harness can distinguish an internal tool
 	// wait from the host's blocked status. Nil leaves the snapshot unchanged.

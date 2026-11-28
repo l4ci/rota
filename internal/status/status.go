@@ -36,12 +36,6 @@ type Entry struct {
 	Raw       *jsonx.Object
 }
 
-func str(o *jsonx.Object, key string) string {
-	v, _ := o.Get(key)
-	s, _ := v.(string)
-	return s
-}
-
 // ActiveItems is active_items: the entry's "items" as a list, or the CSV
 // string split and stripped. Anything else, and non-string elements, give
 // nothing.
@@ -67,8 +61,8 @@ func ActiveItems(o *jsonx.Object) []string {
 
 func entryOf(o *jsonx.Object) Entry {
 	return Entry{
-		Branch: str(o, "branch"), Repo: str(o, "repo"), Items: ActiveItems(o),
-		Worktree: str(o, "worktree"), StartedAt: str(o, "startedAt"), Raw: o,
+		Branch: jsonx.Str(o, "branch"), Repo: jsonx.Str(o, "repo"), Items: ActiveItems(o),
+		Worktree: jsonx.Str(o, "worktree"), StartedAt: jsonx.Str(o, "startedAt"), Raw: o,
 	}
 }
 
@@ -162,7 +156,7 @@ func isEntry(v any, branch, repo string) bool {
 	if !ok {
 		return false
 	}
-	return str(o, "branch") == branch && str(o, "repo") == repo
+	return jsonx.Str(o, "branch") == branch && jsonx.Str(o, "repo") == repo
 }
 
 // Add records (branch, repo) as active with items, replacing an entry for the

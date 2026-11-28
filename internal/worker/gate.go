@@ -10,6 +10,7 @@ import (
 	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/rotastate"
+	"github.com/l4ci/rota/internal/strutil"
 	"github.com/l4ci/rota/internal/testledger"
 	"github.com/l4ci/rota/internal/tracker"
 	"slices"
@@ -488,20 +489,9 @@ const (
 // gateFetchTries bounds the retries of the fetch after a forge merge.
 const gateFetchTries = 3
 
+// indentTail is the last n lines of text, each indented four spaces.
 func indentTail(text string, n int) string {
-	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return "    " + strings.Join(lines, "\n    ")
-}
-
-func tailLines(s string, n int) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
+	return "    " + strings.ReplaceAll(strutil.TailLines(text, n), "\n", "\n    ")
 }
 
 func (r gitRunner) Run(args ...string) (git.Result, error) { return r.e.Git(r.ctx, r.dir, args...) }

@@ -1,6 +1,7 @@
 // Package strutil holds the small text helpers several packages used to carry
 // their own copies of: the first meaningful line of command output, a
-// rune-safe clip, a short commit SHA, the first non-empty string and a default for an empty one.
+// rune-safe clip, the last lines of a text, a short commit SHA, the first
+// non-empty string and a default for an empty one.
 package strutil
 
 import (
@@ -62,6 +63,15 @@ func OrDefault(v, d string) string {
 		return d
 	}
 	return v
+}
+
+// TailLines returns the last n lines of s, ignoring trailing newlines.
+func TailLines(s string, n int) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > n {
+		lines = lines[len(lines)-n:]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // isControl is the one rule for untrusted display text: control runes (escape

@@ -3,8 +3,11 @@ package worker
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -36,6 +39,31 @@ func TestVerifyReportsPassedFailedAndLog(t *testing.T) {
 	defer os.Remove(res.LogPath)
 	if b, _ := os.ReadFile(res.LogPath); string(b) != res.Log || res.Log != "== echo one\none\n== false\n== echo two\ntwo\n" {
 		t.Errorf("log = %q, on disk %q", res.Log, b)
+	}
+}
+
+func TestVerifyPassesWhileChildHoldsOutputPipe(t *testing.T) {
+	root := t.TempDir()
+	t.Cleanup(func() {
+		b, err := os.ReadFile(filepath.Join(root, "child.pid"))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
+		if err != nil || pid <= 0 {
+			t.Errorf("child pid %q: %v", b, err)
+			return
+		}
+		_ = syscall.Kill(pid, syscall.SIGKILL)
+	})
+	const command = "sleep 30 & echo $! > child.pid; echo verified"
+	res, err := (Env{Config: diskConfig}).RunVerify(context.Background(), []string{command}, root)
+	if res.LogPath != "" {
+		t.Cleanup(func() { _ = os.Remove(res.LogPath) })
+	}
+	if err != nil || !res.OK() || !reflect.DeepEqual(res.Verified, []string{command}) || len(res.Failed) != 0 || res.Log != "== "+command+"\nverified\n" {
+		t.Fatalf("verification %+v, err %v; want passed command and its output", res, err)
 	}
 }
 

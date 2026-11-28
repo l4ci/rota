@@ -164,7 +164,7 @@ func (e Env) WindDown(ctx context.Context, root string, be Board, o WindDownOpts
 				res.Verdict = VerdictVerifyFailed
 			}
 			res.Verified = vr.Verified
-			res.VerifyLog = tail(vr.Log, 20)
+			res.VerifyLog = strutil.TailLines(vr.Log, 20)
 		}
 	} else {
 		res.VerifySkipped = true
@@ -366,14 +366,6 @@ func (e Env) requireBase(ctx context.Context, root string) error {
 		return &exitcode.Error{Exit: exitcode.ExitResolution, Message: "the project root has uncommitted changes to tracked files", Hint: "commit or stash them: wind-down verifies the base as it is"}
 	}
 	return nil
-}
-
-func tail(text string, n int) string {
-	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	if len(lines) > n {
-		lines = lines[len(lines)-n:]
-	}
-	return strings.Join(lines, "\n")
 }
 
 // tierSidecarPath is the only shape the commit hint may echo into a shell.

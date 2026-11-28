@@ -47,8 +47,8 @@ func subs(root string) []rotatree.Sub {
 		if !ok {
 			continue
 		}
-		if p := str(o, "path"); p != "" {
-			out = append(out, rotatree.Sub{Name: str(o, "name"), Path: p})
+		if p := jsonx.Str(o, "path"); p != "" {
+			out = append(out, rotatree.Sub{Name: jsonx.Str(o, "name"), Path: p})
 		}
 	}
 	return out
@@ -98,12 +98,6 @@ func Lookup(run git.Runner, cwd string, list []Repo) (Repo, error) {
 		}
 	}
 	return Repo{}, ErrNotRegistered
-}
-
-func str(o *jsonx.Object, key string) string {
-	v, _ := o.Get(key)
-	s, _ := v.(string)
-	return s
 }
 
 // VerdictRepo is the repo name that keys a branch's verdicts: flag when set,

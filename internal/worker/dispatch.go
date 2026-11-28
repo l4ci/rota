@@ -390,7 +390,7 @@ func (e Env) DispatchTask(ctx context.Context, root string, o DispatchOpts) (Dis
 	}
 	// Under herdr the launch binary decides `agent start --kind`, so it
 	// must be the kind's own: refuse before anything is killed.
-	if host.CapabilitiesForKind(h.Kind()).LaunchKindBound {
+	if h.Capabilities().LaunchKindBound {
 		if lk, _, _, lerr := host.LaunchArgs(launch); lerr != nil || lk != kind {
 			return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("round.dispatch=%s starts a %s worker, but %s does not run %s: %s", h.Kind(), kind, key, kind, launch))
 		}

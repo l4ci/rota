@@ -99,7 +99,7 @@ func (e Env) planSwitch(ctx context.Context, root string, be Board, o SwitchOpts
 	if o.Model != "" && !ValidModel(o.Model) {
 		return nil, usage("--model %q is not a valid model id (letters, digits, . _ : / @ -)", o.Model)
 	}
-	if worker.IsSolo(root) {
+	if worker.IsSoloHost(e.HostName) {
 		return nil, usage("round switch relaunches a slot's session; a solo round has none")
 	}
 	remote, err := e.remote(root)
