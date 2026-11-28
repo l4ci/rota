@@ -812,6 +812,9 @@ Runs only under `autonomy.level: auto`; under `off` or `roundtrip` both verbs ex
    review list. Merge and assign-ahead check the same PR-head holds and train readiness.
    If the PR head cannot be read, the slot keeps its current issue and the tick reports
    the read failure in `needsYou`; it tries again on the next tick.
+   When assign-ahead is refused because of the item (not ready, claimed, an unknown model or harness
+   label, a `best-of:2` issue without two free slots), it offers the next ready item to the same slot.
+   A refusal about the slot, its account or the batch is not retried.
    A refused assign leaves the slot a plain merge target; a PR the queue does not
    hold after the assign is dropped from the tick and shows in `needsYou` as kind `assign-ahead`. Review items
    minted in the same tick go first, and count against the same cap. While every account is cooling

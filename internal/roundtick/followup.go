@@ -190,8 +190,7 @@ func (e Env) askedFollowUps(ctx context.Context, r *Result, started int, taken [
 			// moved, and the next tick tries again.
 			pending(f, "the transfer to "+slot+" did not start: "+strutil.FirstLine(err.Error()))
 			// A gate or train holds the land lock: every later start would wait on it too.
-			var blk *round.BlockedError
-			if errors.As(err, &blk) && blk.By == landing.GateRunning {
+			if scope, blk := scopeOf(err); scope == scopeGate {
 				r.Deferred = "gate running, deferred: " + blk.Msg
 				return started, taken, nil
 			}
@@ -332,8 +331,7 @@ func (e Env) failedFollowUps(ctx context.Context, r *Result, started int, taken 
 			return started, taken, fmt.Errorf("follow-up %s: %w", ref, err) // no round to work for
 		default:
 			pending("the transfer to " + slot + " did not start: " + strutil.FirstLine(err.Error()))
-			var blk *round.BlockedError
-			if errors.As(err, &blk) && blk.By == landing.GateRunning {
+			if scope, blk := scopeOf(err); scope == scopeGate {
 				r.Deferred = "gate running, deferred: " + blk.Msg
 				return started, taken, nil
 			}
