@@ -714,16 +714,19 @@ func (l *Linear) Edit(ctx context.Context, key IssueKey, e IssueEdit) error {
 // made changes nothing. Any other failure to read the labels is returned,
 // never taken for "nothing to remove".
 func (l *Linear) knownLabelIDs(ctx context.Context, names []string) ([]string, error) {
+	ids, err := l.labelIDs(ctx, names, false)
+	if !IsKind(err, KindNotFound) {
+		return ids, err
+	}
+	// labelIDs refreshed the whole list before reporting a missing name.
+	// Keep the known names from that snapshot, skipping all absent names.
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	var out []string
 	for _, n := range uniq(names) {
-		ids, err := l.labelIDs(ctx, []string{n}, false)
-		if IsKind(err, KindNotFound) {
-			continue
+		if lb, ok := l.labels[labelKey(linearLabelRule, n)]; ok {
+			out = append(out, lb.ID)
 		}
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, ids...)
 	}
 	return out, nil
 }

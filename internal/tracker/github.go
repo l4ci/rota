@@ -904,16 +904,10 @@ func (g *GitHub) PRFiles(ctx context.Context, pr int) ([]string, error) {
 		return nil, failed("PR %d lists %d files, the most GitHub's API returns: the list may be incomplete", pr, len(d))
 	}
 	var files []string
-	seen := make(map[string]bool)
 	for _, f := range d {
-		for _, path := range []string{f.New, f.Old} {
-			if path != "" && !seen[path] {
-				seen[path] = true
-				files = append(files, path)
-			}
-		}
+		files = append(files, f.New, f.Old)
 	}
-	return files, nil
+	return uniq(files), nil
 }
 
 func (g *GitHub) PRComment(ctx context.Context, pr int, body string) error {

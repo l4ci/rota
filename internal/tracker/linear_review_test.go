@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +10,47 @@ import (
 	"github.com/l4ci/rota/internal/marker"
 	"github.com/l4ci/rota/internal/tracker/lineartest"
 )
+
+func TestLinearRemoveLabelsReloadsOnce(t *testing.T) {
+	for _, warm := range []bool{false, true} {
+		for _, pageSize := range []int{0, 2} {
+			t.Run(fmt.Sprintf("warm=%t/pageSize=%d", warm, pageSize), func(t *testing.T) {
+				ctx := context.Background()
+				l, s := fakeLinear(t, lineartest.Options{PageSize: pageSize})
+				k := linearCreate(t, l, "t", "", "keep", "drop")
+				// A second writer adds a label after l cached the definitions.
+				s.AddLabel("late", "ENG")
+				if err := linearAt(s, linearKey, "ENG").AddLabels(ctx, k, []string{"late"}, false); err != nil {
+					t.Fatal(err)
+				}
+				if !warm {
+					l = linearAt(s, linearKey, "ENG")
+				}
+				n := len(s.Requests())
+				if err := l.RemoveLabels(ctx, k, []string{"ghost", "phantom", "absent", "drop", "LATE", "drop", ""}); err != nil {
+					t.Fatal(err)
+				}
+				if got := s.Labels(string(k)); !slices.Equal(got, []string{"keep"}) {
+					t.Fatalf("labels %v, want only keep", got)
+				}
+				pages := 0
+				for _, op := range since(s, n) {
+					if op == "Labels" {
+						pages++
+					}
+				}
+				wantPages := 1
+				if pageSize == 2 {
+					wantPages = 2 // three definitions over two pages
+				}
+				t.Logf("label pages = %d, want %d (one full list read)", pages, wantPages)
+				if pages != wantPages {
+					t.Fatalf("label pages = %d, want %d (one full list read)", pages, wantPages)
+				}
+			})
+		}
+	}
+}
 
 // Only a label that does not exist means "nothing to remove": a failed label
 // read during RemoveLabels is returned, and the label stays on the issue.
