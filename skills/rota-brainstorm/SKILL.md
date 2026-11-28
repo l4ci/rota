@@ -61,7 +61,7 @@ rota design add <ID> --title "<title>"                     # mint the stub
 rota design put <ID> --body-file <scratch-file>            # issue backend: publish the approved draft
 ```
 
-On the issue backend the design is a note on the item's issue (`references/issue-mode.md`). On the file backend it is `.rota/designs/<ID>.md`: edit the stub's sections, keep the frontmatter. Post each answer that changed direction with `rota item comment add <ID> --kind decision --body-file -`.
+On the issue backend the design is a note on the item's issue (`references/issue-mode.md`). Drafted Acceptance also goes into the issue body: `rota item section set <ID> --name Acceptance --body-file <scratch-file>` (the `- [ ]` lines only; the gates read the body, never the note). On the file backend it is `.rota/designs/<ID>.md`: edit the stub's sections, keep the frontmatter. Post each answer that changed direction with `rota item comment add <ID> --kind decision --body-file -`.
 
 Report two lines (artifact, approaches, open questions). On hand-off say *"Run `/rota-plan <ID>` next."* Under `roundtrip` or `auto`, instead dispatch `/rota-plan <ID>` by reading and following its instructions immediately: no prompt, no confirmation, no "want me to" question.
 
