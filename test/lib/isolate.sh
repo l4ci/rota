@@ -16,8 +16,9 @@ isolate_env() {
   local prefixes
   prefixes="$(paste -sd'|' "$(dirname "${BASH_SOURCE[0]}")/host-env-prefixes")"
   for v in $(compgen -e | grep -E "^($prefixes)"); do unset "$v"; done
-  # CODEX_HOME names the real codex config (#3838); runner.sh pins its own CLAUDE_CONFIG_DIR.
-  unset SSH_AUTH_SOCK SSH_AGENT_PID ROTA_CONFIG_DIR CODEX_HOME
+  # Exact names, also from internal/hostenv (generated file). CLAUDE_CONFIG_DIR
+  # is not among them: runner.sh pins its own before calling this.
+  while IFS= read -r v; do unset "$v"; done < "$(dirname "${BASH_SOURCE[0]}")/isolation-env-names"
   export HOME="$dir/home" XDG_CONFIG_HOME="$dir/xdg/config" XDG_CACHE_HOME="$dir/xdg/cache" \
     XDG_DATA_HOME="$dir/xdg/data" XDG_STATE_HOME="$dir/xdg/state"
   mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME"

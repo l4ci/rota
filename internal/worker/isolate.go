@@ -14,9 +14,9 @@ import (
 // from cold. Same list as isolate_env in test/lib/isolate.sh.
 var goCacheVars = []string{"GOCACHE", "GOMODCACHE", "GOPATH", "GOENV"}
 
-// IsolatedEnviron is environ with host and ssh identity removed (the hostenv
-// prefixes, SSH_AUTH_SOCK, SSH_AGENT_PID) and HOME and the XDG dirs pinned under
-// root, created on the way. Go's caches and pnpm's store are resolved from
+// IsolatedEnviron is environ with host identity removed (the hostenv prefixes
+// and config dirs, and the exact hostenv.IsolationVars: ssh-agent, rota and
+// codex dirs) and HOME and the XDG dirs pinned under root, created on the way. Go's caches and pnpm's store are resolved from
 // environ first and pinned, so they survive the HOME change. It is test.isolate
 // (#388): the shape of test/lib/isolate.sh for projects that run `rota test run`.
 func IsolatedEnviron(environ []string, root string) ([]string, error) {
@@ -32,8 +32,14 @@ func IsolatedEnviron(environ []string, root string) ([]string, error) {
 			return nil, err
 		}
 	}
-	drop := map[string]bool{"SSH_AUTH_SOCK": true, "SSH_AGENT_PID": true, "HOME": true,
-		"XDG_CONFIG_HOME": true, "XDG_CACHE_HOME": true, "XDG_DATA_HOME": true, "XDG_STATE_HOME": true}
+	drop := map[string]bool{}
+	for _, v := range hostenv.IsolationVars {
+		drop[v] = true
+	}
+	for _, p := range pins {
+		k, _, _ := strings.Cut(p, "=")
+		drop[k] = true
+	}
 	caches := goCaches(environ)
 	caches = append(caches, pnpmStore(environ)...)
 	for _, v := range goCacheVars {

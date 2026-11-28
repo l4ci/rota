@@ -31,6 +31,16 @@ func TestShellPrefixFileMatchesList(t *testing.T) {
 	}
 }
 
+// isolate_env reads the exact names from this file; it must match the Go list.
+func TestShellNamesFileMatchesList(t *testing.T) {
+	const namesFile = "../../test/lib/isolation-env-names"
+	want := strings.Join(IsolationVars, "\n") + "\n"
+	got, err := os.ReadFile(namesFile)
+	if err != nil || string(got) != want {
+		t.Fatalf("%s is stale or missing (%v); from the repo root run: go run ./internal/hostenv/gen names > test/lib/isolation-env-names", namesFile, err)
+	}
+}
+
 // Harness config dirs point at the developer's real claude/codex config; a test
 // process must not inherit them (#3838). HOME stays out: testiso and the
 // sandboxes pin it themselves where it matters.
