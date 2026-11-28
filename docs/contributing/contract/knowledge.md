@@ -9,6 +9,8 @@ refs:
 
 ## A5: knowledge, decisions, glossary, blocks, map, qa
 
+A KNOWLEDGE.md, DECISIONS.md, map, QA or external knowledge file that exists but cannot be read makes the verb that reads it exit 5 with the path in the message; a missing file keeps each verb's own result. In an external clone this also covers a path that is not a regular file or resolves outside the clone. An external write may instead be refused earlier (exit 4) when git reports the unreadable file as an uncommitted change. The shared readers decide this (`fsio.ReadUserText`, `knowledge.ReadFile`, the clone's `readRegular`), so callers do not wrap the error themselves.
+
 Every verb that rewrites S's KNOWLEDGE.md (`knowledge add`, `amend`, `replace`, `rm`, `rename-topic`, `glossary write`, `glossary import`) holds the advisory lock on the sibling `KNOWLEDGE.md.lock` for its whole read-modify-write, and takes the `knowledge-tier.json.lock` inside it, never the reverse. `rename-topic`, `replace`, `rm` and `tier set` fold the buffered hits (see `knowledge hit`) under the `KNOWLEDGE.md` lock before they touch the sidecar. N concurrent calls each land their own change (the parallel rename batch in `rota-learn/topic-size.md` relies on it), and the temp file each write renames over the target is unique per call (`<path>.<pid>.<n>.tmp`), per the Writes rule in `cli-conventions.md`. The empty `.lock` stays behind, so a golden that records a writer's changed files lists it. (#895)
 
 ### Local tier identity

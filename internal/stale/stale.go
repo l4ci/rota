@@ -102,7 +102,7 @@ func findMap(repo git.Repo, root string, days int, today time.Time) ([]Entry, er
 }
 
 func findKnowledge(repo git.Repo, root string, days int, today time.Time) ([]Entry, error) {
-	text, err := fsio.ReadText(rotatree.File(root, rotatree.KnowledgeFile))
+	text, err := fsio.ReadUserText(rotatree.File(root, rotatree.KnowledgeFile))
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
