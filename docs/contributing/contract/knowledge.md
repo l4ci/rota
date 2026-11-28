@@ -307,20 +307,22 @@ note: matching is case-insensitive on the term name, and a term with no match is
 rota glossary write <term> --def <text> [--alias <a,b>] [--not <n,m>] [--touch]
 repo: scoped (scope S)
 data: {"term": string, "changed": bool}
-exit: 2 when `--def` is missing; 3 when S's KNOWLEDGE.md or its `## Glossary` heading is missing; 4 when an alias already belongs to another term (`blockedBy: "alias-collision"`)
+exit: 2 when `--def` is missing; 3 when S's KNOWLEDGE.md or its `## Glossary` heading is missing; 4 when a term name is invalid or an alias already belongs to another term (`blockedBy: "alias-collision"` for the alias conflict)
 old: hv-glossary-write <term> --def <text> [--alias <a,b>] [--not <n,m>] [--touch] [--repo <name>]    (same flags; `--not ""` clears the Not list)
 shim: stderr `wrote: Glossary/<term>` is the success signal; `changed` is computed by comparing KNOWLEDGE.md before and after; the old `--batch` rejection is dropped.
 note: `--alias` and `--not` take comma-separated lists (rule 2). Passing `--not` with an empty value clears the list, and omitting it leaves the list alone. As a side effect the verb rewrites the `knowledge` managed block in S's instructions file. The old exit 3 for alias collision is now 4; missing `--def` and parse errors stay 2; a missing target file is now 3 (was 2).
+note: term names follow the `knowledge add` title rule: no blank names, CR/LF, `*` or `-->`. Validation precedes trimming surrounding whitespace. A refused name changes neither KNOWLEDGE.md nor the instructions block.
 
 ### rota glossary import
 rota glossary import --body-file <path|-> [--touch]
 repo: scoped (scope S)
 data: {"imported": number, "terms": []string, "changed": bool}
-exit: 2 when `--body-file` is missing or a manifest line lacks a term or definition; 3 when the manifest file, S's KNOWLEDGE.md or its `## Glossary` heading is missing; 4 when an alias collides with an existing term or inside the batch, or a term is repeated in the batch (`blockedBy: "alias-collision"`)
+exit: 2 when `--body-file` is missing or a manifest line lacks a term or definition; 3 when the manifest file, S's KNOWLEDGE.md or its `## Glossary` heading is missing; 4 when a term name is invalid, an alias collides with an existing term or inside the batch, or a term is repeated in the batch (`blockedBy: "alias-collision"` for alias conflicts and repeated terms)
 old: hv-glossary-import <manifest> [--touch] [--repo <name>]    (`--body-file <p>` is the old positional; `--body-file -` makes the shim write stdin to a temp file and pass its path)
 shim: `imported` comes from stderr `batch ok: N term(s)`; `noop: batch manifest contained no terms` gives `imported: 0, changed: false`; `terms` are the `wrote: Glossary/<term>` lines.
 note: the manifest is a body, so it arrives as `--body-file` instead of a positional.
 note: format is unchanged: TSV `term<TAB>def<TAB>aliases<TAB>nots`, with `#` comment lines and blank lines skipped. The import is all-or-nothing, and a refused batch writes nothing. `--touch` stamps today's date on every imported term. Exit codes shift from the old 2 and 3 to 2, 3 and 4 as listed.
+note: every term name follows the `glossary write` title rule before the batch is written; an invalid name reports its manifest line. Missing terms or definitions remain manifest errors (exit 2).
 
 ### rota block <key>
 rota block <key> [--body-file <path|->]

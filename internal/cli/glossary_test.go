@@ -85,6 +85,25 @@ func TestGlossaryWriteMatchGolden(t *testing.T) {
 	}
 }
 
+func TestGlossaryWriteValidatesNameBeforeTrimming(t *testing.T) {
+	for _, name := range []string{"\nSlot", "Slot\n", "\rSlot"} {
+		t.Run(name, func(t *testing.T) {
+			dir := glProject(t, false, glFixtureTerms)
+			before := knTree(t, dir)
+			got := knNew(t, dir, "", "glossary", "write", name, "--def", "definition")
+			if got.rc != 4 || !strings.Contains(got.stderr, "single line") {
+				t.Errorf("rc=%d stderr=%s, want invalid single-line name", got.rc, got.stderr)
+			}
+			after := knTree(t, dir)
+			for path, want := range before {
+				if after[path] != want {
+					t.Errorf("refused write changed %s", path)
+				}
+			}
+		})
+	}
+}
+
 func TestGlossaryImportMatchGolden(t *testing.T) {
 	good := "# comment\nWorker\tan agent\tagent,slot\torchestrator\n\nRound\tone cycle\t\t\nBatch\ta group\tbunch\t\n"
 	cases := []struct {
