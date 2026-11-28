@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -10,8 +9,6 @@ import (
 	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/config"
-	"github.com/l4ci/rota/internal/design"
-	"github.com/l4ci/rota/internal/exitcode"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/plan"
 )
@@ -20,9 +17,9 @@ import (
 const planTaskShape = "a task is a `- **T1** — title` bullet under `## Tasks` with indented `Serves:` and `Verify:` sub-bullets"
 
 // runPlanCheck is read-only: it holds the plan's tasks against the item's
-// acceptance criteria. Criteria live in the item body, or in the design note
-// when the body has none, so like plan pass it needs the issue backend; unlike plan pass it is a read, so that case exits 1
-// rather than 4.
+// acceptance criteria. Criteria live in the item body, as for every gate, so
+// like plan pass it needs the issue backend; unlike plan pass it is a read, so
+// that case exits 1 rather than 4.
 func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	key, err := oneArg(args, "plan key")
 	if err != nil {
@@ -57,15 +54,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 		return backlogFailRead(err)
 	}
 	var ids []string
-	crits := acceptance.IDs(status.Body)
-	if len(crits) == 0 {
-		text, err := designText(c, ref)
-		if err != nil {
-			return failAny(err)
-		}
-		crits = acceptance.IDs(text)
-	}
-	for _, cr := range crits {
+	for _, cr := range acceptance.IDs(status.Body) {
 		ids = append(ids, cr.ID)
 	}
 	rows, err := be.Comments(ref, "decision")
@@ -136,7 +125,7 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	// Neither of these shows in the lists above in a way that says what to fix.
 	var hints []string
 	if len(ids) == 0 {
-		hints = append(hints, "no acceptance ids: looked for `- [ ]` lines under `## Acceptance` in the issue body and in the design note")
+		hints = append(hints, "no acceptance ids: looked for `- [ ]` lines under `## Acceptance` in the issue body; a design note does not count, write them with `rota item section set <ID> --name Acceptance --body-file <file>`")
 	}
 	if r.NoTasks {
 		hints = append(hints, "no tasks found: "+planTaskShape)
@@ -159,18 +148,4 @@ func runPlanCheck(c *Ctx, args []string) (Result, error) {
 	}
 	return Result{Data: d, Text: strings.Join(lines, "\n")},
 		Failed("%s: %s", key, strings.Join(why, "; "))
-}
-
-// designText is the item's design note, "" when it has none.
-func designText(c *Ctx, ref string) (string, error) {
-	st, _, err := openDesign(c, ref)
-	if err != nil {
-		return "", err
-	}
-	text, err := design.Show(st, ref)
-	var ae *exitcode.Error
-	if errors.As(err, &ae) && ae.Exit == exitcode.ExitResolution {
-		return "", nil
-	}
-	return text, err
 }

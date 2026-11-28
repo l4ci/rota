@@ -38,18 +38,13 @@ func planCheckRun(t *testing.T, design, tasks string) (int, map[string]any, stri
 
 const planCheckTask = "- **T1** — parse\n  - Serves: AC-1\n  - Verify: go test ./parse\n"
 
-func TestPlanCheckReadsAcceptanceFromDesign(t *testing.T) {
-	code, d, msg := planCheckRun(t, "# d\n\n## Acceptance\n\n- [ ] AC-1: it parses\n", planCheckTask)
-	if code != 0 || d["ok"] != true || strings.Contains(msg, "serves unknown") {
-		t.Fatalf("design ids: exit %d data %v %s", code, d, msg)
-	}
-}
-
-func TestPlanCheckNoAcceptanceAnywhere(t *testing.T) {
-	for name, design := range map[string]string{"no design": "", "design without ids": "# d\n"} {
+// Criteria in the design note do not count: no gate reads them, so plan check
+// must not pass on them. The message names the verb that moves them.
+func TestPlanCheckNoAcceptanceInBody(t *testing.T) {
+	for name, design := range map[string]string{"no design": "", "design with ids": "## Acceptance\n\n- [ ] AC-1: it parses\n"} {
 		for _, tasks := range []string{planCheckTask, ""} {
 			code, d, msg := planCheckRun(t, design, tasks)
-			if code != 1 || d["ok"] != false || !strings.Contains(msg, "issue body") || !strings.Contains(msg, "design note") {
+			if code != 1 || d["ok"] != false || !strings.Contains(msg, "issue body") || !strings.Contains(msg, "rota item section set") {
 				t.Errorf("%s, tasks %q: exit %d data %v message %q", name, tasks, code, d, msg)
 			}
 		}
@@ -57,7 +52,7 @@ func TestPlanCheckNoAcceptanceAnywhere(t *testing.T) {
 }
 
 func TestPlanCheckNamesTaskShape(t *testing.T) {
-	code, _, msg := planCheckRun(t, "## Acceptance\n\n- [ ] AC-1: it parses\n",
+	code, _, msg := planCheckRun(t, "",
 		"### T1: parse\n\nServes: AC-1\nVerify: go test ./parse\n")
 	for _, want := range []string{"- **T1**", "Serves:", "Verify:"} {
 		if code != 1 || !strings.Contains(msg, want) {
