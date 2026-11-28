@@ -31,7 +31,6 @@ func debugCommands() []*Command {
 				{Name: "show", Fence: fenceAllowed, Summary: "print the counter state", Verb: noFlags(runCounterShow)},
 				{Name: "summary", Fence: fenceAllowed, Summary: "Iron Law halt note", Verb: noFlags(runCounterSummary)},
 				{Name: "clear", Fence: fenceAllowed, Summary: "delete the counter", Verb: noFlags(runCounterClear)},
-				{Name: "inc-cycle", Fence: fenceAllowed, Summary: "count a hypothesis cycle", Verb: noFlags(runCounterIncCycle)},
 			}},
 			{Name: "session", Summary: "per-developer /rota-debug session notes", Subs: []*Command{
 				{Name: "put", Fence: fenceAllowed, Summary: "write a session file, replacing any earlier one", Verb: debugSessionPut},
@@ -306,24 +305,6 @@ func runCounterPass(c *Ctx, args []string) (Result, error) {
 	d.Set("attempt", n)
 	d.Set("changed", true)
 	return Result{Data: d}, nil
-}
-
-func runCounterIncCycle(c *Ctx, args []string) (Result, error) {
-	if err := noArgs(args); err != nil {
-		return Result{}, err
-	}
-	ctr, err := openCounter(c)
-	if err != nil {
-		return Result{}, err
-	}
-	n, err := ctr.IncCycle()
-	if err != nil {
-		return Result{}, err
-	}
-	d := jsonx.NewObject()
-	d.Set("hypothesisCycles", n)
-	d.Set("changed", true)
-	return Result{Data: d, Text: strconv.Itoa(n)}, nil
 }
 
 func runCounterClear(c *Ctx, args []string) (Result, error) {
