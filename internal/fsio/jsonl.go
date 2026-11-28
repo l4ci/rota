@@ -10,6 +10,8 @@ import (
 // AppendJSONL appends v as one JSON line to path, creating the file (0o600)
 // and its directory (0o700) as needed. The line goes out in one O_APPEND
 // write, so concurrent processes interleave whole lines, never characters.
+// A file whose last line lacks a newline gets one in the same write; with no
+// lock, two writers can both add it, leaving a blank line that readers skip.
 // The logs it serves are per-developer and gitignored, hence the private modes.
 func AppendJSONL(path string, v any) error {
 	line, err := json.Marshal(v)
@@ -19,11 +21,14 @@ func AppendJSONL(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
-	_, werr := f.Write(append(line, '\n'))
+	data, werr := frameLine(f, line)
+	if werr == nil {
+		_, werr = f.Write(data)
+	}
 	if cerr := f.Close(); werr == nil {
 		werr = cerr
 	}

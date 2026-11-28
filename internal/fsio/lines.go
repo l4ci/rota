@@ -10,17 +10,18 @@ import (
 
 // AppendLine appends line plus a newline to path under the file's lock and
 // fsyncs it before returning, so a returned nil means the whole line is on
-// disk. The file is created with mode when absent; its directory is not.
+// disk. A file whose last line lacks a newline gets one first. The file is
+// created with mode when absent; its directory is not.
 func AppendLine(path string, line []byte, mode os.FileMode) error {
 	return Locked(path, LockTimeout, func() error {
-		return appendLocked(path, append(line[:len(line):len(line)], '\n'), mode)
+		return appendLocked(path, line, true, mode)
 	})
 }
 
 // AppendText appends text verbatim (no newline added) to path under the
 // file's lock and fsyncs it. The file is created with mode when absent.
 func AppendText(path, text string, mode os.FileMode) error {
-	return Locked(path, LockTimeout, func() error { return appendLocked(path, []byte(text), mode) })
+	return Locked(path, LockTimeout, func() error { return appendLocked(path, []byte(text), false, mode) })
 }
 
 // AppendLineUnique appends line plus a newline to path unless a line equal to
@@ -42,11 +43,7 @@ func AppendLineUnique(path, line string, mode os.FileMode) (added bool, err erro
 				return nil
 			}
 		}
-		out := line + "\n"
-		if len(have) > 0 && !bytes.HasSuffix(have, []byte("\n")) {
-			out = "\n" + out
-		}
-		if err := appendLocked(path, []byte(out), mode); err != nil {
+		if err := appendLocked(path, []byte(line), true, mode); err != nil {
 			return err
 		}
 		added = true
@@ -56,11 +53,18 @@ func AppendLineUnique(path, line string, mode os.FileMode) (added bool, err erro
 }
 
 // appendLocked writes data to path with O_APPEND and fsyncs; the caller holds
-// the lock.
-func appendLocked(path string, data []byte, mode os.FileMode) error {
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, mode)
+// the lock. With record set, data is one line and is framed by frameLine;
+// otherwise it goes out verbatim.
+func appendLocked(path string, data []byte, record bool, mode os.FileMode) error {
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_APPEND|os.O_CREATE, mode)
 	if err != nil {
 		return err
+	}
+	if record {
+		if data, err = frameLine(f, data); err != nil {
+			f.Close()
+			return err
+		}
 	}
 	if _, err := f.Write(data); err != nil {
 		f.Close()
@@ -71,6 +75,26 @@ func appendLocked(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return f.Close()
+}
+
+// frameLine returns line plus a newline, led by another when f ends mid-line
+// (a torn append), so the new record is not fused to the remains.
+func frameLine(f *os.File, line []byte) ([]byte, error) {
+	fi, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 0, len(line)+2)
+	if n := fi.Size(); n > 0 {
+		var last [1]byte
+		if _, err := f.ReadAt(last[:], n-1); err != nil {
+			return nil, err
+		}
+		if last[0] != '\n' {
+			out = append(out, '\n')
+		}
+	}
+	return append(append(out, line...), '\n'), nil
 }
 
 // LinePolicy says what ReadLines does with a line decode rejects.
