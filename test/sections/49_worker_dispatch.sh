@@ -510,7 +510,7 @@ OUT=$(tx hvj worker session ensure --session hvsmoke) || fail "session ensure ou
 [ "$(jget data.changed <<<"$OUT")" = "true" ] || fail "a handoff reports changed:true, got: $OUT"
 [ "$(jget data.session <<<"$OUT")" = "hvsmoke" ] || fail "handoff data must name the session, got: $OUT"
 TLOG=$(cat "$TX/state/log")
-for SUB in '^new-session .*hvsmoke' '^new-window .*operator' '^send-keys .*hvsmoke:operator'; do
+for SUB in '^new-session .*hvsmoke' '^new-window .*operator' '^send-keys .*=hvsmoke:=operator'; do
   grep -q "$SUB" <<<"$TLOG" || fail "session ensure never ran '$SUB'; log: $TLOG"
 done
 
