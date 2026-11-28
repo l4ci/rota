@@ -626,16 +626,10 @@ func (g *GitLab) PRFiles(ctx context.Context, pr int) ([]string, error) {
 		return nil, err
 	}
 	var files []string
-	seen := make(map[string]bool)
 	for _, f := range d {
-		for _, path := range []string{f.New, f.Old} {
-			if path != "" && !seen[path] {
-				seen[path] = true
-				files = append(files, path)
-			}
-		}
+		files = append(files, f.New, f.Old)
 	}
-	return files, nil
+	return uniq(files), nil
 }
 
 func (g *GitLab) PRComment(ctx context.Context, pr int, body string) error {
@@ -658,11 +652,17 @@ func (g *GitLab) PRState(ctx context.Context, pr int) (string, error) {
 	if err := g.json(ctx, []string{"mr", "view", strconv.Itoa(pr), "--output", "json"}, &d); err != nil {
 		return "", err
 	}
-	st := strings.ToLower(d.State)
-	if st == "opened" {
-		st = "open"
+	switch strings.ToLower(d.State) {
+	case "opened", "locked":
+		// Locked is transitional: the MR has not finished merging yet.
+		return "open", nil
+	case "merged":
+		return "merged", nil
+	case "closed":
+		return "closed", nil
+	default:
+		return "", failed("MR %d has unknown state %q", pr, d.State)
 	}
-	return st, nil
 }
 
 // CommitChecks reports the newest pipeline per ref on sha, ordered by ref,

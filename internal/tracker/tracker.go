@@ -3,10 +3,10 @@
 // the forge CLI runs (CLI.Run, ported from bin/hv-tracker-call), with list
 // limits, pagination and bounded rate-limit handling.
 //
-// Adapters cache nothing, except the GitLab username that AssignSelf resolves
-// once per adapter. List calls page until the forge returns a short page, so
-// a result is never silently truncated. Every call takes a context; each CLI
-// attempt also has its own timeout (CLI.Timeout).
+// Adapters cache identity and metadata lookups for their lifetime; Linear and
+// It's a Plan also cache issue IDs. CLI reads can share an invocation's ReadCache.
+// List calls page through results so they are never silently truncated. Every
+// call takes a context; each CLI attempt also has its own timeout (CLI.Timeout).
 package tracker
 
 import (
@@ -352,8 +352,8 @@ type IssueReader interface {
 }
 
 // IssueTracker is the issue side of the seam: where issues, their comments,
-// labels and milestones live (issues.source). GitHub, GitLab, Jira and
-// Linear implement it. Issues are named by IssueKey; PR numbers stay ints.
+// labels and milestones live (issues.source). GitHub, GitLab, Jira, Linear and
+// It's a Plan implement it. Issues are named by IssueKey; PR numbers stay ints.
 type IssueTracker interface {
 	IssueReader
 
@@ -523,7 +523,7 @@ type Adapter interface {
 type Settings struct {
 	// Provider is forge.provider: auto | github | gitlab | local.
 	Provider string
-	// Source is issues.source (file | github | gitlab | jira | linear), or
+	// Source is issues.source (file | github | gitlab | forge | jira | linear | itsaplan), or
 	// config.SourceIssues for a legacy config that has not named its tracker.
 	Source          string
 	RetryWait       time.Duration
