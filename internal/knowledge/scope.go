@@ -107,10 +107,10 @@ func (s Store) TierPath(scope string) (string, error) {
 	return filepath.Join(s.dir(scope), "knowledge-tier.json"), nil
 }
 
-// ReadFile returns the file's text with newlines normalized (fsio.ReadText),
+// ReadFile returns the file's text with newlines normalized (fsio.ReadUserText),
 // or "" when it does not exist.
 func ReadFile(path string) (string, error) {
-	t, err := fsio.ReadText(path)
+	t, err := fsio.ReadUserText(path)
 	if os.IsNotExist(err) {
 		return "", nil
 	}

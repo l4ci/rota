@@ -44,7 +44,7 @@ func Query(root, dir string, names []string) (text string, missing []string, err
 			missing = append(missing, name)
 			continue
 		}
-		raw, err := fsio.ReadText(rotatree.Doc(root, dir, name))
+		raw, err := fsio.ReadUserText(rotatree.Doc(root, dir, name))
 		if os.IsNotExist(err) {
 			missing = append(missing, name)
 			continue
@@ -82,12 +82,12 @@ func Entries(root string) ([]Entry, error) {
 	}
 	var out []Entry
 	for _, f := range files {
-		raw, err := fsio.ReadText(f)
+		raw, err := fsio.ReadUserText(f)
 		if os.IsNotExist(err) {
 			continue
 		}
 		if err != nil {
-			return nil, fsio.Unreadable(err)
+			return nil, err
 		}
 		fm, _, body := frontmatter.Parse(raw)
 		if name := fileName(f); validName(name) {
@@ -169,12 +169,12 @@ func QAIndexBlock(root string) (string, error) {
 	if len(files) > 0 {
 		var lines []string
 		for _, f := range files {
-			raw, err := fsio.ReadText(f)
+			raw, err := fsio.ReadUserText(f)
 			if os.IsNotExist(err) {
 				continue
 			}
 			if err != nil {
-				return "", fsio.Unreadable(err)
+				return "", err
 			}
 			fm, _, _ := frontmatter.Parse(raw)
 			lines = append(lines, fmt.Sprintf("- **%s** (%s) — %s", fileName(f), strutil.OrDefault(frontmatter.Str(fm, "surface"), "?"), strutil.OrDefault(frontmatter.Str(fm, "summary"), "(no summary)")))
