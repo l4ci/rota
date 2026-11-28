@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/l4ci/rota/internal/exitcode"
 	gatepolicy "github.com/l4ci/rota/internal/gate"
+	"github.com/l4ci/rota/internal/gatereport"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/roundlease"
@@ -426,6 +427,10 @@ func TestGateResultShape(t *testing.T) {
 	}
 	if want := gittest.Run(t, w.dir, "rev-parse", "--short", "HEAD"); res.SHA != want {
 		t.Errorf("sha = %s, want %s", res.SHA, want)
+	}
+	report := gatereport.RenderReport(res)
+	if !strings.Contains(report, "Merge commit: `"+res.SHA+"`") || strings.Contains(report, "Reviewed SHA") {
+		t.Errorf("passing report must label the merge commit:\n%s", report)
 	}
 }
 

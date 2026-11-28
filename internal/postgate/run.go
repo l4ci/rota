@@ -180,7 +180,7 @@ func trainReports(issues map[string]string, r landing.TrainResult) []landing.Gat
 			continue
 		}
 		checks := append(append([]string{}, r.Verified...), r.E2EVerified...)
-		out = append(out, landing.GateResult{Branch: m.Branch, PR: m.PR, Issue: issues[m.Target], SHA: r.SHA, Verdict: landing.GatePass, Verified: checks, VerifySkipped: len(checks) == 0})
+		out = append(out, landing.GateResult{Branch: m.Branch, PR: m.PR, Issue: issues[m.Target], SHA: r.SHA, MergeCommit: r.SHA, Verdict: landing.GatePass, Verified: checks, VerifySkipped: len(checks) == 0})
 	}
 	if r.Culprit != "" && !seen[r.Culprit] {
 		out = append(out, r.CulpritGate)

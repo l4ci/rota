@@ -255,6 +255,7 @@ func (g *gateRun) verifyFirst(what string, check func(dir, sha string) (bool, er
 	}
 	tree, _ := g.git(dir, "rev-parse", "HEAD^{tree}")
 	g.res.SHA = strutil.ShortSHA(sha)
+	g.res.MergeCommit = g.res.SHA
 	if done, err := check(dir, sha); done || err != nil {
 		return true, err
 	}

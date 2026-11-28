@@ -28,6 +28,9 @@ type GateResult struct {
 	Issue  string
 	Branch string
 	SHA    string
+	// MergeCommit is set to SHA where SHA names a merge commit rather than the
+	// head that was checked. The report labels SHA by whether the two agree.
+	MergeCommit string `json:"-"`
 	// CheckedHead is the full head commit a CheckOnly gate checked, the one
 	// its review verdicts were read at; an integration train merges exactly it.
 	CheckedHead   string
