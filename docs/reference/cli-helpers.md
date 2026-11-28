@@ -396,6 +396,10 @@ Bare `rota` with no verb does the same in an initialized project and runs `rota 
 | `rota skills update [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account] [--stub \| --full]` | refresh the skill directories that already have a manifest, each in its recorded mode unless a flag switches it (a manifest with no mode is full); both flags exit 1; a corrupt manifest exits 5 and nothing is rewritten (`rota skills install` repairs it) |
 | `rota skills uninstall [--scope <user\|project>] [--agent <claude\|codex\|all>] [--overwrite] [--current-account]` | remove what rota installed; a corrupt manifest exits 5 and nothing is removed (`rota skills install` repairs it) |
 
+Link scanning skips fenced examples until a closing fence uses the same character
+and at least as many backticks or tildes as the opening fence. Shorter nested fences
+leave the example's links excluded.
+
 ## `rota round`
 
 The orchestrator's verbs for a [parallel round](../usage/parallel-rounds.md). All of them read and write `.rota/workers.json` and the round lease.
