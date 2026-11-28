@@ -96,7 +96,7 @@ func TestSummaryBytes(t *testing.T) {
 	c.RecordAttempt(long, "abc")
 	c.Fail()
 	st, _ := c.Load()
-	md, bug, failed := st.Summary()
+	md, bug := st.Summary(1)
 	trunc := ""
 	for i := 0; i < 117; i++ {
 		trunc += "é"
@@ -105,7 +105,7 @@ func TestSummaryBytes(t *testing.T) {
 		"- Run `/rota-pause` to leave a handoff note and step away.\n" +
 		"- Or re-read the symptom — the root cause is likely in a different subsystem than the hypotheses so far have explored.\n" +
 		"- The failed-fix count is per item and survives a new branch; only `rota debug reset B07`, after a human approves it, starts it again."
-	if md != want || bug != "B07" || failed != 1 {
+	if md != want || bug != "B07" {
 		t.Fatalf("summary:\n%s", md)
 	}
 }
@@ -245,7 +245,7 @@ func TestLoadPartialFile(t *testing.T) {
 	if _, ok := att.Get("commit"); ok {
 		t.Error("show emitted commit for an attempt without one")
 	}
-	md, bug, _ := s.Summary()
+	md, bug := s.Summary(2)
 	if bug != "?" || !strings.Contains(md, "1. unknown — h") {
 		t.Errorf("fallbacks: %q\n%s", bug, md)
 	}

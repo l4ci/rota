@@ -358,6 +358,7 @@ data: {"failedFixes": number, "changed": true}
 exit: 3 when the session has no state file; 4 when there is no attempt or the last attempt isn't `pending`; 5 when not in a git repository
 old: hv-debug-counter fail
 shim: stdout (the new count) becomes `failedFixes`.
+note: `failedFixes` here is the branch session's count, not the item's: it never halts anything.
 
 ### rota debug counter pass
 rota debug counter pass
@@ -379,9 +380,10 @@ shim: parses the raw file JSON and renames keys to camelCase. Text mode prints t
 rota debug counter summary
 repo: none
 data: {"bugId": string, "failedFixes": number, "markdown": string}
-exit: 1 when there are no attempts (read-only verb, `markdown` empty); 3 when the session has no state file; 5 when not in a git repository
+exit: 1 when there are no attempts (read-only verb, `markdown` empty); 3 when the session has no state file or its `bug_id` names no item; 5 when not in a git repository; tracker
 old: hv-debug-counter summary
-shim: stdout becomes `markdown`. `bugId` and `failedFixes` are read from the state file. A state file with no attempts exits 1 with the same data and empty `markdown`.
+shim: stdout becomes `markdown`. `bugId` is read from the state file. A state file with no attempts exits 1 with the same data and empty `markdown`.
+note: `failedFixes`, and the count in `markdown`, are the item's count from the verdict store, the one the Iron Law refusal reports ([verdict-refusals.md](verdict-refusals.md)): it spans branches and starts again at `debug reset`. The attempt list is the branch session's. A state file with no `bug_id` names no item and reports its own `failed_fixes`.
 
 ### rota debug counter clear
 rota debug counter clear

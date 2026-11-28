@@ -325,14 +325,14 @@ func (s *Session) Show() *jsonx.Object {
 	return d
 }
 
-// Summary is the Iron Law halt note. The caller decides what an empty
-// attempt list means; Summary renders whatever the session holds.
-func (s *Session) Summary() (md, bugID string, failed int) {
+// Summary is the Iron Law halt note. failed is the item's failed-fix count,
+// which the caller owns: the session holds only this branch's attempts. The
+// caller also decides what an empty attempt list means.
+func (s *Session) Summary(failed int) (md, bugID string) {
 	bugID = "?"
 	if v, ok := s.raw.Get("bug_id"); ok {
 		bugID, _ = v.(string)
 	}
-	failed = s.FailedFixes
 	plural := "s"
 	if failed == 1 {
 		plural = ""
@@ -364,5 +364,5 @@ func (s *Session) Summary() (md, bugID string, failed int) {
 		"- Or re-read the symptom — the root cause is likely in a different subsystem than the hypotheses so far have explored.",
 		"- The failed-fix count is per item and survives a new branch; only `rota debug reset "+bugID+"`, after a human approves it, starts it again.",
 	)
-	return strings.Join(lines, "\n"), bugID, failed
+	return strings.Join(lines, "\n"), bugID
 }

@@ -175,6 +175,12 @@ func openCounter(c *Ctx) (*debugctr.Counter, error) {
 	return ctr, err
 }
 
+// itemFailedFixes is the count that halts bug, the one the refusal and the
+// halt note both report.
+func itemFailedFixes(root, bug string) int {
+	return verdict.FailedFixes(verdict.Load(root).Items[bug])
+}
+
 // ironLaw refuses (exit 4) when bug has 3 or more failed fixes since its
 // last reset (B3). The count is the verdict store's, so a new branch or a
 // cleared session file does not start it again.
@@ -183,7 +189,7 @@ func ironLaw(c *Ctx, bug string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	failed := verdict.FailedFixes(verdict.Load(root).Items[bug])
+	failed := itemFailedFixes(root, bug)
 	if failed < verdict.IronLaw {
 		return Result{}, nil
 	}
@@ -370,7 +376,20 @@ func runCounterSummary(c *Ctx, args []string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	md, bug, failed := st.Summary()
+	// A file without a bug_id names no item, so its own count is all there is.
+	failed := st.FailedFixes
+	if st.BugID != "" {
+		id, err := debugItem(c, st.BugID)
+		if err != nil {
+			return backlogFail(err)
+		}
+		root, err := c.Root()
+		if err != nil {
+			return Result{}, err
+		}
+		failed = itemFailedFixes(root, id)
+	}
+	md, bug := st.Summary(failed)
 	d := jsonx.NewObject()
 	d.Set("bugId", bug)
 	d.Set("failedFixes", failed)
