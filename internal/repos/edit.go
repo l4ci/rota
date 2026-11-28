@@ -24,6 +24,9 @@ var (
 	ErrUnknown = errors.New("not registered")
 )
 
+// errUnchanged stops an edit that has nothing to write.
+var errUnchanged = errors.New("unchanged")
+
 // Add registers the git repo at path under name, which defaults to the
 // directory's basename. path may be absolute or relative to the working
 // directory and must lie strictly below root. Registering an entry that is
@@ -48,36 +51,42 @@ func Add(root, path, name string) (r Repo, changed bool, err error) {
 	}
 	r = Repo{Name: name, Rel: "./" + filepath.ToSlash(rel), Path: abs}
 
-	for _, have := range Load(root) {
-		switch {
-		case have.Name == name && have.Path == abs:
-			return have, false, nil
-		case have.Name == name:
-			return Repo{}, false, fmt.Errorf("%w: %s is registered at %s", ErrConflict, name, have.Rel)
-		case have.Path == abs:
-			return Repo{}, false, fmt.Errorf("%w: %s is registered as %s", ErrConflict, path, have.Name)
+	changed = true
+	err = edit(root, false, func(entries []any) ([]any, error) {
+		// Load reads the file edit holds the lock on, so the check and the
+		// write see the same registry.
+		for _, have := range Load(root) {
+			switch {
+			case have.Name == name && have.Path == abs:
+				r, changed = have, false
+				return nil, errUnchanged
+			case have.Name == name:
+				return nil, fmt.Errorf("%w: %s is registered at %s", ErrConflict, name, have.Rel)
+			case have.Path == abs:
+				return nil, fmt.Errorf("%w: %s is registered as %s", ErrConflict, path, have.Name)
+			}
 		}
-	}
-	entry := newEntry(name, r.Rel)
-	if err := edit(root, false, func(entries []any) []any { return append(entries, entry) }); err != nil {
+		return append(entries, newEntry(name, r.Rel)), nil
+	})
+	if err != nil && !errors.Is(err, errUnchanged) {
 		return Repo{}, false, err
 	}
-	return r, true, nil
+	return r, changed, nil
 }
 
 // Remove unregisters name and returns the entry it held. The repo itself is
 // not touched. A name nothing registers is ErrUnknown.
 func Remove(root, name string) (Repo, error) {
 	var gone Repo
-	for _, have := range Load(root) {
-		if have.Name == name {
-			gone = have
+	err := edit(root, false, func(entries []any) ([]any, error) {
+		for _, have := range Load(root) {
+			if have.Name == name {
+				gone = have
+			}
 		}
-	}
-	if gone.Name == "" {
-		return Repo{}, fmt.Errorf("%w: %s", ErrUnknown, name)
-	}
-	err := edit(root, false, func(entries []any) []any {
+		if gone.Name == "" {
+			return nil, fmt.Errorf("%w: %s", ErrUnknown, name)
+		}
 		var keep []any
 		for _, e := range entries {
 			if o, ok := e.(*jsonx.Object); ok {
@@ -87,7 +96,7 @@ func Remove(root, name string) (Repo, error) {
 			}
 			keep = append(keep, e)
 		}
-		return keep
+		return keep, nil
 	})
 	return gone, err
 }
@@ -103,7 +112,7 @@ func SetTopLevel(root string, names []string) error {
 	for _, n := range names {
 		want[n] = true
 	}
-	return edit(root, true, func(entries []any) []any {
+	return edit(root, true, func(entries []any) ([]any, error) {
 		var out []any
 		have := map[string]bool{}
 		for _, e := range entries {
@@ -122,7 +131,7 @@ func SetTopLevel(root string, names []string) error {
 				have[n] = true
 			}
 		}
-		return out
+		return out, nil
 	})
 }
 
@@ -133,30 +142,37 @@ func newEntry(name, rel string) *jsonx.Object {
 	return entry
 }
 
-// edit rewrites repos.json with fn applied to its entry list, sorted by name.
-// A registry that exists but is not a JSON object is an error rather than
-// something to overwrite, unless replaceCorrupt.
-func edit(root string, replaceCorrupt bool, fn func([]any) []any) error {
+// edit rewrites repos.json with fn applied to its entry list, sorted by name,
+// holding the file's lock from the read to the write. An error from fn leaves
+// the file as it is. A registry that exists but is not a JSON object is an
+// error rather than something to overwrite, unless replaceCorrupt.
+func edit(root string, replaceCorrupt bool, fn func([]any) ([]any, error)) error {
 	path := rotatree.Repos(root)
-	reg := jsonx.NewObject()
-	if _, err := os.Stat(path); err == nil {
-		o, ok := fsio.LoadJSON(path, nil).(*jsonx.Object)
-		switch {
-		case ok:
-			reg = o
-		case !replaceCorrupt:
-			return fmt.Errorf("%s is not a valid JSON object", path)
+	update := fsio.UpdateJSONStrict
+	if replaceCorrupt {
+		update = fsio.UpdateJSON
+	}
+	return update(path, jsonx.NewObject(), func(v any) (any, error) {
+		reg, ok := v.(*jsonx.Object)
+		if !ok {
+			if !replaceCorrupt {
+				return nil, fmt.Errorf("%s is not a valid JSON object", path)
+			}
+			reg = jsonx.NewObject()
 		}
-	}
-	list, _ := reg.Get("repos")
-	entries, _ := list.([]any)
-	entries = fn(append([]any{}, entries...))
-	if entries == nil {
-		entries = []any{}
-	}
-	sort.SliceStable(entries, func(i, j int) bool { return entryName(entries[i]) < entryName(entries[j]) })
-	reg.Set("repos", entries)
-	return fsio.WriteJSONAtomic(path, reg)
+		list, _ := reg.Get("repos")
+		entries, _ := list.([]any)
+		entries, err := fn(append([]any{}, entries...))
+		if err != nil {
+			return nil, err
+		}
+		if entries == nil {
+			entries = []any{}
+		}
+		sort.SliceStable(entries, func(i, j int) bool { return entryName(entries[i]) < entryName(entries[j]) })
+		reg.Set("repos", entries)
+		return reg, nil
+	})
 }
 
 func entryName(e any) string {
