@@ -325,22 +325,29 @@ func (s *Session) Show() *jsonx.Object {
 	return d
 }
 
-// Summary is the Iron Law halt note. The caller decides what an empty
-// attempt list means; Summary renders whatever the session holds.
-func (s *Session) Summary() (md, bugID string, failed int) {
+// Summary is the Iron Law halt note. failed is the item's failed-fix count and
+// halted whether it reaches the Iron Law, both the caller's: the session holds
+// only this branch's attempts. Below the law the note does not claim a halt.
+// The caller also decides what an empty attempt list means.
+func (s *Session) Summary(failed int, halted bool) (md, bugID string) {
 	bugID = "?"
 	if v, ok := s.raw.Get("bug_id"); ok {
 		bugID, _ = v.(string)
 	}
-	failed = s.FailedFixes
 	plural := "s"
 	if failed == 1 {
 		plural = ""
 	}
+	title := "# Iron Law triggered for [" + bugID + "]"
+	count := strconv.Itoa(failed) + " fix attempt" + plural + " failed to resolve the bug. Halting."
+	if !halted {
+		title = "# Fix attempts for [" + bugID + "]"
+		count = "Failed fixes recorded for this item: " + strconv.Itoa(failed) + ". The Iron Law has not halted it."
+	}
 	lines := []string{
-		"# Iron Law triggered for [" + bugID + "]",
+		title,
 		"",
-		strconv.Itoa(failed) + " fix attempt" + plural + " failed to resolve the bug. Halting.",
+		count,
 		"",
 		"## Attempts",
 		"",
@@ -364,5 +371,5 @@ func (s *Session) Summary() (md, bugID string, failed int) {
 		"- Or re-read the symptom — the root cause is likely in a different subsystem than the hypotheses so far have explored.",
 		"- The failed-fix count is per item and survives a new branch; only `rota debug reset "+bugID+"`, after a human approves it, starts it again.",
 	)
-	return strings.Join(lines, "\n"), bugID, failed
+	return strings.Join(lines, "\n"), bugID
 }

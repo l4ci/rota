@@ -273,3 +273,54 @@ func TestVerdictAddUsesInjectedClock(t *testing.T) {
 		t.Fatalf("recordedAt = %v, want the injected clock; out %s", got, out)
 	}
 }
+
+// The halt note and the refusal read one count (#4419): it spans branches,
+// whose session files each hold only their own attempts, and a reset clears it.
+func TestCounterSummaryReportsTheItemCount(t *testing.T) {
+	dir := verdictRepo(t)
+	fail := func() {
+		t.Helper()
+		for _, args := range [][]string{
+			{"debug", "counter", "record-attempt", "--hypothesis", "h", "--commit", "abc"},
+			{"debug", "verdict", "B07", "--verdict", "FAIL"},
+		} {
+			if code, out, se := rotaIn(t, dir, args...); code != 0 {
+				t.Fatalf("%v: exit %d %s %s", args, code, out, se)
+			}
+		}
+	}
+	summary := func(want float64, line string) {
+		t.Helper()
+		code, out, _ := rotaIn(t, dir, "debug", "counter", "summary", "--json")
+		d := data(t, out)
+		md, _ := d["markdown"].(string)
+		if code != 0 || d["bugId"] != "B07" || d["failedFixes"] != want || !strings.Contains(md, line) {
+			t.Errorf("summary: exit %d failedFixes %v, want %v and %q:\n%s", code, d["failedFixes"], want, line, md)
+		}
+	}
+	branch := func(args ...string) {
+		t.Helper()
+		gittest.Run(t, dir, append([]string{"checkout", "-q"}, args...)...)
+	}
+	branch("-b", "fix-a")
+	rotaIn(t, dir, "debug", "counter", "init", "B07")
+	fail()
+	fail()
+	branch("-b", "fix-b")
+	rotaIn(t, dir, "debug", "counter", "init", "B07")
+	fail()
+
+	_, out, _ := rotaIn(t, dir, "debug", "counter", "record-attempt", "--hypothesis", "h", "--commit", "abc", "--json")
+	if d := data(t, out); d["blockedBy"] != "iron law" || d["failedFixes"] != float64(3) {
+		t.Fatalf("refusal: %v", d)
+	}
+	summary(3, "3 fix attempts failed")
+	branch("fix-a")
+	summary(3, "3 fix attempts failed")
+
+	if code, _, se := rotaIn(t, dir, "debug", "reset", "B07", "--reason", "r", "--confirm", "--confirm-note", "yes"); code != 0 {
+		t.Fatalf("reset: exit %d %s", code, se)
+	}
+	fail()
+	summary(1, "Failed fixes recorded for this item: 1.")
+}
