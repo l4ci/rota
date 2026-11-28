@@ -31,19 +31,19 @@ func orcaCheckSize(text string) error {
 
 func (o *orca) send(ctx context.Context, handle, text string) error {
 	if err := orcaCheckSize(text); err != nil {
-		return err
+		return classifySendAs(err, ErrNotSubmitted)
 	}
 	h, err := o.decodeOrca(handle)
 	if err != nil {
-		return err
+		return classifySendAs(err, ErrNotSubmitted)
 	}
 	if h.Branch == "" {
-		return fmt.Errorf("cannot submit Orca prompt: saved worktree branch is missing")
+		return classifySendAs(fmt.Errorf("cannot submit Orca prompt: saved worktree branch is missing"), ErrNotSubmitted)
 	}
 	before, err := o.readPane(ctx, &h, 0)
 	handle = encodeOrca(h)
 	if err != nil {
-		return err
+		return classifySendAs(err, ErrNotSubmitted)
 	}
 	// Orca has no validated key-only transport. Refuse every dialog without
 	// changing its selection or pasting text into it.
@@ -66,7 +66,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 		return ErrDraftOnPrompt
 	}
 	if readErr != nil {
-		return readErr
+		return classifySendAs(readErr, ErrNotSubmitted)
 	}
 	if dialog, ok := orcaDialog(latest); ok {
 		return &DialogError{First: dialog.First}
@@ -74,7 +74,7 @@ func (o *orca) send(ctx context.Context, handle, text string) error {
 	before = latest
 	handle = encodeOrca(h)
 	if !orcaReady(before) && !o.inputReady(h, before) {
-		return fmt.Errorf("orca input is not ready; wait for the agent prompt in the Orca terminal, then retry")
+		return classifySendAs(fmt.Errorf("orca input is not ready; wait for the agent prompt in the Orca terminal, then retry"), ErrNotSubmitted)
 	}
 	raw, err := o.call(ctx, "terminal", "send", "--terminal", h.ID, "--text", text, "--enter", "--wait-submit", "20", "--json")
 	if err != nil {
