@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -42,7 +41,8 @@ var issuesVerbReads = uncachedReads("an issues verb reads an upstream issue, wri
 
 // issuesScope is the project root, the issues config and the directory the
 // forge CLI runs in (scope S): --repo's sub-repo, else the registered
-// sub-repo the working directory is in, else the root.
+// sub-repo whose checkout the working directory belongs to (repos.Lookup),
+// else the root.
 func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 	root, err = c.Root()
 	if err != nil {
@@ -54,12 +54,8 @@ func issuesScope(c *Ctx) (root, dir string, env issues.Env, err error) {
 			return
 		}
 	} else if cwd, werr := c.deps().Getwd(); werr == nil {
-		here := repos.Realpath(cwd)
-		for _, r := range repos.Load(root) {
-			if rel, rerr := filepath.Rel(r.Path, here); rerr == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				dir = r.Path
-				break
-			}
+		if r, lerr := repos.Lookup(c.deps().Git, cwd, repos.Load(root)); lerr == nil {
+			dir = r.Path
 		}
 	}
 	env = issues.NewEnv(c.projectConfig(root), c.deps().trackerOptions(issuesVerbReads), c.deps().IssuesForge)

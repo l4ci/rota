@@ -522,7 +522,8 @@ func baseSource(prNum int) string {
 // branchReviewDepth resolves the depth ship.review picks for t, from its diff
 // size against the base, the labels of the branch's issue (read from the
 // tracker when the policy has a labels map) plus extra, and the Door line of
-// its open PR. why carries the Door note.
+// its open PR. Both are read in t.Dir, the repo that holds the branch; config
+// comes from the project root. why carries the Door note.
 func branchReviewDepth(c *Ctx, t reviewSpan, extra []string) (worker.ReviewDepth, string, error) {
 	root, err := backlogScope(c)
 	if err != nil {
@@ -533,9 +534,9 @@ func branchReviewDepth(c *Ctx, t reviewSpan, extra []string) (worker.ReviewDepth
 		Config: worker.ParseGateConfig(cfg), Root: root, Dir: t.Dir, Branch: t.Name,
 		Span: t.diffSpan(t.Head), Git: c.deps().Git, Labels: extra,
 		Issues: func() (worker.ReviewIssues, error) {
-			return c.deps().issuesOrNone(c.Context(), cfg, root, cachedReads)
+			return c.deps().issuesOrNone(c.Context(), cfg, t.Dir, cachedReads)
 		},
-		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", root) },
+		BranchForge: func() (tracker.Forge, error) { return c.deps().forge(c.Context(), cfg, "", t.Dir) },
 		// The preview meters the reviewer accounts, so it names the account
 		// the review runs on; the gate does not (any eligible harness passes).
 		Pools: func(ctx context.Context) (worker.CrossPools, error) {
