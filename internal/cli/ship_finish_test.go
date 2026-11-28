@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/l4ci/rota/internal/gittest"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 // finishDeps is testDeps with ROTA_SLOT unset (or slot), whatever the
@@ -192,6 +193,59 @@ func TestShipFinishUsesExplicitMergeWithRetainedBranch(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(work, ".rota", "BACKLOG.md"))
 	if err != nil || !strings.Contains(string(b), "- **[F72]") || strings.Contains(string(b), "~~**[F72]") {
 		t.Errorf("later work must stay open: %s, %v", b, err)
+	}
+}
+
+// The debug-cycle signal reads the per-item debug verdicts, which outlive the
+// session `/rota-debug` clears before ship.
+func TestShipFinishCountsDebugVerdicts(t *testing.T) {
+	work := finishFixture(t, 1, false)
+	finishProve(t, work, "F71")
+	rota := func(args ...string) {
+		t.Helper()
+		if o := trRun(t, work, "", args...); o.code != 0 {
+			t.Fatalf("%v: %+v", args, o)
+		}
+	}
+	rota("status", "add", "rota/fin", "--items", "F71")
+	rota("debug", "counter", "init", "F71")
+	for _, v := range []string{"FAIL", "FAIL", "PASS"} {
+		rota("debug", "verdict", "F71", "--verdict", v)
+	}
+	// F72 is not referenced by the branch, so its failures do not count.
+	for i := 0; i < 3; i++ {
+		rota("debug", "verdict", "F72", "--verdict", "FAIL")
+	}
+	rota("debug", "counter", "clear")
+
+	data := finishRun(t, finishDeps(""), work, 0, "rota/fin")
+	if sg := sub(data, "signals"); sg["debugCycles"] != float64(2) {
+		t.Errorf("signals %v", sg)
+	}
+	if l := sub(data, "learn"); l["action"] != "fire" || l["reason"] != "2 debug cycles" {
+		t.Errorf("learn %v", l)
+	}
+}
+
+// On a tracker the branch refs are "#9" while the store key is "9".
+func TestShipFinishCountsDebugVerdictsForIssueRefs(t *testing.T) {
+	work := finishFixture(t, 1, false)
+	gittest.Run(t, work, "checkout", "-q", "rota/fin")
+	shipCommit(t, work, "fix.txt", "fix: the bug", "Closes #9")
+	gittest.Run(t, work, "checkout", "-q", "main")
+	write(t, filepath.Join(work, ".rota", "config.json"), issuesConfig)
+	for i := 0; i < 2; i++ {
+		if _, err := verdict.AddItem(work, "9", verdict.NewRecord(verdict.DebugFix, verdict.Fail, "abc1234", verdict.Body{}, testNow)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if o := trRun(t, work, "", "status", "add", "rota/fin", "--items", "9"); o.code != 0 {
+		t.Fatalf("status add: %+v", o)
+	}
+
+	data := finishRun(t, finishWith(withTracker(t, issueFixture()), ""), work, 0, "rota/fin")
+	if sg := sub(data, "signals"); sg["debugCycles"] != float64(2) {
+		t.Errorf("signals %v, items %v", sg, data["items"])
 	}
 }
 
