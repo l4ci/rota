@@ -134,12 +134,12 @@ func (e Env) placeWorker(ctx context.Context, root string, in preflightIn, out p
 	if _, err := worker.LaunchHarness(kind); err != nil {
 		return kind, source, nil, err
 	}
-	if pinned && !in.Resuming && !worker.IsSolo(root) && config.ReviewOnlyKind(cfg, kind) {
+	if pinned && !in.Resuming && !worker.IsSoloHost(e.HostName) && config.ReviewOnlyKind(cfg, kind) {
 		return kind, source, nil, blocked(blockedby.HarnessLabel, "no worker account for the %s harness: its logins are all in review.accounts, which never take a worker issue; add one to round.accounts or name another harness", kind)
 	}
 	// A resuming slot keeps its kind and account (dispatch refuses one at its
 	// limit), and solo runs every subagent on the orchestrator's own account.
-	if in.Resuming || worker.IsSolo(root) || !poolConfigured(cfg, set) {
+	if in.Resuming || worker.IsSoloHost(e.HostName) || !poolConfigured(cfg, set) {
 		// No pick, but a model named by flag or label still has to belong to the kind.
 		if name := strutil.FirstNonEmpty(in.FlagModel, out.Pick.Model); name != "" && len(kindsOfModel(set, []string{kind}, name)) == 0 {
 			return kind, source, nil, blocked(blockedby.ModelLabel, "model %s is named by no round.tiers entry of %s", name, kind)

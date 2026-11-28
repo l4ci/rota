@@ -38,7 +38,9 @@ func TestKillSlotCloseFailureHintGoesThroughEnvStderr(t *testing.T) {
 // The herdr handoff hint names the cwd Env reports.
 func TestSessionEnsureHerdrHintNamesEnvGetwd(t *testing.T) {
 	dir := gittest.Project(t, `{"round":{"dispatch":"herdr"}}`)
-	e := envWith(&fakeHost{name: "herdr"})
+	f := herdrFake()
+	f.inSession = false
+	e := envWith(f)
 	e.Getwd = func() (string, error) { return "/fake/cwd", nil }
 	_, err := e.SessionEnsure(bg, dir, SessionOpts{})
 	we, ok := err.(*exitcode.Error)

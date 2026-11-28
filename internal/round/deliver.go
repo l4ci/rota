@@ -27,7 +27,7 @@ func (e Env) deliveryRefusals(ctx context.Context, root, kind, slot, model strin
 	if err != nil {
 		return nil, err
 	}
-	if why := lp.H.SoloRefusal(); why != "" && worker.IsSolo(root) {
+	if why := lp.H.SoloRefusal(); why != "" && worker.IsSoloHost(e.HostName) {
 		return nil, usage("%s", why)
 	}
 	// The account the worker will run under, not the one it ran under last.
@@ -93,7 +93,7 @@ func (d *delivery) steps(ctx context.Context, e Env, root string) ([]step, error
 	if err != nil {
 		return nil, err
 	}
-	solo := worker.IsSolo(root)
+	solo := worker.IsSoloHost(e.HostName)
 	var text string
 	steps := []step{
 		// The account pickWorker chose: a Claude slot's is the pane's
