@@ -72,7 +72,8 @@ lease whose orchestrator died. `rota reap` finds them.
 
 In a linked worktree, `rota reap` and doctor's leftover hints act on the main checkout when it has
 `.rota/`: its slot registry, round config, worktree list and temp root. The result is the same as from
-the main checkout.
+the main checkout. So `rota reap --kind worktree --apply`, run from inside a clean worktree that no
+slot owns, removes that worktree, which is your shell's current directory.
 
 ```sh
 rota reap                          # preview: list candidates, delete nothing
