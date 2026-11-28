@@ -32,8 +32,9 @@ type Book interface {
 	// when the landed PR left the issue open for later slices (#3629). It is a
 	// no-op for any other issue.
 	ReleaseSlice(root, issue, slot string) error
-	// HasOrigin reports whether the repo at root has an origin remote.
-	HasOrigin(ctx context.Context, root string) bool
+	// Remote names the configured git remote (git.remote), the one the gate
+	// uses, and reports whether the repo at root has it.
+	Remote(ctx context.Context, root string) (string, bool)
 }
 
 // Failure is a bookkeeping step that failed for one target. The verdict stands;

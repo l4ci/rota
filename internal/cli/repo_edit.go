@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/initproj"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/pystr"
@@ -30,6 +31,8 @@ func repoAdd(fs *flag.FlagSet) RunFunc {
 			return Result{}, Refused("%v", err)
 		case errors.Is(err, repos.ErrNotRepo), errors.Is(err, repos.ErrOutside):
 			return Result{}, Resolution("%v", err)
+		case errors.Is(err, fsio.ErrLockTimeout):
+			return Result{}, &Error{Exit: ExitRetry, Message: err.Error()}
 		case err != nil:
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
@@ -78,7 +81,12 @@ func repoRm(fs *flag.FlagSet) RunFunc {
 			c.Warn("active stream(s) still in repo %s: %s", name, strings.Join(streams, ", "))
 		}
 		r, err := repos.Remove(root, name)
-		if err != nil {
+		switch {
+		case errors.Is(err, repos.ErrUnknown): // another rm won the race
+			return Result{}, Resolution("%v", err)
+		case errors.Is(err, fsio.ErrLockTimeout):
+			return Result{}, &Error{Exit: ExitRetry, Message: err.Error()}
+		case err != nil:
 			return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
 		}
 		return Result{

@@ -837,3 +837,118 @@ func TestSetupTestSlotsGlobal(t *testing.T) {
 		}
 	})
 }
+
+// #4428: a list answer equal to the global list is inherited, however it is
+// spelled; one that differs is still written.
+func TestSetupListAnswerEqualToGlobalWritesNothing(t *testing.T) {
+	gdir := isolateGlobal(t)
+	const global = `{"test":{"full":["make test","make e2e"]},"round":{"harnesses":["codex"]}}`
+	writeFile(t, config.GlobalPath(gdir), global)
+	dir := t.TempDir()
+	// test.full is spelled without the canonical space after the comma.
+	code, out, errOut := setupRun(t, dir, "", false, "--yes", "--save-global",
+		"--set", `test.full=["make test","make e2e"]`, "--set", "round.harnesses=codex")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if tracked := readConfig(t, dir); strings.Contains(tracked, "make test") {
+		t.Errorf("config.json pins the global test.full:\n%s", tracked)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, ".rota", "config.local.json")); err == nil {
+		t.Errorf("config.local.json pins the global round.harnesses:\n%s", b)
+	}
+	vals, err := config.LoadGlobal(gdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := vals["test.full"]; !reflect.DeepEqual(got, []any{"make test", "make e2e"}) {
+		t.Errorf("global test.full = %v", got)
+	}
+	if strings.Contains(out, "set test.full") || strings.Contains(out, "set round.harnesses") {
+		t.Errorf("output reports a write:\n%s", out)
+	}
+
+	differs := t.TempDir()
+	if code, _, errOut := setupRun(t, differs, "", false, "--yes", "--set", "test.full=make test", "--set", "round.harnesses=claude"); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got := cfgValue(t, differs, "test.full"); !reflect.DeepEqual(got, []any{"make test"}) {
+		t.Errorf("test.full = %v", got)
+	}
+	if got := cfgValue(t, differs, "round.harnesses"); !reflect.DeepEqual(got, []any{harness.Claude}) {
+		t.Errorf("round.harnesses = %v", got)
+	}
+}
+
+// #4428: a global or existing list is the prompt default, in canonical JSON;
+// config.local.json wins over config.json.
+func TestSetupListOffersListValuesAsDefaults(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"test":{"full":["make test","make e2e"]},"round":{"harnesses":["codex"]}}`)
+	defaults := func(dir string) map[string]string {
+		t.Helper()
+		code, out, errOut := setupRun(t, dir, "", false, "--json", "--list")
+		if code != 0 {
+			t.Fatalf("exit %d: %s", code, errOut)
+		}
+		var env struct {
+			Data struct {
+				Questions []struct{ Key, Default string }
+			}
+		}
+		if err := json.Unmarshal([]byte(out), &env); err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		for _, q := range env.Data.Questions {
+			got[q.Key] = q.Default
+		}
+		return got
+	}
+	got := defaults(t.TempDir())
+	for k, want := range map[string]string{"test.full": `["make test", "make e2e"]`, "round.harnesses": `["codex"]`} {
+		if got[k] != want {
+			t.Errorf("global default %s = %q, want %q", k, got[k], want)
+		}
+	}
+
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".rota", "config.json"), `{"test":{"full":["tracked"]},"round":{"harnesses":["claude"]}}`)
+	writeLocalConfig(t, dir, `{"round":{"harnesses":["opencode"]}}`+"\n")
+	got = defaults(dir)
+	for k, want := range map[string]string{"test.full": `["tracked"]`, "round.harnesses": `["opencode"]`} {
+		if got[k] != want {
+			t.Errorf("existing default %s = %q, want %q", k, got[k], want)
+		}
+	}
+}
+
+// #4428: the support path too writes no list the clone already reads, whether
+// it was given or is the default; a differing one is written.
+func TestSetupSupportPathDoesNotPinInheritedList(t *testing.T) {
+	gdir := isolateGlobal(t)
+	writeFile(t, config.GlobalPath(gdir), `{"round":{"harnesses":["codex"]}}`)
+	for name, args := range map[string][]string{
+		"default": nil,
+		"set":     {"--set", "round.harnesses=codex"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir, _ := supportClone(t)
+			code, _, errOut := setupRun(t, dir, "", false, append([]string{"--yes", "--set", "round.role=support"}, args...)...)
+			if code != 0 {
+				t.Fatalf("exit %d: %s", code, errOut)
+			}
+			if got, ok := config.Lookup(localConfig(t, dir), "round.harnesses"); ok {
+				t.Errorf("local pins round.harnesses = %v", got)
+			}
+		})
+	}
+	dir, _ := supportClone(t)
+	code, _, errOut := setupRun(t, dir, "", false, "--yes", "--set", "round.role=support", "--set", "round.harnesses=claude")
+	if code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut)
+	}
+	if got, _ := config.Lookup(localConfig(t, dir), "round.harnesses"); !reflect.DeepEqual(got, []any{harness.Claude}) {
+		t.Errorf("local round.harnesses = %v", got)
+	}
+}

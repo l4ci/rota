@@ -133,8 +133,8 @@ func (m RoundMigration) Changed() bool { return len(m.Config) > 0 || len(m.Local
 // changed, under their locks. Both files are read and planned before either
 // is written: a malformed file (ErrCorrupt naming it) or a conflict
 // (*ConflictError) writes nothing. Each file migrates on its own, so a run cut
-// short between the two writes is finished by the next. A missing file, and an
-// empty config.local.json, have nothing to migrate.
+// short between the two writes is finished by the next. A missing or blank file
+// has nothing to migrate.
 func MigrateRoundKeysFiles(root string, apply bool) (RoundMigration, error) {
 	var m RoundMigration
 	err := migrateLayerFiles(layerFiles(root, "", false), apply, func(files []*migrationFile) error {
@@ -165,24 +165,20 @@ func migrateRoundPlan(files []*migrationFile, m *RoundMigration) error {
 		})
 }
 
-// readMigrateTarget reads one config layer for the migration: nil for a
-// missing file (or path ""), and for an empty or blank file when blankOK is set
-// (config.local.json, which Load already treats as absent); ErrCorrupt naming
-// the file for anything that is not a JSON object; any other read error is
-// returned wrapped, naming the file.
-func readMigrateTarget(path, name string, blankOK bool) (*jsonx.Object, error) {
+// readMigrateTarget reads one project layer for the migration: nil for a
+// missing file (or path ""), an empty object for a blank one (ReadLayer);
+// ErrCorrupt naming the file for anything that is not a JSON object; any other
+// read error is returned wrapped, naming the file.
+func readMigrateTarget(path, name string) (*jsonx.Object, error) {
 	if path == "" {
 		return nil, nil
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := ReadLayer(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", rotatree.Rel(name), err)
-	}
-	if blankOK && len(bytes.TrimSpace(raw)) == 0 {
-		return nil, nil
 	}
 	doc, ok := decodeObject(raw)
 	if !ok {

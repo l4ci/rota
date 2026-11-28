@@ -221,17 +221,18 @@ func trainCulprit(issues map[string]string, targets map[string]GateTarget, r lan
 	return g
 }
 
-// resolveHead preserves the no-origin boundary and resolves the same branch
+// resolveHead preserves the no-remote boundary and resolves the same branch
 // identity for reporting and deduplicating a reconstructed train culprit.
 func (e Env) resolveHead(ctx context.Context, root string, r landing.GateResult) (landing.GateResult, string, bool) {
 	repo := git.Repo{Dir: root, Runner: e.Git}
-	// A recorded PR without origin must never cause forge traffic.
-	if r.PR != "" && !e.Book.HasOrigin(ctx, root) {
+	remote, found := e.Book.Remote(ctx, root)
+	// A recorded PR without the remote must never cause forge traffic.
+	if r.PR != "" && !found {
 		return r, "", false
 	}
 	ref := r.Branch
 	if ok, _ := repo.Verify(ctx, "refs/heads/"+ref); !ok {
-		ref = "origin/" + ref
+		ref = remote + "/" + ref
 	}
 	if r.SHA == "" {
 		if res, err := repo.Run(ctx, "rev-parse", "--short", ref); err == nil && res.ExitCode == 0 {

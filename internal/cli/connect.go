@@ -44,7 +44,8 @@ func (d *Deps) connectEnv() (string, *connections.Secrets, error) {
 func doctorConnection(ctx context.Context, d *Deps, name string) *doctor.ConnCheck {
 	dir, sec, err := d.connectEnv()
 	if err != nil {
-		return &doctor.ConnCheck{Name: name, State: string(connections.StateFailed), Detail: err.Error()}
+		return &doctor.ConnCheck{Name: name, State: string(connections.StateFailed), Detail: err.Error(),
+			Hint: "fix the error above (HOME, or access to the rota config and data dirs), then run: rota doctor"}
 	}
 	dg := connections.Check(ctx, dir, name, sec, d.ConnTesters)
 	return &doctor.ConnCheck{Name: name, State: string(dg.State), Detail: dg.Detail, Hint: dg.Hint}

@@ -4,7 +4,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 )
 
@@ -23,7 +22,7 @@ func SaveLocal(root string, answers map[string]string) error {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	return fsio.UpdateJSONStrict(localPath(root), jsonx.NewObject(), func(doc any) (any, error) {
+	return updateLayer(localPath(root), jsonx.NewObject(), func(doc any) (any, error) {
 		cfg, ok := doc.(*jsonx.Object)
 		if !ok {
 			return nil, ErrLocalNotObject
