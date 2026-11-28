@@ -200,10 +200,10 @@ func (t *tmux) SendPane(ctx context.Context, pane, text string) error {
 	if pane == "" {
 		return errors.New("no pane to send to")
 	}
-	if r := t.tmux(ctx, "send-keys", "-t", pane, "-l", "--", text); r.ExitCode != 0 {
+	if r := t.tmux(ctx, "send-keys", "-t", tmuxTarget(pane), "-l", "--", text); r.ExitCode != 0 {
 		return fmt.Errorf("tmux send-keys failed: %s", strings.TrimSpace(r.Stderr))
 	}
-	if r := t.tmux(ctx, "send-keys", "-t", pane, "C-m"); r.ExitCode != 0 {
+	if r := t.tmux(ctx, "send-keys", "-t", tmuxTarget(pane), "C-m"); r.ExitCode != 0 {
 		return fmt.Errorf("tmux send-keys failed: %s", strings.TrimSpace(r.Stderr))
 	}
 	return nil

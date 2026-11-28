@@ -153,6 +153,7 @@ func TestJget(t *testing.T) {
 func TestTmuxSpawn(t *testing.T) {
 	booted := false
 	f := &fake{handler: func(name string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 		switch a[0] {
 		case "has-session":
 			return Result{ExitCode: 1}
@@ -173,8 +174,8 @@ func TestTmuxSpawn(t *testing.T) {
 	}
 	for _, want := range []string{
 		"tmux new-session -d -s rota -c /wt",
-		"tmux new-window -d -t rota -n w1 -c /wt",
-		"tmux send-keys -t rota:w1 CLAUDE_CONFIG_DIR='/acct' claude --model sonnet C-m",
+		"tmux new-window -d -t =rota: -n w1 -c /wt",
+		"tmux send-keys -t =rota:=w1 CLAUDE_CONFIG_DIR='/acct' claude --model sonnet C-m",
 	} {
 		if !strings.Contains(f.log(), want) {
 			t.Errorf("missing call %q in\n%s", want, f.log())
@@ -270,6 +271,7 @@ func TestTmuxSend(t *testing.T) {
 	os.WriteFile(file, []byte("hi"), 0o644)
 	changed := false
 	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 		switch a[0] {
 		case "send-keys":
 			changed = true
@@ -284,7 +286,7 @@ func TestTmuxSend(t *testing.T) {
 	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); err != nil {
 		t.Fatalf("Send = %v", err)
 	}
-	for _, want := range []string{"tmux load-buffer -b rota-w1 " + file, "tmux paste-buffer -b rota-w1 -t rota:w1", "tmux delete-buffer -b rota-w1", "tmux send-keys -t rota:w1 C-m"} {
+	for _, want := range []string{"tmux load-buffer -b rota-w1 " + file, "tmux paste-buffer -b rota-w1 -t =rota:=w1", "tmux delete-buffer -b rota-w1", "tmux send-keys -t =rota:=w1 C-m"} {
 		if !strings.Contains(f.log(), want) {
 			t.Errorf("missing %q in\n%s", want, f.log())
 		}
@@ -297,17 +299,29 @@ func TestTmuxSend(t *testing.T) {
 func TestTmuxSendPastesRawIntoOpenCode(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "p.md")
 	os.WriteFile(file, []byte("a\nb"), 0o644)
-	for _, c := range []struct{ cmd, paste string }{
-		{"opencode", "tmux paste-buffer -r -b rota-w1 -t rota:w1"},
-		{"claude", "tmux paste-buffer -b rota-w1 -t rota:w1"},
-		{"codex", "tmux paste-buffer -b rota-w1 -t rota:w1"},
-		{"", "tmux paste-buffer -b rota-w1 -t rota:w1"},
+	for _, c := range []struct {
+		name, reported, paste string
+		exit                  int
+	}{
+		{"opencode", "rota:w1\topencode", "tmux paste-buffer -r -b rota-w1 -t =rota:=w1", 0},
+		{"claude", "rota:w1\tclaude", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 0},
+		{"codex", "rota:w1\tcodex", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 0},
+		{"empty", "rota:w1\t", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 0},
+
+		// tmux 3.4 display-message can succeed for an absent exact target.
+		{"missing window", "rota:w10\topencode", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 0},
+		{"missing session", "rota2:w1\topencode", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 0},
+		{"failed query", "rota:w1\topencode", "tmux paste-buffer -b rota-w1 -t =rota:=w1", 1},
 	} {
 		changed := false
 		f := &fake{handler: func(_ string, a []string) Result {
+			checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 			switch a[0] {
 			case "display-message":
-				return Result{Stdout: c.cmd + "\n"}
+				if got := a[len(a)-1]; got != "#{session_name}:#{window_name}\t#{pane_current_command}" {
+					t.Errorf("foreground query format = %q", got)
+				}
+				return Result{Stdout: c.reported + "\n", ExitCode: c.exit}
 			case "send-keys":
 				changed = true
 			case "capture-pane":
@@ -319,13 +333,13 @@ func TestTmuxSendPastesRawIntoOpenCode(t *testing.T) {
 			return Result{}
 		}}
 		if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); err != nil {
-			t.Fatalf("%q: Send = %v", c.cmd, err)
+			t.Fatalf("%q: Send = %v", c.name, err)
 		}
 		if !strings.Contains(f.log(), c.paste+"\n") && !strings.HasSuffix(f.log(), c.paste) {
-			t.Errorf("%q: want %q in\n%s", c.cmd, c.paste, f.log())
+			t.Errorf("%q: want %q in\n%s", c.name, c.paste, f.log())
 		}
-		if c.cmd != "opencode" && strings.Contains(f.log(), "paste-buffer -r") {
-			t.Errorf("%q: pasted raw:\n%s", c.cmd, f.log())
+		if c.name != "opencode" && strings.Contains(f.log(), "paste-buffer -r") {
+			t.Errorf("%q: pasted raw:\n%s", c.name, f.log())
 		}
 	}
 }
@@ -348,9 +362,12 @@ func TestTmuxSendPasteFails(t *testing.T) {
 }
 
 func TestTmuxCaptureAndStatus(t *testing.T) {
-	f := &fake{handler: func(string, []string) Result { return Result{Stdout: "CALLER PANE"} }}
+	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
+		return Result{Stdout: "CALLER PANE"}
+	}}
 	h := New("tmux", deps(f, nil, &clock{}))
-	if got, err := h.ReadPane(bg, "w1", "rota:w1", 40); got != "CALLER PANE" || err != nil || !strings.Contains(f.log(), "capture-pane -pJ -t rota:w1") {
+	if got, err := h.ReadPane(bg, "w1", "rota:w1", 40); got != "CALLER PANE" || err != nil || !strings.Contains(f.log(), "capture-pane -pJ -t =rota:=w1") {
 		t.Errorf("capture call wrong: %s", f.log())
 	}
 	if h.Status(bg, "w1", "rota:w1") != (AgentStatus{}) {
@@ -368,10 +385,21 @@ func windows(list string) func(string, []string) Result {
 }
 
 func TestTmuxKillExactWindowMatch(t *testing.T) {
-	// w10 exists but w1 does not: a prefix match would call w1 alive.
-	f := &fake{handler: windows("w10 4242\nother 1\n")}
-	h := New("tmux", deps(f, nil, &clock{}))
-	if err := h.Kill(bg, "w1", "rota:w1"); err != nil {
+	// w10 exists but w1 does not: neither the proof query nor the close
+	// may resolve a prefix to another worker.
+	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
+		if a[0] == "list-windows" {
+			return Result{Stdout: "w10 4242\nother 1\n"}
+		}
+		return Result{ExitCode: 1, Stderr: "can't find window: w1"}
+	}}
+	d := deps(f, nil, &clock{})
+	d.Tree = func(pid int) []int {
+		t.Errorf("must not collect another window's pid %d", pid)
+		return nil
+	}
+	if err := New("tmux", d).Kill(bg, "w1", "rota:w1"); err != nil {
 		t.Fatalf("Kill = %v", err)
 	}
 }
@@ -401,7 +429,7 @@ func TestTmuxKillProvesWindowGone(t *testing.T) {
 	if treeOf != 4242 {
 		t.Errorf("pid tree taken from %d, want the pane pid 4242, before the close", treeOf)
 	}
-	if !strings.Contains(f.log(), "tmux kill-window -t rota:w1") {
+	if !strings.Contains(f.log(), "tmux kill-window -t =rota:=w1") {
 		t.Errorf("no kill-window: %s", f.log())
 	}
 }
@@ -586,7 +614,7 @@ func TestTmuxSpawnCarriesAccountEnv(t *testing.T) {
 		}}
 		h := New("tmux", deps(f, nil, &clock{}))
 		_, _ = h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Env: []string{env + "=/acct", "ROTA_SLOT=w1"}, Launch: "opencode", BootTimeout: 1})
-		want := "tmux send-keys -t rota:w1 " + env + "='/acct' ROTA_SLOT='w1' opencode C-m"
+		want := "tmux send-keys -t =rota:=w1 " + env + "='/acct' ROTA_SLOT='w1' opencode C-m"
 		if !strings.Contains(f.log(), want) {
 			t.Errorf("%s: missing %q in\n%s", env, want, f.log())
 		}
@@ -1107,6 +1135,7 @@ func TestTmuxEnsureOperator(t *testing.T) {
 	os.WriteFile(file, []byte("go"), 0o644)
 	keys := 0
 	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=ops:", "=ops:=operator")
 		switch a[0] {
 		case "has-session":
 			return Result{ExitCode: 1}
@@ -1128,12 +1157,12 @@ func TestTmuxEnsureOperator(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{
-		"tmux has-session -t ops",
+		"tmux has-session -t =ops:",
 		"tmux new-session -d -s ops -c /proj -n scratch",
-		"tmux list-windows -t ops -F #{window_name}",
-		"tmux kill-window -t ops:operator",
-		"tmux new-window -d -t ops -n operator -c /proj",
-		"tmux send-keys -t ops:operator claude --continue C-m",
+		"tmux list-windows -t =ops: -F #{window_name}",
+		"tmux kill-window -t =ops:=operator",
+		"tmux new-window -d -t =ops: -n operator -c /proj",
+		"tmux send-keys -t =ops:=operator claude --continue C-m",
 	}
 	if !reflect.DeepEqual(f.calls[:len(want)], want) {
 		t.Errorf("calls =\n%s", f.log())
@@ -1411,6 +1440,7 @@ func tmuxDraftSend(t *testing.T, pane, brief string) (error, *fake, *clock) {
 	os.WriteFile(file, []byte(brief), 0o644)
 	changed := false
 	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 		switch a[0] {
 		case "send-keys":
 			changed = true
@@ -1771,7 +1801,7 @@ func TestTmuxSpawnPrefixesSlotEnv(t *testing.T) {
 	if _, err := h.Spawn(bg, SpawnOpts{Slot: "w1", Session: "rota", Cwd: "/wt", Launch: "claude", Env: []string{"ROTA_SLOT=w1", "ROTA_PORT_BASE=20000"}, BootTimeout: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if want := "tmux send-keys -t rota:w1 ROTA_SLOT='w1' ROTA_PORT_BASE='20000' claude C-m"; !strings.Contains(f.log(), want) {
+	if want := "tmux send-keys -t =rota:=w1 ROTA_SLOT='w1' ROTA_PORT_BASE='20000' claude C-m"; !strings.Contains(f.log(), want) {
 		t.Errorf("missing %q in\n%s", want, f.log())
 	}
 }
@@ -1848,6 +1878,7 @@ func TestTmuxSendDismissesAutocompactPicker(t *testing.T) {
 	os.WriteFile(file, []byte("sig\nthe last line of the brief\n"), 0o644)
 	dismissed := false
 	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 		switch a[0] {
 		case "send-keys":
 			dismissed = true
@@ -1862,7 +1893,7 @@ func TestTmuxSendDismissesAutocompactPicker(t *testing.T) {
 	if err := New("tmux", deps(f, nil, &clock{})).Send(bg, "w1", "rota:w1", file); errors.Is(err, ErrDialogOpen) || errors.Is(err, ErrDraftOnPrompt) {
 		t.Fatalf("Send = %v", err)
 	}
-	if f.count("tmux send-keys -t rota:w1 Escape") != 1 {
+	if f.count("tmux send-keys -t =rota:=w1 Escape") != 1 {
 		t.Errorf("want one Escape:\n%s", f.log())
 	}
 }
@@ -2080,6 +2111,7 @@ func TestTmuxSpawnAnswersStartupDialog(t *testing.T) {
 	trust := readFixture(t, "trust-dialog-2.1.288.txt")
 	answered := false
 	f := &fake{handler: func(_ string, a []string) Result {
+		checkTmuxTarget(t, a, "=rota:", "=rota:=w1")
 		switch a[0] {
 		case "capture-pane":
 			if answered {

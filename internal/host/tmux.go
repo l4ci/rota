@@ -59,8 +59,23 @@ func (t *tmux) tmux(ctx context.Context, args ...string) Result {
 	return r
 }
 
+// tmuxTarget makes named sessions and windows exact without changing stored
+// handles. A session-only target needs the colon too: new-window otherwise
+// treats =rota as a window name and can fall back to a prefix-matched session.
+// Native pane/window/session IDs already identify a single object.
+func tmuxTarget(target string) string {
+	if target == "" || strings.HasPrefix(target, "%") || strings.HasPrefix(target, "@") || strings.HasPrefix(target, "$") {
+		return target
+	}
+	session, window, named := strings.Cut(target, ":")
+	if named {
+		window = "=" + window
+	}
+	return "=" + session + ":" + window
+}
+
 func (t *tmux) pane(ctx context.Context, window string) string {
-	return t.tmux(ctx, "capture-pane", "-pJ", "-t", window).Stdout
+	return t.tmux(ctx, "capture-pane", "-pJ", "-t", tmuxTarget(window)).Stdout
 }
 
 // tmuxKeys maps DialogKeys names to tmux send-keys names.
@@ -82,7 +97,7 @@ func (t *tmux) waitReady(ctx context.Context, window string, timeout int) (bool,
 		case dialogExhausted:
 			return false, &DialogError{First: dialogTitle(p)}
 		case dialogAnswer:
-			args := []string{"send-keys", "-t", window}
+			args := []string{"send-keys", "-t", tmuxTarget(window)}
 			for _, k := range keys {
 				args = append(args, tmuxKeys[k])
 			}
@@ -152,15 +167,15 @@ func (t *tmux) Spawn(ctx context.Context, o SpawnOpts) (string, error) {
 		}
 		return errors.New(msg)
 	}
-	if t.tmux(ctx, "has-session", "-t", o.Session).ExitCode != 0 {
+	if t.tmux(ctx, "has-session", "-t", tmuxTarget(o.Session)).ExitCode != 0 {
 		if err := slotCmd("new-session", t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Cwd)); err != nil {
 			return "", err
 		}
 	}
-	if err := slotCmd("new-window", t.tmux(ctx, "new-window", "-d", "-t", o.Session, "-n", o.Slot, "-c", o.Cwd)); err != nil {
+	if err := slotCmd("new-window", t.tmux(ctx, "new-window", "-d", "-t", tmuxTarget(o.Session), "-n", o.Slot, "-c", o.Cwd)); err != nil {
 		return "", err
 	}
-	if err := slotCmd("send-keys", t.tmux(ctx, "send-keys", "-t", handle, launch, "C-m")); err != nil {
+	if err := slotCmd("send-keys", t.tmux(ctx, "send-keys", "-t", tmuxTarget(handle), launch, "C-m")); err != nil {
 		// The window exists: hand it back so the caller records and reaps it.
 		return handle, err
 	}
@@ -183,7 +198,9 @@ func (t *tmux) Send(ctx context.Context, slot, handle, file string) error {
 
 func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	read := func() string { return t.draftPane(ctx, handle) }
-	press := func(k string) { t.tmux(ctx, "send-keys", "-t", handle, map[string]string{"esc": "Escape"}[k]) }
+	press := func(k string) {
+		t.tmux(ctx, "send-keys", "-t", tmuxTarget(handle), map[string]string{"esc": "Escape"}[k])
+	}
 	if err := clearDialog(&t.d, read, press); err != nil {
 		return err
 	}
@@ -200,9 +217,9 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	if t.tmux(ctx, "load-buffer", "-b", buf, file).ExitCode != 0 {
 		return ErrNotSubmitted
 	}
-	paste := []string{"paste-buffer", "-b", buf, "-t", handle}
+	paste := []string{"paste-buffer", "-b", buf, "-t", tmuxTarget(handle)}
 	if t.rawPaste(ctx, handle) {
-		paste = []string{"paste-buffer", "-r", "-b", buf, "-t", handle}
+		paste = []string{"paste-buffer", "-r", "-b", buf, "-t", tmuxTarget(handle)}
 	}
 	if t.tmux(ctx, paste...).ExitCode != 0 {
 		return ErrNotSubmitted
@@ -211,19 +228,24 @@ func (t *tmux) sendFile(ctx context.Context, handle, file, buf string) error {
 	return confirmPickup(&t.d, Tmux, func(time.Duration) (bool, error) {
 		return t.pane(ctx, handle) != before, nil
 	}, func() {
-		t.tmux(ctx, "send-keys", "-t", handle, "C-m")
+		t.tmux(ctx, "send-keys", "-t", tmuxTarget(handle), "C-m")
 	})
 }
 
 // rawPaste reports whether the pane's foreground process is a TUI that needs
 // its line feeds pasted as they are (harness.RawPaste). The process, not the
-// pane text, decides: a running session shows no stable marker.
+// pane text, decides: a running session shows no stable marker. tmux can
+// report success for an absent exact target, so verify the reported names too.
 func (t *tmux) rawPaste(ctx context.Context, handle string) bool {
-	r := t.tmux(ctx, "display-message", "-p", "-t", handle, "#{pane_current_command}")
+	r := t.tmux(ctx, "display-message", "-p", "-t", tmuxTarget(handle), "#{session_name}:#{window_name}\t#{pane_current_command}")
 	if r.ExitCode != 0 {
 		return false
 	}
-	h, ok := harness.ForBinary(strings.TrimSpace(r.Stdout))
+	reported, command, ok := strings.Cut(strings.TrimRight(r.Stdout, "\n"), "\t")
+	if !ok || reported != handle {
+		return false
+	}
+	h, ok := harness.ForBinary(strings.TrimSpace(command))
 	return ok && h.RawPaste()
 }
 
@@ -234,7 +256,7 @@ func (t *tmux) ReadPane(ctx context.Context, slot, handle string, lines int) (st
 	if handle == "" {
 		return "", nil
 	}
-	r := t.tmux(ctx, "capture-pane", "-pJ", "-t", handle)
+	r := t.tmux(ctx, "capture-pane", "-pJ", "-t", tmuxTarget(handle))
 	if r.ExitCode != 0 {
 		msg := strings.TrimSpace(r.Stderr)
 		if tmuxGone(msg) {
@@ -259,7 +281,7 @@ func tmuxGone(msg string) bool {
 // draftPane captures with styling (-e) and drops the dim runs, so a ghost
 // suggestion is not mistaken for typed text; plain text when that capture fails.
 func (t *tmux) draftPane(ctx context.Context, window string) string {
-	r := t.tmux(ctx, "capture-pane", "-pJe", "-t", window)
+	r := t.tmux(ctx, "capture-pane", "-pJe", "-t", tmuxTarget(window))
 	if r.ExitCode == 0 && strings.TrimSpace(r.Stdout) != "" {
 		return stripDim(r.Stdout)
 	}
@@ -277,7 +299,7 @@ func (t *tmux) Status(ctx context.Context, slot, handle string) AgentStatus { re
 // presentUnknown.
 func (t *tmux) windowPID(ctx context.Context, handle string) (int, presence) {
 	session, name, _ := strings.Cut(handle, ":")
-	r := t.tmux(ctx, "list-windows", "-t", session, "-F", "#{window_name} #{pane_pid}")
+	r := t.tmux(ctx, "list-windows", "-t", tmuxTarget(session), "-F", "#{window_name} #{pane_pid}")
 	if r.ExitCode != 0 {
 		if strings.Contains(r.Stderr, "can't find session") || strings.Contains(r.Stderr, "no server running") {
 			return 0, presentGone
@@ -311,7 +333,7 @@ func (t *tmux) Kill(ctx context.Context, slot, handle string) error {
 	}
 	out, err := runKill(killSteps{
 		deps: &t.d, pids: pids, unverifiedBefore: before == presentUnknown,
-		close: func() error { t.tmux(ctx, "kill-window", "-t", handle); return nil },
+		close: func() error { t.tmux(ctx, "kill-window", "-t", tmuxTarget(handle)); return nil },
 		gone: func() presence {
 			_, p := t.windowPID(ctx, handle)
 			return p
@@ -359,22 +381,22 @@ var (
 // operator window is replaced, not stacked: a second ensure after an
 // interrupted run must not leave two operators.
 func (t *tmux) EnsureOperator(ctx context.Context, o OperatorOpts) error {
-	if t.tmux(ctx, "has-session", "-t", o.Session).ExitCode != 0 {
+	if t.tmux(ctx, "has-session", "-t", tmuxTarget(o.Session)).ExitCode != 0 {
 		if t.tmux(ctx, "new-session", "-d", "-s", o.Session, "-c", o.Root, "-n", "scratch").ExitCode != 0 {
 			return ErrOperatorSession
 		}
 	}
-	for _, name := range strings.Split(t.tmux(ctx, "list-windows", "-t", o.Session, "-F", "#{window_name}").Stdout, "\n") {
+	for _, name := range strings.Split(t.tmux(ctx, "list-windows", "-t", tmuxTarget(o.Session), "-F", "#{window_name}").Stdout, "\n") {
 		if name == "operator" {
-			t.tmux(ctx, "kill-window", "-t", o.Session+":operator")
+			t.tmux(ctx, "kill-window", "-t", tmuxTarget(o.Session+":operator"))
 			break
 		}
 	}
-	if t.tmux(ctx, "new-window", "-d", "-t", o.Session, "-n", "operator", "-c", o.Root).ExitCode != 0 {
+	if t.tmux(ctx, "new-window", "-d", "-t", tmuxTarget(o.Session), "-n", "operator", "-c", o.Root).ExitCode != 0 {
 		return ErrOperatorWindow
 	}
 	target := o.Session + ":operator"
-	if r := t.tmux(ctx, "send-keys", "-t", target, o.Command, "C-m"); r.ExitCode != 0 {
+	if r := t.tmux(ctx, "send-keys", "-t", tmuxTarget(target), o.Command, "C-m"); r.ExitCode != 0 {
 		return fmt.Errorf("tmux send-keys failed for the operator window: %s", strings.TrimSpace(r.Stderr))
 	}
 	if o.Instruction == "" {
