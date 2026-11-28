@@ -304,7 +304,7 @@ func setupSupport(c *Ctx, dir string, in *bufio.Reader, given map[string]string,
 	vals := map[string]string{}
 	out := jsonx.NewObject()
 	lines := []string{"support machine: answers go to .rota/config.local.json, this machine only"}
-	inherited := config.Load(c.deps().projectsEnv(), dir)
+	inherited := c.deps().Config(dir)
 	for _, p := range config.Prompts {
 		v, ok := answers[p.Key]
 		if !ok || (p.Optional && v == "") {
