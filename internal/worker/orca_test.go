@@ -197,16 +197,36 @@ func TestDispatchPreservesMaybeSubmittedEvidence(t *testing.T) {
 	}
 }
 
-// A not-submitted send is safe to resend on any host kind: a retry exit.
-func TestDispatchNotSubmittedIsRetryOnEveryKind(t *testing.T) {
-	for _, kind := range []host.Kind{host.Orca, host.Tmux} {
-		dir := gittest.Project(t, `{"round":{"dispatch":"orca","commands":{"claude":"claude --model haiku"}}}`)
-		goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
-		h := &fakeHost{name: kind, sendErr: fmt.Errorf("%w: cannot read brief", host.ErrNotSubmitted)}
-		_, err := envWith(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1"})
-		if exitOf(err) != 6 || !strings.Contains(err.Error(), "never picked up") {
-			t.Fatalf("%s: %v", kind, err)
-		}
+// A definite pre-input failure keeps both its retry exit and the host's
+// corrective action, rather than telling the operator to resend unchanged input.
+func TestDispatchNotSubmittedPreservesGuidance(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		kind   host.Kind
+		detail string
+	}{
+		{"oversize", host.Orca, "Orca brief is 122881 UTF-8 bytes; limit is 122880 bytes; shorten the brief before resending"},
+		{"not ready", host.Orca, "orca input is not ready; wait for the agent prompt in the Orca terminal, then retry"},
+		{"replaced Core program", host.HerdrCore, "Core worker program lost or replaced by a shell; recover/reassign"},
+		{"unreadable brief Orca", host.Orca, "cannot read brief"},
+		{"unreadable brief tmux", host.Tmux, "cannot read brief"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := gittest.Project(t, fmt.Sprintf(`{"round":{"dispatch":%q}}`, tc.kind))
+			goInit(t, dir, InitOpts{Slots: 1, Base: "main"})
+			sendErr := fmt.Errorf("%w: %s", host.ErrNotSubmitted, tc.detail)
+			h := &fakeHost{name: tc.kind, receipts: tc.kind == host.HerdrCore, sendErr: sendErr}
+			rig := &codexRig{loggedIn: true, missing: map[string]bool{"herdr": true}}
+			workerKind := harness.Claude
+			if tc.kind == host.HerdrCore {
+				workerKind = harness.Codex
+			}
+			_, err := rig.env(h).Dispatch(bg, dir, DispatchOpts{Slot: "w1", BodyFile: writeBrief(t, "brief"), Task: "T1", Kind: workerKind})
+			want := "slot 'w1': " + sendErr.Error()
+			if exitOf(err) != 6 || err.Error() != want {
+				t.Fatalf("dispatch = exit %d, %q; want exit 6, %q", exitOf(err), err, want)
+			}
+		})
 	}
 }
 

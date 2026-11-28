@@ -259,6 +259,7 @@ A fresh Core send that fails while checking the terminal, program, screen or
 readiness also reports not submitted. A prior delivery receipt keeps its existing
 delivery classification. Orca reports not submitted for oversize briefs, invalid
 handles, missing saved branches, failed pre-send reads and input that is not ready.
+Dispatch keeps these recovery details when it exits with code 6.
 Failures after the native send begins keep their existing delivery classification.
 
 The orchestrator does not run that itself. To keep a round moving while the

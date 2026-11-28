@@ -341,9 +341,12 @@ func sendFailure(h host.Host, slot string, res DispatchResult, sendErr error) (D
 		// after the prompt was accepted). Preserve that evidence instead of
 		// suggesting the brief was never sent.
 		return res, fail(exitcode.ExitUnavailable, fmt.Sprintf("slot '%s': %v", slot, sendErr))
+	case errors.Is(sendErr, host.ErrNotSubmitted) && sendErr != host.ErrNotSubmitted:
+		// Specific failures carry the corrective action needed before another attempt.
+		return res, fail(exitcode.ExitRetry, fmt.Sprintf("slot '%s': %v", slot, sendErr))
 	default:
-		// host.Send classifies every failure (host/sendclass.go), so this is
-		// ErrNotSubmitted; a Host double that returns a plain error keeps its cause.
+		// A bare not-submitted sentinel has no host-specific guidance.
+		// A Host double that returns a plain error keeps its cause.
 		cause := ""
 		if !errors.Is(sendErr, host.ErrNotSubmitted) {
 			cause = fmt.Sprintf(" (%v)", sendErr)
