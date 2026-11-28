@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/reap"
+	"github.com/l4ci/rota/internal/rotastate"
 	"github.com/l4ci/rota/internal/rotatree"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/skills"
@@ -54,6 +56,7 @@ func reapVerb(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
+		root = c.deps().reapRoot(c.Context(), root)
 		// An unreadable registry reads as an empty pool, which strips the
 		// shield from every slot worktree: refuse before listing or deleting.
 		if err := worker.CheckRegistry(root); err != nil {
@@ -132,6 +135,17 @@ func reapCandidateRows(found []reap.Candidate) (rows []any, lines []string) {
 		lines = append(lines, line)
 	}
 	return rows, lines
+}
+
+// reapRoot is the project reap and doctor's leftover count act on: the main
+// checkout when it holds .rota/, else root. The temp root is always the main
+// checkout's, and a linked worktree has a .rota/ without the gitignored slot
+// registry, so reading the registry there would hold no slot's temp dir.
+func (d *Deps) reapRoot(ctx context.Context, root string) string {
+	if main, ok, err := rotastate.MainCheckoutVia(ctx, d.Git, root); err == nil && ok && fsio.IsDir(rotatree.Dir(main)) {
+		return main
+	}
+	return root
 }
 
 // reapInput builds the one reap.Input both `rota reap` and `rota doctor` list
