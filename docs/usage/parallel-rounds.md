@@ -253,6 +253,12 @@ Use this flag alone, without a body file
 or other dispatch flags. Definite Core rejections, including `invalid_params`,
 report not submitted and allow a normal retry without confirmation.
 
+A fresh Core send that fails while checking the terminal, program, screen or
+readiness also reports not submitted. A prior delivery receipt keeps its existing
+delivery classification. Orca reports not submitted for oversize briefs, invalid
+handles, missing saved branches, failed pre-send reads and input that is not ready.
+Failures after the native send begins keep their existing delivery classification.
+
 The orchestrator does not run that itself. To keep a round moving while the
 maintainer has not answered, give the issue to another slot:
 
