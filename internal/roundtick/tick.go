@@ -12,9 +12,7 @@ package roundtick
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/l4ci/rota/internal/blockedby"
 	"github.com/l4ci/rota/internal/gate"
 	"github.com/l4ci/rota/internal/landing"
 	"github.com/l4ci/rota/internal/round"
@@ -865,24 +863,18 @@ func (e Env) assign(ctx context.Context, r *Result, minted []string, used int, t
 }
 
 // fillStops reads an assign refusal for what it means to the rest of the
-// tick's fill. A quota refusal is the cap showing through a pool the cap check
-// left open (Claude workers beside Codex logins): it says why. A gate or train
-// holding the land lock, or a batch that filled during this tick, stops every
-// later assign: true.
+// tick's fill and records why. true stops every later assign.
 func (e Env) fillStops(r *Result, err error) bool {
-	var blk *round.BlockedError
-	if !errors.As(err, &blk) {
-		return false
-	}
-	switch blk.By {
-	case blockedby.Quota:
+	scope, blk := scopeOf(err)
+	switch scope {
+	case scopeQuota:
 		if r.Capped == "" {
 			r.Capped = blk.Msg
 		}
-	case landing.GateRunning:
+	case scopeGate:
 		r.Deferred = "gate running, deferred: " + blk.Msg
 		return true
-	case blockedby.Batch:
+	case scopeBatch:
 		r.BatchFull = true
 		return true
 	}
@@ -962,12 +954,4 @@ func (q *pickQueue) unbundle(b round.Bundle, i int) {
 // bundleDetail names a bundle and the declared Touches that justified it.
 func bundleDetail(b round.Bundle) string {
 	return "bundle (+" + strings.Join(b.Members, ", +") + ") sharing " + strings.Join(b.Shared, ", ")
-}
-
-// isRefusal reports whether err is Assign declining without anything having
-// gone wrong: a *round.BlockedError other than "no round", which means the
-// autopilot has no round to work for.
-func isRefusal(err error) bool {
-	var blk *round.BlockedError
-	return errors.As(err, &blk) && blk.By != blockedby.NoRound
 }

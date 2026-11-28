@@ -2,12 +2,9 @@ package roundtick
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
-	"github.com/l4ci/rota/internal/blockedby"
-	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/worker"
 )
@@ -152,7 +149,7 @@ func (e Env) aheadOne(ctx context.Context, r *Result, q *pickQueue, s Slot, slot
 			if e.fillStops(r, err) {
 				return nil, nil, true, nil
 			}
-			if !itemRefusal(err) {
+			if scope, _ := scopeOf(err); scope != scopeItem {
 				return nil, nil, false, nil
 			}
 		default:
@@ -214,20 +211,4 @@ func samePR(a, b string) bool {
 	m, okA := worker.PRRefNumber(a)
 	n, okB := worker.PRRefNumber(b)
 	return okA && okB && m == n
-}
-
-// itemRefusal is an assign refusal about the item, not the slot: the next
-// item may still go to the same slot.
-func itemRefusal(err error) bool {
-	var blk *round.BlockedError
-	if !errors.As(err, &blk) {
-		return false
-	}
-	switch blk.By {
-	case blockedby.NotReady, blockedby.Overlap, blockedby.Claimed, blockedby.OpenPR, blockedby.OutOfScope,
-		blockedby.Bundle, blockedby.CrossMilestone, blockedby.HumanDecision, blockedby.StaleClaim,
-		blockedby.ClaimLost, blockedby.BriefMissing:
-		return true
-	}
-	return false
 }

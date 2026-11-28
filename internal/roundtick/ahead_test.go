@@ -165,7 +165,7 @@ func TestAssignAheadSkipsRelayedAndAwaitingReview(t *testing.T) {
 // A refusal leaves the slot a slot target: the tick goes on and gates it as
 // before. A slot-side refusal does not burn the other candidates.
 func TestAssignAheadRefusalKeepsSlotTarget(t *testing.T) {
-	for _, by := range []string{blockedby.SlotBusy, blockedby.Batch, blockedby.Quota, landing.GateRunning} {
+	for _, by := range []string{blockedby.SlotBusy, blockedby.NoLogin, blockedby.Draining, blockedby.Batch, blockedby.Quota, landing.GateRunning} {
 		t.Run(by, func(t *testing.T) {
 			f := &fake{
 				slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}},
@@ -193,29 +193,33 @@ func TestAssignAheadRefusalKeepsSlotTarget(t *testing.T) {
 	}
 }
 
-// A candidate-side refusal (the item is not ready after all) tries the next
-// candidate on the same slot.
-func TestAssignAheadCandidateRefusalTriesNext(t *testing.T) {
-	f := &fake{
-		slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}},
-		cands: []round.Candidate{cand("#5", true), cand("#6", true)},
-	}
-	f.aheadFn = func(_, id string) error {
-		if id == "#5" {
-			return &round.BlockedError{By: blockedby.NotReady, Msg: "claimed meanwhile"}
-		}
-		return nil
-	}
-	e := f.env()
-	f.withAhead(&e)
-	if _, err := Run(context.Background(), e); err != nil {
-		t.Fatal(err)
-	}
-	if want := []string{"#6->wolf"}; !reflect.DeepEqual(f.ahead, want) {
-		t.Fatalf("ahead %v, want %v", f.ahead, want)
-	}
-	if want := []string{"main:#11"}; !reflect.DeepEqual(f.gated, want) {
-		t.Fatalf("gated %v, want %v", f.gated, want)
+// #4465 AC-1: a refusal about the item tries the next candidate on the same
+// slot. A kind nothing classifies counts as one, so it cannot idle the slot.
+func TestAssignAheadItemRefusalTriesNext(t *testing.T) {
+	for _, by := range []string{blockedby.NotReady, blockedby.ModelLabel, blockedby.HarnessLabel, blockedby.BestOfSlots, "a kind added later"} {
+		t.Run(by, func(t *testing.T) {
+			f := &fake{
+				slots: []Slot{{Name: "wolf", State: "done", Issue: "#1", PR: "#11"}},
+				cands: []round.Candidate{cand("#5", true), cand("#6", true)},
+			}
+			f.aheadFn = func(_, id string) error {
+				if id == "#5" {
+					return &round.BlockedError{By: by, Msg: "refused"}
+				}
+				return nil
+			}
+			e := f.env()
+			f.withAhead(&e)
+			if _, err := Run(context.Background(), e); err != nil {
+				t.Fatal(err)
+			}
+			if want := []string{"#6->wolf"}; !reflect.DeepEqual(f.ahead, want) {
+				t.Fatalf("ahead %v, want %v", f.ahead, want)
+			}
+			if want := []string{"main:#11"}; !reflect.DeepEqual(f.gated, want) {
+				t.Fatalf("gated %v, want %v", f.gated, want)
+			}
+		})
 	}
 }
 
