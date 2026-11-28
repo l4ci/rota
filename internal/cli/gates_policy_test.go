@@ -137,7 +137,7 @@ var oldSupportAllowed = []string{
 	// Cycle bookkeeping: status.json and handoff (gitignored), claims and, on
 	// the file backend, item completion, which a support machine never reaches.
 	"rota ship finish", "rota work start",
-	"rota debug counter clear", "rota debug counter fail", "rota debug counter inc-cycle", "rota debug counter init", "rota debug counter pass",
+	"rota debug counter clear", "rota debug counter fail", "rota debug counter init", "rota debug counter pass",
 	"rota debug counter record-attempt", "rota debug reset", "rota debug session put", "rota debug session rm", "rota debug verdict",
 	"rota debug work-fix attempt", "rota debug work-fix pass", "rota debug work-fix reset",
 	"rota repo add", "rota repo rm",

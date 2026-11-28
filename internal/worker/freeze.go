@@ -123,7 +123,7 @@ func (e Env) freezeRecovery(ctx context.Context, root string, o FreezeOpts, r *l
 	}
 	vr, err = e.runE2E(ctx, in.cfg.E2E, root, in.ledger)
 	if err == nil {
-		err = e.recordFlakes(root, nil, nil, vr)
+		e.recordVerifyResult(root, nil, "", GateTarget{}, nil, vr, nil)
 	}
 	if err != nil {
 		return nil, err

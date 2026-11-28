@@ -371,10 +371,11 @@ shim: `attempt` is the `n` of the last attempt, read from the state file after t
 ### rota debug counter show
 rota debug counter show
 repo: none
-data: {"session": string, "bugId": string, "startedAt": string, "failedFixes": number, "hypothesisCycles": number, "attempts": [{"n": number, "startedAt": string, "hypothesis": string, "commit": string, "outcome": string, "endedAt"?: string}]}
+data: {"session": string, "bugId": string, "startedAt": string, "failedFixes": number, "attempts": [{"n": number, "startedAt": string, "hypothesis": string, "commit": string, "outcome": string, "endedAt"?: string}]}
 exit: 3 when the session has no state file (old: silent rc 1); 5 when not in a git repository
 old: hv-debug-counter show
 shim: parses the raw file JSON and renames keys to camelCase. Text mode prints the state file verbatim (snake_case), as before.
+note: a state file written by an older `rota` may hold `hypothesis_cycles`. It loads, `data` leaves it out and nothing reads it. The `inc-cycle` verb that wrote it is gone (#4420).
 
 ### rota debug counter summary
 rota debug counter summary
@@ -392,14 +393,6 @@ data: {"changed": bool}
 exit: 5 when not in a git repository
 old: hv-debug-counter clear
 shim: `changed` is false when no state file existed. `clear` stays idempotent.
-
-### rota debug counter inc-cycle
-rota debug counter inc-cycle
-repo: none
-data: {"hypothesisCycles": number, "changed": true}
-exit: 3 when the session has no state file; 5 when not in a git repository
-old: hv-debug-counter inc-cycle
-shim: stdout (the new count) becomes `hypothesisCycles`.
 
 ### rota debug session put
 rota debug session put <slug> --body-file <path|->

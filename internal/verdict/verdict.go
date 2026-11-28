@@ -640,6 +640,17 @@ func (c counter) count(list []Record) int {
 // debug-reset record.
 func FailedFixes(list []Record) int { return debugCounter.count(list) }
 
+// DebugFails counts every failed debug-fix record in list, resets or not.
+func DebugFails(list []Record) int {
+	n := 0
+	for _, r := range list {
+		if debugCounter.failed(r) {
+			n++
+		}
+	}
+	return n
+}
+
 // WorkFixAttempts counts an item's work-fix attempts since the latest
 // work-fix PASS or work-fix-reset record.
 func WorkFixAttempts(list []Record) int { return workCounter.count(list) }

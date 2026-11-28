@@ -58,7 +58,6 @@ func (c *Counter) def() *jsonx.Object {
 	o.Set("bug_id", "")
 	o.Set("started_at", "")
 	o.Set("failed_fixes", 0)
-	o.Set("hypothesis_cycles", 0)
 	o.Set("attempts", []any{})
 	return o
 }
@@ -186,20 +185,6 @@ func (c *Counter) Pass() (int, error) {
 	return n, err
 }
 
-// IncCycle bumps hypothesis_cycles and returns the new value.
-func (c *Counter) IncCycle() (int, error) {
-	if err := c.require(); err != nil {
-		return 0, err
-	}
-	n := 0
-	err := c.update(func(o *jsonx.Object) error {
-		n = intOf(mustGet(o, "hypothesis_cycles")) + 1
-		o.Set("hypothesis_cycles", n)
-		return nil
-	})
-	return n, err
-}
-
 // Clear removes the state file; false when there was none.
 func (c *Counter) Clear() (bool, error) {
 	err := os.Remove(c.Path)
@@ -238,12 +223,11 @@ const outcomePending = "pending"
 // Session is a typed snapshot of the state file. Callers read it instead of
 // the file's snake_case keys.
 type Session struct {
-	Session          string
-	BugID            string
-	StartedAt        string
-	FailedFixes      int
-	HypothesisCycles int
-	Attempts         []Attempt
+	Session     string
+	BugID       string
+	StartedAt   string
+	FailedFixes int
+	Attempts    []Attempt
 
 	raw *jsonx.Object // the file as stored
 }
@@ -265,12 +249,11 @@ func (c *Counter) Load() (*Session, error) {
 	o := asObj(fsio.LoadJSON(c.Path, c.def()))
 	str := func(o *jsonx.Object, k string) string { s, _ := mustGet(o, k).(string); return s }
 	s := &Session{
-		Session:          str(o, "session"),
-		BugID:            str(o, "bug_id"),
-		StartedAt:        str(o, "started_at"),
-		FailedFixes:      intOf(mustGet(o, "failed_fixes")),
-		HypothesisCycles: intOf(mustGet(o, "hypothesis_cycles")),
-		raw:              o,
+		Session:     str(o, "session"),
+		BugID:       str(o, "bug_id"),
+		StartedAt:   str(o, "started_at"),
+		FailedFixes: intOf(mustGet(o, "failed_fixes")),
+		raw:         o,
 	}
 	for _, av := range attemptsOf(o) {
 		a := asObj(av)
@@ -315,7 +298,7 @@ func (s *Session) Show() *jsonx.Object {
 		return d
 	}
 	d := pick(s.raw, [][2]string{{"session", "session"}, {"bug_id", "bugId"}, {"started_at", "startedAt"},
-		{"failed_fixes", "failedFixes"}, {"hypothesis_cycles", "hypothesisCycles"}})
+		{"failed_fixes", "failedFixes"}})
 	atts := []any{}
 	for _, a := range s.Attempts {
 		atts = append(atts, pick(a.raw, [][2]string{{"n", "n"}, {"started_at", "startedAt"}, {"hypothesis", "hypothesis"},

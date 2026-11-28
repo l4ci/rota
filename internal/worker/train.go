@@ -229,10 +229,10 @@ func (t *trainRun) isAncestor(dir, ancestor, descendant string) (bool, error) {
 
 // The ledger's lease lookup still takes an Env. Bind only this bookkeeping
 // call; tracker factories keep the context captured during construction.
-func (t *trainRun) recordVerification(tier string, prs []string, vr VerifyResult) {
+func (t *trainRun) verificationEnv() Env {
 	book := t.e
 	book.Ctx = t.ctx
-	book.recordVerification(t.root, t.o.Round, tier, GateTarget{}, prs, vr)
+	return book
 }
 
 // trainPlan pins the refs and scratch prefixes built by planning. It is the
@@ -969,10 +969,7 @@ func (t *trainRun) verifyStage(p trainPlan, result landing.TrainResult) (trainVe
 		res: res, cache: t.cache, ctx: ctx, baseSHA: baseSHA, heads: p.heads, tips: p.tips, n: n,
 		phase: t.phase, passing: n, onFailStop: o.OnFail == OnFailStop,
 		record: func(tier string, prs []string, r VerifyResult) error {
-			t.recordVerification(tier, prs, r)
-			if err := e.recordFlakes(t.root, o.Round, prs, r); err != nil {
-				res.Notes = append(res.Notes, "WARNING "+err.Error())
-			}
+			t.verificationEnv().recordVerifyResult(t.root, o.Round, tier, GateTarget{}, prs, r, &res.Notes)
 			return nil
 		},
 		stop:  func(tier string, failed VerifyResult) { t.stopTrain(res, p, tier, baseSHA, failed) },
@@ -1344,11 +1341,7 @@ func (t *trainRun) rerunRed(p trainPlan, res *landing.TrainResult, tier string, 
 		res.Flaky = append(res.Flaky, entry)
 		res.Notes = append(res.Notes, flakeNote(entry))
 	}
-	// A ledger that cannot be written is a warning: the flake is real and the
-	// verdict stands (#4244).
-	if err := e.recordFlakes(t.root, t.o.Round, prs, VerifyResult{Flaky: entries}); err != nil {
-		res.Notes = append(res.Notes, "WARNING "+err.Error())
-	}
+	e.recordVerifyResult(t.root, t.o.Round, "", GateTarget{}, prs, VerifyResult{Flaky: entries}, &res.Notes)
 	res.Verdict, res.Unreproduced = landing.GateVerifyFailed, true
 	res.Err = fmt.Sprintf("TRAIN-FAIL flaky — the train failed %s, then passed on a re-run of the same tree (%s); a flake, no bisect, no culprit, nothing landed\n%s",
 		tier, strings.Join(failed.Failed, "; "), failed.detail())
@@ -1679,7 +1672,7 @@ func (t *trainRun) verifyLanded(p trainPlan, res *landing.TrainResult) (bool, er
 	if tier == "" {
 		tier = tierFull
 	}
-	t.recordVerification(tier, landedPRs(res), full)
+	t.verificationEnv().recordVerification(t.root, t.o.Round, tier, GateTarget{}, landedPRs(res), full)
 	if err != nil {
 		return true, err
 	}
@@ -1693,8 +1686,7 @@ func (t *trainRun) verifyLanded(p trainPlan, res *landing.TrainResult) (bool, er
 	if full.OK() {
 		e2e, err := t.e.runE2E(t.ctx, p.in.cfg.E2E, t.root, p.in.ledger)
 		if err == nil {
-			t.recordVerification(tierE2E, landedPRs(res), e2e)
-			err = t.e.recordFlakes(t.root, t.o.Round, landedPRs(res), e2e)
+			t.verificationEnv().recordVerifyResult(t.root, t.o.Round, tierE2E, GateTarget{}, landedPRs(res), e2e, &res.Notes)
 		}
 		if err != nil {
 			return true, err

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/l4ci/rota/internal/backlog"
@@ -14,6 +13,7 @@ import (
 	"github.com/l4ci/rota/internal/jsonx"
 	"github.com/l4ci/rota/internal/repos"
 	"github.com/l4ci/rota/internal/status"
+	"github.com/l4ci/rota/internal/verdict"
 )
 
 const (
@@ -120,7 +120,11 @@ func shipFinish(fs *flag.FlagSet) RunFunc {
 		completed, _ := items.Get("completed")
 		done := removed > 0 || swept || len(completed.([]string)) > 0
 
-		sig := cycle.Signals{Items: len(info.IDs), Files: len(info.Files), DebugCycles: finishDebugCycles(c, info.IDs)}
+		cycles, err := finishDebugCycles(c, root, info.IDs)
+		if err != nil {
+			return Result{}, err
+		}
+		sig := cycle.Signals{Items: len(info.IDs), Files: len(info.Files), DebugCycles: cycles}
 		cfg := c.projectConfig(root)
 		learn := finishGate(cycle.Gate(sig), done)
 		learnObj := jsonx.NewObject()
@@ -233,18 +237,29 @@ func finishItems(c *Ctx, root string, ids []string, commit string) (*jsonx.Objec
 	return o, unproven, nil
 }
 
-// finishDebugCycles is the open debug session's hypothesis cycles when its bug
-// is one of ids, else 0.
-func finishDebugCycles(c *Ctx, ids []string) int {
-	ctr, err := openCounter(c)
+// finishDebugCycles is the most failed debug verdicts recorded for any one of
+// ids. The verdict store outlives the session /rota-debug clears before ship.
+// A debug-reset does not hide earlier failures: they happened.
+func finishDebugCycles(c *Ctx, root string, ids []string) (int, error) {
+	issue, err := c.issueBackend(root)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	st, err := ctr.Load()
-	if err != nil || st.BugID == "" || !slices.Contains(ids, st.BugID) {
-		return 0
+	s := verdict.Load(root)
+	if issue {
+		verdict.Canonicalize(&s, debugKeys(root))
 	}
-	return st.HypothesisCycles
+	most := 0
+	for _, id := range ids {
+		// A tracker ref is "#9"; the store key is "9".
+		if issue {
+			if keys := debugKeys(root)(id); len(keys) == 1 {
+				id = keys[0]
+			}
+		}
+		most = max(most, verdict.DebugFails(s.Items[id]))
+	}
+	return most, nil
 }
 
 // finishRelease is the release nudge: fires when `rota release pending` has
