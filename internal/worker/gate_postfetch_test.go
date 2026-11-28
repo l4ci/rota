@@ -61,7 +61,7 @@ func TestGatePostMergeFetchFailureIsLandedNotBroken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Verdict != landing.GateMergedRemotely || !res.Changed || !res.VerifySkipped || res.SHA == "" {
+	if res.Verdict != landing.GateMergedRemotely || !res.Changed || !res.VerifySkipped || res.SHA == "" || res.MergeCommit != res.SHA {
 		t.Fatalf("verdict=%s changed=%v verifySkipped=%v sha=%q: %s", res.Verdict, res.Changed, res.VerifySkipped, res.SHA, res.Err)
 	}
 	if fetches != gateFetchTries {

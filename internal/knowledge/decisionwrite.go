@@ -114,7 +114,7 @@ func (s Store) changeDecisions(change func(string) (string, error)) (bool, error
 			err = nil
 		}
 		if err != nil {
-			return err
+			return fsio.Unreadable(err)
 		}
 		next, err := change(string(raw))
 		if err != nil {

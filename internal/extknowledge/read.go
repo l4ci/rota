@@ -61,7 +61,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil, fmt.Errorf("%w: %s has no %s", ErrNotFound, c.Dir, c.indexName())
 		}
-		return nil, nil, fsio.Unreadable(err)
+		return nil, nil, err
 	}
 	var roots []Topic
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -95,7 +95,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 	for _, t := range roots {
 		body, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(t.File)))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, bad, fsio.Unreadable(err)
+			return nil, bad, err
 		}
 		if err == nil {
 			if t.Split {
@@ -109,7 +109,7 @@ func (c Clone) scan() ([]Topic, []string, error) {
 					st := &t.Subtopics[i]
 					sb, err := c.readRegular(filepath.Join(c.Dir, filepath.FromSlash(st.File)))
 					if err != nil && !errors.Is(err, os.ErrNotExist) {
-						return nil, bad, fsio.Unreadable(err)
+						return nil, bad, err
 					}
 					if err == nil {
 						st.Bullets = bulletCount(string(sb))
@@ -292,8 +292,17 @@ func (c Clone) Policy() (Policy, error) {
 
 // readRegular reads a clone file, refusing a non-regular file and any path
 // whose symlinks resolve outside the clone, so a hostile knowledge repo cannot
-// point a topic (or the topics directory) at a file elsewhere.
+// point a topic (or the topics directory) at a file elsewhere. Every failure
+// but a missing file is marked fsio.Unreadable.
 func (c Clone) readRegular(p string) ([]byte, error) {
+	b, err := c.readInside(p)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fsio.Unreadable(err)
+	}
+	return b, err
+}
+
+func (c Clone) readInside(p string) ([]byte, error) {
 	fi, err := os.Lstat(p)
 	if err != nil {
 		return nil, err

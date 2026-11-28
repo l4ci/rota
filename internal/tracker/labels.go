@@ -335,5 +335,5 @@ func labelMetadata(name string, entries []labels.Entry) (Label, bool) {
 	if entries == nil {
 		return labels.Lookup(name, nil)
 	}
-	return labels.Find(entries, name)
+	return labels.Find(entries, name, nil)
 }

@@ -399,7 +399,7 @@ func LoadSummaryInputs(root string, items []Item, fileMode bool) (SummaryInputs,
 		name string
 		dst  *string
 	}{{rotatree.KnowledgeFile, &in.Knowledge}, {rotatree.DecisionsFile, &in.Decisions}, {rotatree.ArchiveFile, &in.Archive}} {
-		text, err := fsio.ReadText(rotatree.File(root, r.name))
+		text, err := fsio.ReadUserText(rotatree.File(root, r.name))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return SummaryInputs{}, err
 		}

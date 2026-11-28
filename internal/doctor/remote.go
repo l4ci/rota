@@ -133,6 +133,7 @@ func scanLabels(ctx context.Context, cfg any, get func() (Tracker, error)) *Labe
 		return state
 	}
 	_, state.Metadata = tr.(tracker.LabelManager)
+	state.Matcher = tracker.LabelsFor(tr)
 	state.Existing, err = lister.ListLabels(ctx)
 	if err != nil {
 		state.Problem = err.Error()

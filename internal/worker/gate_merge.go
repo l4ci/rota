@@ -54,6 +54,7 @@ func (runner gateRun) stepMerge(result landing.GateResult, target GateTarget, fo
 	} else {
 		g.res.SHA = strutil.ShortSHA(g.landed)
 	}
+	g.res.MergeCommit = g.res.SHA
 	return finish(false, nil)
 }
 
@@ -76,6 +77,7 @@ func (g *gateRun) mergeLocal(dir string) (sha string, done bool) {
 		if dir == g.root {
 			g.res.Changed = true
 			g.res.SHA = strutil.ShortSHA(sha)
+			g.res.MergeCommit = g.res.SHA
 		}
 		g.broke(err.Error())
 		return sha, true
@@ -170,6 +172,7 @@ func (g *gateRun) confirmLanded(sha string) (done bool) {
 		// The forge already reports the PR merged: it landed, only unconfirmed here.
 		g.res.Changed, g.res.VerifySkipped = true, true
 		g.res.SHA = strutil.ShortSHA(sha)
+		g.res.MergeCommit = g.res.SHA
 		g.verdict(landing.GateMergedRemotely,
 			fmt.Sprintf("MERGED-REMOTELY %s — PR %s is merged into %s on the forge, but git fetch %s failed %d times after merging (%s); do not re-merge, reconcile %s by hand", o.Slot, g.prNum, o.Base, g.rem(), gateFetchTries, cause, o.Base),
 			fmt.Sprintf("the merged tree was NOT verified: once %s answers, fetch it, fast-forward the local %s to %s, then run the full gate on %s", g.rem(), o.Base, g.baseRef, o.Base))
@@ -187,6 +190,7 @@ func (g *gateRun) confirmLanded(sha string) (done bool) {
 	g.res.Changed = true
 	if len(sha) >= 7 {
 		g.res.SHA = strutil.ShortSHA(sha) // the merge that landed on origin, for the merged-remotely verdicts
+		g.res.MergeCommit = g.res.SHA
 	}
 	if out, code := g.git(g.root, "merge", "--ff-only", g.baseRef); code != 0 {
 		g.mergedRemotely(fmt.Sprintf("local %s could not fast-forward (%s)", o.Base, g.ffFailureCause(out)))

@@ -44,12 +44,12 @@ func UmbrellaOnlyBlock(key string) bool { return blockKinds[key].umbrellaOnly }
 // instructions file. A missing source file just yields no topics.
 func (s Store) BlockInputs(key, scope string) (topics []string, target string, err error) {
 	topicsOf := func(path string) ([]string, error) {
-		raw, err := fsio.ReadText(path)
+		raw, err := fsio.ReadUserText(path)
 		if os.IsNotExist(err) {
 			return nil, nil
 		}
 		if err != nil {
-			return nil, fsio.Unreadable(err)
+			return nil, err
 		}
 		text := raw
 		topics := section.Topics(text)

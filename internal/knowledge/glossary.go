@@ -243,7 +243,7 @@ func (s Store) glossaryTarget(scope string) (path, text string, start, end int, 
 	if err != nil {
 		return
 	}
-	raw, rerr := fsio.ReadText(path)
+	raw, rerr := fsio.ReadUserText(path)
 	if rerr != nil {
 		if os.IsNotExist(rerr) {
 			err = notFound("%s missing — run rota init first", path)
@@ -432,7 +432,7 @@ func (s Store) GlossaryRead(scope string, terms []string) (string, []string, err
 	printed := false
 	matched := map[string]bool{}
 	for _, sc := range srcs {
-		raw, err := fsio.ReadText(sc.path)
+		raw, err := fsio.ReadUserText(sc.path)
 		if os.IsNotExist(err) {
 			continue
 		}

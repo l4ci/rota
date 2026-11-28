@@ -1,6 +1,7 @@
 package fsio
 
 import (
+	"errors"
 	"os"
 
 	"github.com/l4ci/rota/internal/pystr"
@@ -16,4 +17,14 @@ func ReadText(path string) (string, error) {
 		return "", err
 	}
 	return pystr.UniversalNewlines(string(b)), nil
+}
+
+// ReadUserText is ReadText for a file the user keeps: any failure but a
+// missing file is marked Unreadable. A missing file's error is returned as is.
+func ReadUserText(path string) (string, error) {
+	t, err := ReadText(path)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", Unreadable(err)
+	}
+	return t, err
 }

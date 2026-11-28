@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/l4ci/rota/internal/fsio"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/strutil"
 )
@@ -163,6 +165,9 @@ func (c Clone) syncForWrite(ctx context.Context) error {
 		return err
 	}
 	if d {
+		if err := c.unreadable(); err != nil {
+			return err
+		}
 		return fmt.Errorf("%w: commit or discard them in %s first", ErrDirty, c.Dir)
 	}
 	r := c.fetchAndFastForward(ctx, true)
@@ -173,6 +178,19 @@ func (c Clone) syncForWrite(ctx context.Context) error {
 		return fmt.Errorf("%w: reconcile %s by hand first", ErrDiverged, c.Dir)
 	}
 	return r.err
+}
+
+// unreadable is the first clone file a write needs that cannot be read: git
+// reports such a file as an uncommitted change, which is not what to fix.
+func (c Clone) unreadable() error {
+	_, err := c.walk(nil, true)
+	if err == nil {
+		_, err = c.Policy()
+	}
+	if errors.Is(err, fsio.ErrUnreadable) {
+		return err
+	}
+	return nil
 }
 
 type refreshProblem uint8

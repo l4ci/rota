@@ -8,7 +8,7 @@ import (
 )
 
 func TestOnHoldSyncDefinition(t *testing.T) {
-	for _, change := range Diff(Resolve(nil), nil, nil, true) {
+	for _, change := range Diff(Resolve(nil), nil, nil, true, nil) {
 		if change.Label.Name == "on-hold" {
 			if change.Kind != Missing || change.Label.Description == "" || change.Label.Color == "" {
 				t.Fatalf("hold sync metadata: %+v", change)
@@ -33,13 +33,13 @@ func TestResolveOverridesAndOpenPrefixes(t *testing.T) {
 	settings["issues.labels.needsHuman"] = ""
 	entries := Resolve(func(k string) string { return settings[k] })
 	for _, name := range []string{"doing", "priority/0", "priority/3", "effort/Major", "claimed:dana@main", "model:custom", "machine:mac"} {
-		l, ok := Find(entries, name)
+		l, ok := Find(entries, name, nil)
 		if !ok || l.Description == "" || l.Color == "" {
 			t.Errorf("%s has no resolved metadata: %+v", name, l)
 		}
 	}
 	for _, name := range []string{InProgress, "p0", "size:Major", NeedsHuman, ClaimPrefix, "harness:unknown", LegacySupport} {
-		if _, ok := Find(entries, name); ok {
+		if _, ok := Find(entries, name, nil); ok {
 			t.Errorf("unexpected recognized label %q", name)
 		}
 	}
@@ -64,7 +64,7 @@ func TestDiffBucketsAndExtras(t *testing.T) {
 		{Name: LegacySupport}, {Name: "unrelated"},
 		{Name: "area:cli", Description: "Command-line behavior.", Color: "#C5DEF5"},
 	}
-	changes := Diff(entries, have, used, true)
+	changes := Diff(entries, have, used, true, nil)
 	want := map[string]string{NeedsReview: Metadata, "claimed:active@main": Metadata, "claimed:gone@main": UnusedClaim, "bug": DefaultOverlap, "enhancement": DefaultOverlap, "documentation": DefaultOverlap, LegacySupport: Unknown, "unrelated": Unknown, InProgress: Missing}
 	for _, c := range changes {
 		if c.Label.Name == "area:cli" {
@@ -83,7 +83,7 @@ func TestDiffBucketsAndExtras(t *testing.T) {
 	if len(want) != 0 {
 		t.Errorf("missing findings: %v", want)
 	}
-	for _, c := range Diff(entries, have, used, false) {
+	for _, c := range Diff(entries, have, used, false, nil) {
 		if c.Kind == Metadata {
 			t.Error("name-only tracker compared metadata")
 		}
@@ -102,7 +102,7 @@ func TestDiffBucketsAndExtras(t *testing.T) {
 	for _, l := range byName {
 		repaired = append(repaired, l)
 	}
-	for _, c := range Diff(entries, repaired, used, true) {
+	for _, c := range Diff(entries, repaired, used, true, nil) {
 		if c.Kind == Missing || c.Kind == Metadata {
 			t.Errorf("repair not idempotent: %+v", c)
 		}
@@ -121,11 +121,11 @@ func TestReferencePageIsCurrent(t *testing.T) {
 
 func TestMilestoneMergeLabelRegistry(t *testing.T) {
 	entries := Resolve(nil)
-	label, ok := Find(entries, "on-milestone/M01")
+	label, ok := Find(entries, "on-milestone/M01", nil)
 	if !ok || label.Description == "" || label.Color != "0052cc" {
 		t.Fatalf("milestone merge label is absent or undescribed: %+v, %v", label, ok)
 	}
-	for _, change := range Diff(entries, []Label{{Name: "on-milestone/M01"}}, nil, true) {
+	for _, change := range Diff(entries, []Label{{Name: "on-milestone/M01"}}, nil, true, nil) {
 		if change.Label.Name == "on-milestone/M01" && change.Kind != Metadata {
 			t.Fatalf("milestone merge label classified as %s", change.Kind)
 		}
