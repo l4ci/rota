@@ -67,3 +67,58 @@ func TestRemove(t *testing.T) {
 		})
 	}
 }
+
+// A replace that strips a bold title drops its tier record and buffered hits,
+// so a later bullet of that title starts provisional.
+func TestReplaceRemovingTheTitleDropsTheTierRecord(t *testing.T) {
+	s := lockedStore(t)
+	writeBullets(t, s, "## A\n\n- **Gone** — body\n")
+	if _, err := s.TierSet("", "A", "Gone", Deprecated); err != nil {
+		t.Fatal(err)
+	}
+	// Buffered: it must not recreate the record on a later fold.
+	if _, err := s.Hit("", "A", "Gone"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Replace("", "A", "**Gone**", "Gone"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FoldHits(""); err != nil {
+		t.Fatal(err)
+	}
+	sc, err := LoadSidecar(mustTier(t, s))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, ok, _ := sc.Get("A", "Gone"); ok {
+		t.Fatalf("tier record survived: %+v", e)
+	}
+	if _, err := s.Add("", "A", "Gone", "again", "2026-01-01", ""); err != nil {
+		t.Fatal(err)
+	}
+	e, _, err := s.TierGet("", "A", "Gone")
+	if err != nil || e.Tier != Provisional || e.Hits != 0 {
+		t.Fatalf("later bullet = %+v, %v; want provisional with no hits", e, err)
+	}
+}
+
+// A twin already on disk still holds the title, so the record stays.
+func TestReplaceKeepsTheTierRecordATwinStillHolds(t *testing.T) {
+	s := lockedStore(t)
+	writeBullets(t, s, "## A\n\n- **One** — a\n- **One** — b\n")
+	km, _ := s.KnowledgePath("")
+	sc, _ := s.TierPath("")
+	if err := os.WriteFile(sc, []byte(`{"version":1,"entries":{"A::One":{"tier":"confirmed","hits":1,"lastSeen":"2026-01-01"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Replace("", "A", "**One** — a", "plain"); err != nil {
+		t.Fatalf("%v:\n%s", err, mustRead(t, km))
+	}
+	got, err := LoadSidecar(sc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e, ok, _ := got.Get("A", "One"); !ok || e.Tier != Confirmed {
+		t.Errorf("twin lost its record: %+v ok=%v", e, ok)
+	}
+}
