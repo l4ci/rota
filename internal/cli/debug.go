@@ -175,8 +175,7 @@ func openCounter(c *Ctx) (*debugctr.Counter, error) {
 	return ctr, err
 }
 
-// itemFailedFixes is the count that halts bug, the one the refusal and the
-// halt note both report.
+// itemFailedFixes is the count that halts bug.
 func itemFailedFixes(root, bug string) int {
 	return verdict.FailedFixes(verdict.Load(root).Items[bug])
 }
@@ -379,17 +378,11 @@ func runCounterSummary(c *Ctx, args []string) (Result, error) {
 	// A file without a bug_id names no item, so its own count is all there is.
 	failed := st.FailedFixes
 	if st.BugID != "" {
-		id, err := debugItem(c, st.BugID)
-		if err != nil {
-			return backlogFail(err)
+		if failed, err = debugReadCount(c, st.BugID); err != nil {
+			return backlogFailRead(err)
 		}
-		root, err := c.Root()
-		if err != nil {
-			return Result{}, err
-		}
-		failed = itemFailedFixes(root, id)
 	}
-	md, bug := st.Summary(failed)
+	md, bug := st.Summary(failed, failed >= verdict.IronLaw)
 	d := jsonx.NewObject()
 	d.Set("bugId", bug)
 	d.Set("failedFixes", failed)

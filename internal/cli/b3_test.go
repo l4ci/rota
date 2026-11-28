@@ -322,5 +322,5 @@ func TestCounterSummaryReportsTheItemCount(t *testing.T) {
 		t.Fatalf("reset: exit %d %s", code, se)
 	}
 	fail()
-	summary(1, "1 fix attempt failed")
+	summary(1, "Failed fixes recorded for this item: 1.")
 }

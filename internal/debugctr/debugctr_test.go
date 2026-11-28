@@ -96,12 +96,12 @@ func TestSummaryBytes(t *testing.T) {
 	c.RecordAttempt(long, "abc")
 	c.Fail()
 	st, _ := c.Load()
-	md, bug := st.Summary(1)
+	md, bug := st.Summary(3, true)
 	trunc := ""
 	for i := 0; i < 117; i++ {
 		trunc += "é"
 	}
-	want := "# Iron Law triggered for [B07]\n\n1 fix attempt failed to resolve the bug. Halting.\n\n## Attempts\n\n1. abc — " + trunc + "...\n\n## Next steps\n\n" +
+	want := "# Iron Law triggered for [B07]\n\n3 fix attempts failed to resolve the bug. Halting.\n\n## Attempts\n\n1. abc — " + trunc + "...\n\n## Next steps\n\n" +
 		"- Run `/rota-pause` to leave a handoff note and step away.\n" +
 		"- Or re-read the symptom — the root cause is likely in a different subsystem than the hypotheses so far have explored.\n" +
 		"- The failed-fix count is per item and survives a new branch; only `rota debug reset B07`, after a human approves it, starts it again."
@@ -245,7 +245,7 @@ func TestLoadPartialFile(t *testing.T) {
 	if _, ok := att.Get("commit"); ok {
 		t.Error("show emitted commit for an attempt without one")
 	}
-	md, bug := s.Summary(2)
+	md, bug := s.Summary(2, false)
 	if bug != "?" || !strings.Contains(md, "1. unknown — h") {
 		t.Errorf("fallbacks: %q\n%s", bug, md)
 	}

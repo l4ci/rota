@@ -88,7 +88,7 @@ func TestDebugCounterLifecycle(t *testing.T) {
 	}
 	code, out, _ = rotaIn(t, dir, "debug", "counter", "summary", "--json")
 	md, _ := data(t, out)["markdown"].(string)
-	if code != 0 || !strings.Contains(md, "2. def — h2") {
+	if code != 0 || !strings.Contains(md, "2. def — h2") || strings.Contains(md, "Halting") || strings.Contains(md, "Iron Law triggered") {
 		t.Errorf("summary: %d %q", code, md)
 	}
 	_, out, _ = rotaIn(t, dir, "debug", "counter", "show", "--json")

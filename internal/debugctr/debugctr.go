@@ -325,10 +325,11 @@ func (s *Session) Show() *jsonx.Object {
 	return d
 }
 
-// Summary is the Iron Law halt note. failed is the item's failed-fix count,
-// which the caller owns: the session holds only this branch's attempts. The
-// caller also decides what an empty attempt list means.
-func (s *Session) Summary(failed int) (md, bugID string) {
+// Summary is the Iron Law halt note. failed is the item's failed-fix count and
+// halted whether it reaches the Iron Law, both the caller's: the session holds
+// only this branch's attempts. Below the law the note does not claim a halt.
+// The caller also decides what an empty attempt list means.
+func (s *Session) Summary(failed int, halted bool) (md, bugID string) {
 	bugID = "?"
 	if v, ok := s.raw.Get("bug_id"); ok {
 		bugID, _ = v.(string)
@@ -337,10 +338,16 @@ func (s *Session) Summary(failed int) (md, bugID string) {
 	if failed == 1 {
 		plural = ""
 	}
+	title := "# Iron Law triggered for [" + bugID + "]"
+	count := strconv.Itoa(failed) + " fix attempt" + plural + " failed to resolve the bug. Halting."
+	if !halted {
+		title = "# Fix attempts for [" + bugID + "]"
+		count = "Failed fixes recorded for this item: " + strconv.Itoa(failed) + ". The Iron Law has not halted it."
+	}
 	lines := []string{
-		"# Iron Law triggered for [" + bugID + "]",
+		title,
 		"",
-		strconv.Itoa(failed) + " fix attempt" + plural + " failed to resolve the bug. Halting.",
+		count,
 		"",
 		"## Attempts",
 		"",

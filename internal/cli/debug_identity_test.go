@@ -5,11 +5,14 @@ import (
 	"github.com/l4ci/rota/internal/gittest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/l4ci/rota/internal/backlog"
 	"github.com/l4ci/rota/internal/debugctr"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/tracker"
 	"github.com/l4ci/rota/internal/verdict"
 )
 
@@ -161,6 +164,53 @@ func TestDebugLegacyHistoryBeyondCap(t *testing.T) {
 		t.Fatalf("reset lost failures: %v", d)
 	}
 	debugIssueRun(t, deps, root, 0, "counter", "init", "9")
+}
+
+// The halt note is a read: a tracker that is down must not lose it, and it
+// must not move legacy keys in the store (#4419).
+func TestCounterSummaryIsReadOnlyAndSurvivesTrackerFailure(t *testing.T) {
+	root := verdictRepo(t)
+	if err := os.WriteFile(filepath.Join(root, ".rota", "config.json"), []byte(issuesConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctr, err := debugctr.Open(root, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctr.Init("#9"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctr.RecordAttempt("h", "abc"); err != nil {
+		t.Fatal(err)
+	}
+	b3Fails(t, root, "9", 2)
+	b3Fails(t, root, "B09", 1)
+	before, err := os.ReadFile(verdict.Path(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	down := issueFixture()
+	down.Fail = map[string]error{"get": &tracker.Error{Kind: tracker.KindUnavailable, Message: "forge\nis down"}}
+	for name, c := range map[string]struct {
+		tr   backlog.Tracker
+		warn bool
+	}{"up": {issueFixture(), false}, "down": {down, true}} {
+		code, env, stderr := rotaRunWith(t, withTracker(t, c.tr), "--json", "-C", root, "debug", "counter", "summary")
+		if code != 0 {
+			t.Fatalf("%s: exit %d: %s", name, code, stderr)
+		}
+		d := issueData(t, env)
+		md, _ := issueGet(d, "markdown").(string)
+		if issueGet(d, "failedFixes") != json.Number("3") || !strings.Contains(md, "3 fix attempts failed") {
+			t.Errorf("%s: %v\n%s", name, issueGet(d, "failedFixes"), md)
+		}
+		if warned := strings.Count(stderr, "\n") == 1 && strings.Contains(stderr, "warning: tracker read failed"); warned != c.warn {
+			t.Errorf("%s: stderr %q", name, stderr)
+		}
+		if after, _ := os.ReadFile(verdict.Path(root)); string(after) != string(before) {
+			t.Errorf("%s: summary rewrote the store:\n%s", name, after)
+		}
+	}
 }
 
 var testNow = time.Date(2026, 3, 4, 9, 5, 6, 0, time.UTC)
