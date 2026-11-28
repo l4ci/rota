@@ -101,7 +101,11 @@ func (b landingBook) Targets(root string, args []string) (map[string]postgate.Ga
 	}
 	return out, nil
 }
-func (b landingBook) HasOrigin(ctx context.Context, root string) bool {
-	res, err := (git.Repo{Dir: root, Runner: b.env.Git}).Run(ctx, "remote", "get-url", "origin")
-	return err == nil && res.ExitCode == 0
+func (b landingBook) Remote(ctx context.Context, root string) (string, bool) {
+	name, err := b.env.Remote(root)
+	if err != nil {
+		return "", false
+	}
+	res, err := (git.Repo{Dir: root, Runner: b.env.Git}).Run(ctx, "remote", "get-url", name)
+	return name, err == nil && res.ExitCode == 0
 }
