@@ -128,6 +128,8 @@ Where it opens depends on where you ran it:
 started with `herdr --session rota-<dir> server`; your default herdr session is never driven.
 Under tmux and herdr, a spawn answers up to three startup dialogs (theme, trust, bypass). A tmux pane that stays stuck
 reports the dialog by name instead of a generic boot timeout.
+Tmux sessions and worker windows are addressed by exact name. A missing `w1` window
+will not send input to, read from or close `w10`; the same rule applies to session names.
 The agent comes from `orchestrator.harness` (`claude`, `codex`, `hermes` or `opencode`; see
 [orchestrator harnesses](orchestrator-harnesses.md)). `rota orchestrate --dry-run`
 shows what would start.

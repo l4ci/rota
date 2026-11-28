@@ -124,7 +124,7 @@ LMNOW="2026-10-03T14:00:30Z" watch_ >/dev/null || true # past the reset, inside 
 LMNOW="2026-10-03T14:01:30Z"
 RC=0; OUT="$(watch_)" || RC=$?
 [ "$RC" = "0" ] && [ "$(jget data.resumed <<<"$OUT")" = "1" ] && [ "$(jget data.waiting <<<"$OUT")" = "0" ] || fail "D3: resume: rc=$RC $OUT"
-[ "$(sent)" = "1" ] && grep -q -F -- "send-keys -t rota:ben -l -- $PROMPT" "$FK/tmux/log" || fail "D3: the prompt must be typed once into ben's pane: $(grep send-keys "$FK/tmux/log")"
+[ "$(sent)" = "1" ] && grep -q -F -- "send-keys -t =rota:=ben -l -- $PROMPT" "$FK/tmux/log" || fail "D3: the prompt must be typed once into ben's pane: $(grep send-keys "$FK/tmux/log")"
 [ "$(lim l1 status)" = "resumed" ] && [ "$(lim l1 cycles)" = "1" ] && [ "$(lim l1 resolvedAt)" = "2026-10-03T14:01:30Z" ] || fail "D3: resumed entry: $(cat "$REG")"
 pass "D3: sleep mode logs a waiting entry with the meter's reset, types nothing early, then types the prompt once and marks it resumed"
 

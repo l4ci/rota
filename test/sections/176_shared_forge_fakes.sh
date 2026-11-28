@@ -24,9 +24,15 @@ pass "gh fake rejects an unknown call; forge_state seeds the PR, its issue and t
 
 FK="$TMP_SF/tmux"; mkdir -p "$FK"; echo "w1 4194001" > "$FK/windows"
 tm() { FAKE_TMUX="$FK" bash "$TESTDIR/fakes/tmux" "$@"; }
-touch "$FK/kill_fails"; tm kill-window -t rota:w1
-[ -s "$FK/windows" ] || fail "kill_fails must leave the window in place"
-rm -f "$FK/kill_fails"; tm kill-window -t rota:w1
-[ ! -s "$FK/windows" ] || fail "without kill_fails the window must go: $(cat "$FK/windows")"
-pass "tmux fake keeps a window alive under kill_fails and kills it otherwise"
+for target in rota:w1 '=rota:=w1'; do
+  echo "w1 4194001" > "$FK/windows"
+  touch "$FK/kill_fails"; tm kill-window -t "$target"
+  [ -s "$FK/windows" ] || fail "kill_fails must leave the window in place"
+  rm -f "$FK/kill_fails"; tm kill-window -t "$target"
+  [ ! -s "$FK/windows" ] || fail "without kill_fails the window must go: $(cat "$FK/windows")"
+done
+echo "worker pane" > "$FK/pane.w1"; touch "$FK/frozen.w1"
+OUT=$(tm capture-pane -pJ -t '=rota:=w1') || fail "exact target capture failed"
+[ "$OUT" = "worker pane" ] || fail "exact target lost its per-window pane: $OUT"
+pass "tmux fake accepts bare and exact window targets for close and capture"
 rm -rf "${TMP_SF:?}"
