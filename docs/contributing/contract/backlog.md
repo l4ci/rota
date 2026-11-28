@@ -294,6 +294,7 @@ data: {"apply": bool, "writable": bool, "changed": bool, "changes": [{"kind": "m
 exit: 3 with the file backend (there are no tracker labels); 5 when the tracker cannot list label definitions; tracker
 old: none (#2136)
 note: dry run by default: no tracker writes, including when labels are missing. The registry resolves configured names, project extras and review labels. All open issues are read without backlog filters to identify claim labels still in use; a closed issue does not keep a claim definition active. A read failure stops before any writes.
+note: registry definitions and open prefixes use the issue tracker's label-name rule, as the doctor labels check does. A case variant on GitHub, Linear or It's a Plan is recognized and can report metadata drift; GitLab and Jira match exactly. Existing spelling is preserved.
 note: with --apply, GitHub, GitLab and Linear create missing fixed labels and finite families and correct descriptions and colors of known labels. Open prefixes update existing definitions only. Tracker defaults that overlap rota labels, unused claim definitions and unknown labels (including retired names) are report-only: never changed, renamed or deleted. Jira and It's a Plan support names only and stay report-only even with --apply; writable is false and metadata differences are omitted. changed is true after any successful upsert; an apply failure returns the measured changes and whether earlier writes succeeded.
 
 ### rota issues label
