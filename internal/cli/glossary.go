@@ -59,7 +59,7 @@ func glWrite(fs *flag.FlagSet) RunFunc {
 		if err != nil {
 			return Result{}, err
 		}
-		term := knowledge.Term{Name: strings.TrimSpace(args[0]), Definition: *def, Aliases: pystr.SplitCSV(*alias), Nots: pystr.SplitCSV(*not)}
+		term := knowledge.Term{Name: args[0], Definition: *def, Aliases: pystr.SplitCSV(*alias), Nots: pystr.SplitCSV(*not)}
 		name, changed, err := st.GlossaryWrite(scope, term, *touch, notsProvided)
 		if err != nil {
 			return knFail(err)
