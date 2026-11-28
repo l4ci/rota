@@ -223,11 +223,11 @@ const outcomePending = "pending"
 // Session is a typed snapshot of the state file. Callers read it instead of
 // the file's snake_case keys.
 type Session struct {
-	Session          string
-	BugID            string
-	StartedAt        string
-	FailedFixes      int
-	Attempts         []Attempt
+	Session     string
+	BugID       string
+	StartedAt   string
+	FailedFixes int
+	Attempts    []Attempt
 
 	raw *jsonx.Object // the file as stored
 }
@@ -249,11 +249,11 @@ func (c *Counter) Load() (*Session, error) {
 	o := asObj(fsio.LoadJSON(c.Path, c.def()))
 	str := func(o *jsonx.Object, k string) string { s, _ := mustGet(o, k).(string); return s }
 	s := &Session{
-		Session:          str(o, "session"),
-		BugID:            str(o, "bug_id"),
-		StartedAt:        str(o, "started_at"),
-		FailedFixes:      intOf(mustGet(o, "failed_fixes")),
-		raw:              o,
+		Session:     str(o, "session"),
+		BugID:       str(o, "bug_id"),
+		StartedAt:   str(o, "started_at"),
+		FailedFixes: intOf(mustGet(o, "failed_fixes")),
+		raw:         o,
 	}
 	for _, av := range attemptsOf(o) {
 		a := asObj(av)
