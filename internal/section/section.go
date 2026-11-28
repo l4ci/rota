@@ -232,10 +232,11 @@ const (
 // (a legacy hv-<key> block too, in place), appends one when none exists, or
 // creates the file holding just the block.
 // A second identical call is Unchanged and does not touch the file.
+// The file is the user's: see fsio.WriteUserFile.
 func UpsertBlock(path, key, block string) (string, error) {
 	content, err := fsio.ReadText(path)
 	if os.IsNotExist(err) {
-		return Created, fsio.WriteFileAtomic(path, []byte(block+"\n"))
+		return Created, fsio.WriteUserFile(path, []byte(block+"\n"))
 	}
 	if err != nil {
 		return "", err
@@ -254,7 +255,7 @@ func UpsertBlock(path, key, block string) (string, error) {
 	if next == content {
 		return Unchanged, nil
 	}
-	return status, fsio.WriteFileAtomic(path, []byte(next))
+	return status, fsio.WriteUserFile(path, []byte(next))
 }
 
 // UpsertManaged wraps body in the key's markers and upserts it into the

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -51,6 +52,8 @@ func settingsTarget(c *Ctx, scopeFlag string) (hook.Scope, string, map[hook.Scop
 	return scope, p, paths, nil
 }
 
+// writeSettings rewrites a settings file, through a symlink if it is one (see
+// fsio.WriteUserFile).
 func writeSettings(path string, o *jsonx.Object) error {
 	b, err := jsonx.Marshal(o)
 	if err != nil {
@@ -59,7 +62,14 @@ func writeSettings(path string, o *jsonx.Object) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return err
 	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
+	return fsio.WriteUserFile(path, append(b, '\n'))
+}
+
+func settingsWriteError(err error) error {
+	if errors.Is(err, fsio.ErrLinkDirMissing) {
+		return &Error{Exit: ExitUnavailable, Message: err.Error()}
+	}
+	return &Error{Exit: ExitInternal, Message: err.Error()}
 }
 
 func hookInstall(fs *flag.FlagSet) RunFunc {
@@ -98,7 +108,7 @@ func hookInstall(fs *flag.FlagSet) RunFunc {
 		}
 		if out.Changed {
 			if err := writeSettings(path, files[scope]); err != nil {
-				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+				return Result{}, settingsWriteError(err)
 			}
 		}
 		guardReach := hook.GuardReachesWorkers(files)
@@ -134,7 +144,7 @@ func hookUninstall(fs *flag.FlagSet) RunFunc {
 		}
 		if len(removed) > 0 {
 			if err := writeSettings(path, o); err != nil {
-				return Result{}, &Error{Exit: ExitInternal, Message: err.Error()}
+				return Result{}, settingsWriteError(err)
 			}
 		}
 		d := jsonx.Obj("scope", string(scope), "settingsPath", path, "removed", removed, "changed", len(removed) > 0)

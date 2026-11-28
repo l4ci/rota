@@ -61,7 +61,7 @@ One topic is special-cased: `## Glossary` holds domain-terminology entries as ne
 
 `rota glossary write` and `rota glossary import` validate term names using the `knowledge add` title rule: names cannot be blank or contain line breaks, `*` or `-->`. Invalid names leave knowledge and instructions unchanged; an invalid name in an import refuses the entire batch. Surrounding whitespace is trimmed after validation.
 
-`rota init` inserts a managed block in `CLAUDE.md` (or `AGENTS.md` when present) that lists the current topics (`Glossary` surfaces here like any other topic). That block keeps knowledge visible to the model across context clears without re-reading the file.
+`rota init` inserts a managed block in `CLAUDE.md` (or `AGENTS.md` when present) that lists the current topics (`Glossary` surfaces here like any other topic). That block keeps knowledge visible to the model across context clears without re-reading the file. A write to the instructions file follows a symlink to its target and keeps the file mode. A link that leaves the project or points into `.git` is refused (exit 5).
 
 ## DECISIONS.md: hard-boundary decisions
 
