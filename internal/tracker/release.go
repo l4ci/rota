@@ -95,7 +95,7 @@ func (g *GitHub) ReleaseDrafts() bool { return true }
 // ReleaseView asks GitHub about the release for tag. gh 2.45 finds drafts too
 // (a GraphQL lookup by pending tag), so "release not found" means none.
 func (g *GitHub) ReleaseView(ctx context.Context, tag string) (Release, bool, error) {
-	r, err := g.cli.Run(ctx, []string{"release", "view", tag, "--json", "isDraft,assets"}, nil)
+	r, err := g.cli.read(ctx, []string{"release", "view", tag, "--json", "isDraft,assets"}, nil)
 	if err != nil {
 		return Release{}, true, err
 	}

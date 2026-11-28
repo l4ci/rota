@@ -101,6 +101,22 @@ func (b *base) json(ctx context.Context, args []string, v any) error {
 	if err != nil {
 		return err
 	}
+	return decodeTrackerJSON(out, v)
+}
+
+// readJSON lets an adapter state that its document cannot mutate the forge.
+func (b *base) readJSON(ctx context.Context, args []string, v any) error {
+	res, err := b.cli.read(ctx, args, nil)
+	if err != nil {
+		return err
+	}
+	if res.ExitCode != 0 {
+		return FailedCall(string(res.Stderr), res.ExitCode)
+	}
+	return decodeTrackerJSON(string(res.Stdout), v)
+}
+
+func decodeTrackerJSON(out string, v any) error {
 	if err := json.Unmarshal([]byte(out), v); err != nil {
 		return failed("unparseable tracker output: %q", strutil.Clip(out, clipLen))
 	}
@@ -110,10 +126,14 @@ func (b *base) json(ctx context.Context, args []string, v any) error {
 // pages decodes an `api` list call whose paginated output concatenates one
 // JSON array per page.
 func (b *base) pages(ctx context.Context, path string, v any) error {
-	out, err := b.run(ctx, []string{"api", path}, "")
+	res, err := b.cli.read(ctx, []string{"api", path}, nil)
 	if err != nil {
 		return err
 	}
+	if res.ExitCode != 0 {
+		return FailedCall(string(res.Stderr), res.ExitCode)
+	}
+	out := string(res.Stdout)
 	var all []json.RawMessage
 	dec := json.NewDecoder(strings.NewReader(strings.TrimSpace(out)))
 	for dec.More() {
