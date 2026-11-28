@@ -73,9 +73,11 @@ func TestUnreadableExternalFilesExit5(t *testing.T) {
 	}{
 		{"README.md", []string{"knowledge topics --external", "knowledge query --external go"}},
 		{"topics/go.md", []string{
-			// A write is refused earlier: git reports the clone as dirty (exit 4).
+			// git reports an unreadable tracked file as an uncommitted change.
 			"knowledge query --external go", "knowledge query --external --match vet",
+			"knowledge add --external --topic Go --title New --body-file -",
 		}},
+		{"topics/git.md", []string{"knowledge add --external --topic Go --title New --body-file -"}},
 		{"rota-knowledge.json", []string{"knowledge add --external --topic Go --title New --body-file -"}},
 	} {
 		for _, verb := range tc.verbs {
