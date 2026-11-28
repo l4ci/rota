@@ -10,7 +10,7 @@ A post-cycle nudge or auto-dispatch fires when **at least one** of:
 
 - **2+ items resolved** in the cycle (counted as distinct closed items across the cycle: bracketed IDs such as `[B07]` in its commit messages, or issue closures, i.e. `Closes #N` / `Fixes #N` / `Resolves #N` in its commits or the PR body; `rota ship body` and `rota ship pr --items` emit the `Closes #N` lines).
 - **≥5 files touched** in the cycle (counted by the cycle's diff against its base; for `/rota-ship`, use the scope JSON's `touchedFiles` field).
-- A **hard bug** that took 2 or more debug cycles to root-cause (signaled by 2+ `/rota-debug` invocations within the same `/rota-work` session, or by the bug carrying a `Detail:` pointer to a `.rota/bugs/<id>.md` file with 2 or more hypothesis entries).
+- A **hard bug** that took 2 or more debug cycles to root-cause (2+ `FAIL` records from `rota debug verdict` for one referenced item; `rota ship finish` reports the count as `signals.debugCycles`).
 
 ## When the gate does NOT fire
 

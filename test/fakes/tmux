@@ -38,12 +38,12 @@ case "$1" in
     esac ;;
   kill-window)
     [ -f "$F/kill_fails" ] && exit 0
-    target="$3"; name="${target#*:}"
+    target="$3"; name="${target#*:}"; name="${name#=}"
     [ -f "$F/windows" ] && grep -v "^$name " "$F/windows" >"$F/windows.new"
     mv "$F/windows.new" "$F/windows" 2>/dev/null; exit 0 ;;
   capture-pane)
     win=""
-    while [ $# -gt 0 ]; do [ "$1" = "-t" ] && win="${2#*:}"; shift; done
+    while [ $# -gt 0 ]; do [ "$1" = "-t" ] && { win="${2#*:}"; win="${win#=}"; }; shift; done
     # A window with its own pane.<win> file is steered by that window's files only.
     sfx=""; [ -n "$win" ] && [ -f "$F/pane.$win" ] && sfx=".$win"
     cat "$F/pane$sfx" 2>/dev/null

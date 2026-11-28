@@ -49,7 +49,6 @@ func TestStateFileBytes(t *testing.T) {
 	}
 	c.RecordAttempt("h2", "def")
 	c.Pass()
-	c.IncCycle()
 	raw, _ := os.ReadFile(c.Path)
 	got := ts.ReplaceAllString(string(raw), "TS")
 	want := `{
@@ -57,7 +56,6 @@ func TestStateFileBytes(t *testing.T) {
   "bug_id": "B07",
   "started_at": "TS",
   "failed_fixes": 1,
-  "hypothesis_cycles": 1,
   "attempts": [
     {
       "n": 1,
@@ -114,9 +112,6 @@ func TestMissingSessionIsExit3(t *testing.T) {
 	c, _ := Open(repo(t), nil)
 	if _, err := c.RecordAttempt("h", "c"); exitOf(err) != 3 {
 		t.Errorf("record-attempt: %v", err)
-	}
-	if _, err := c.IncCycle(); exitOf(err) != 3 {
-		t.Errorf("inc-cycle: %v", err)
 	}
 	if _, err := c.Fail(); exitOf(err) != 3 {
 		t.Errorf("fail: %v", err)
@@ -199,7 +194,7 @@ func TestPendingAttemptRule(t *testing.T) {
 	}
 }
 
-func TestBugIDAndCycles(t *testing.T) {
+func TestBugID(t *testing.T) {
 	c, _ := Open(repo(t), nil)
 	if _, err := c.BugID(); exitOf(err) != 3 {
 		t.Fatalf("bug id without file: %v", err)
@@ -208,13 +203,11 @@ func TestBugIDAndCycles(t *testing.T) {
 		t.Fatalf("load without file: %v", err)
 	}
 	c.Init("B07")
-	c.IncCycle()
-	c.IncCycle()
 	if id, err := c.BugID(); err != nil || id != "B07" {
 		t.Fatalf("bug id %q %v", id, err)
 	}
-	if s, err := c.Load(); err != nil || s.HypothesisCycles != 2 {
-		t.Fatalf("cycles %+v %v", s, err)
+	if s, err := c.Load(); err != nil || s.BugID != "B07" {
+		t.Fatalf("load %+v %v", s, err)
 	}
 }
 
@@ -223,12 +216,12 @@ func TestBugIDAndCycles(t *testing.T) {
 func TestLoadPartialFile(t *testing.T) {
 	c, _ := Open(repo(t), nil)
 	os.MkdirAll(filepath.Dir(c.Path), 0o777)
-	os.WriteFile(c.Path, []byte(`{"failed_fixes": 2, "attempts": [{"n": 1, "outcome": "pending", "hypothesis": "h"}]}`), 0o666)
+	os.WriteFile(c.Path, []byte(`{"failed_fixes": 2, "hypothesis_cycles": 3, "attempts": [{"n": 1, "outcome": "pending", "hypothesis": "h"}]}`), 0o666)
 	s, err := c.Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.FailedFixes != 2 || s.BugID != "" || s.HypothesisCycles != 0 || len(s.Attempts) != 1 {
+	if s.FailedFixes != 2 || s.BugID != "" || len(s.Attempts) != 1 {
 		t.Fatalf("mapping: %+v", s)
 	}
 	if a, ok := s.Pending(); !ok || a.N != 1 || a.Hypothesis != "h" || a.Commit != "" {

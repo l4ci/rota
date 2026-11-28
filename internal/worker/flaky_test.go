@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"github.com/l4ci/rota/internal/gittest"
 	"github.com/l4ci/rota/internal/landing"
 	"os"
@@ -221,23 +222,46 @@ func TestGateAndTrainRetryE2E(t *testing.T) {
 	}
 }
 
-func TestGateDoesNotLandWhenFlakeLedgerCannotBeWritten(t *testing.T) {
-	w := gateLedgerWorld(t, "check")
-	if err := os.Mkdir(flakeledger.Path(w.dir), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	e := w.env(false)
-	calls := 0
-	e.Shell = func(context.Context, string, string) (string, int) {
-		calls++
-		if calls == 1 {
-			return "--- FAIL: TestLoad (0s)\nFAIL\n", 1
+func TestGateFlakeLedgerWriteFailureWarns(t *testing.T) {
+	for _, phase := range []string{"before", "after"} {
+		for _, recover := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/retry=%v", phase, recover), func(t *testing.T) {
+				w := newWorld(t, ghURL)
+				w.setConfig(`{"test":{"full":["check"]}}`)
+				if phase == "after" {
+					w.forge("pushBeforeMerge", "other.txt")
+				} else if err := os.Mkdir(flakeledger.Path(w.dir), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				e := w.env(false)
+				calls := map[string]int{}
+				e.Shell = func(_ context.Context, dir, _ string) (string, int) {
+					calls[dir]++
+					if phase == "after" && dir == w.dir && calls[dir] == 1 {
+						if err := os.Remove(flakeledger.Path(w.dir)); err != nil {
+							t.Fatal(err)
+						}
+						if err := os.Mkdir(flakeledger.Path(w.dir), 0o755); err != nil {
+							t.Fatal(err)
+						}
+					}
+					if recover && calls[dir] == 1 {
+						return "--- FAIL: TestLoad (0s)\nFAIL\n", 1
+					}
+					return "ok\n", 0
+				}
+				r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
+				if err != nil || r.Verdict != landing.GatePass || !r.Changed || !w.onOriginMain("work.txt") {
+					t.Fatalf("ledger failure must preserve green landing: %+v %v", r, err)
+				}
+				if !strings.Contains(strings.Join(r.Notes, "\n"), "WARNING flake ledger not written:") {
+					t.Fatalf("missing flake write warning: %+v", r.Notes)
+				}
+				if phase == "after" && calls[w.dir] == 0 {
+					t.Fatal("landed base was not verified")
+				}
+			})
 		}
-		return "ok\n", 0
-	}
-	r, err := e.Gate(bg, w.dir, GateOpts{Slot: "w1", Base: "main"})
-	if (err == nil && r.Verdict == landing.GatePass) || r.Changed || w.onOriginMain("work.txt") {
-		t.Fatalf("recovery without a durable record must not land: %+v %v", r, err)
 	}
 }
 

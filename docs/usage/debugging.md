@@ -89,7 +89,7 @@ A refuted hypothesis is struck from the list with its evidence and the next one 
 
 ### Iron Law: hard stop at 3 failed fixes
 
-Each committed fix is recorded as PASS or FAIL for the bug (`rota debug verdict`). Failed fixes are counted per item in `.rota/verdicts.json`, so a new branch or session does not reset the count; a per-branch attempt log sits in `.rota/debug/<session>.json` (session keyed by current branch, with `/` → `-`).
+Each committed fix is recorded as PASS or FAIL for the bug (`rota debug verdict`). Failed fixes are counted per item in `.rota/verdicts.json`, so a new branch or session does not reset the count; a per-branch attempt log sits in `.rota/debug/<session>.json` (session keyed by current branch, with `/` → `-`). Two or more FAIL records for an item the shipped branch references also make `rota ship finish` suggest a learning pass.
 
 At 3 failed fixes, the Iron Law fires: hard stop, no further attempts. `/rota-debug` prints a summary of every refuted hypothesis and committed fix (`rota debug counter summary`), then surfaces. The failed count in that summary is the item's, across branches; the attempts it lists are the current branch's. Three committed fixes that don't hold mean the framing of the bug needs human triage, not more agents.
 
