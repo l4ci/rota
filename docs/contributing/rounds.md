@@ -99,8 +99,11 @@ or set `HOME` or `XDG_CONFIG_HOME` with `t.Setenv`. Tests in `internal/testiso`
 are exempt because they run the isolation init themselves. This is a file-level
 check; it does not prove every test path is isolated. Host-session scrubbing uses
 `internal/hostenv` in Go and its generated `test/lib/host-env-prefixes` list in
-shell. `hostenv.ConfigVars` (`CLAUDE_CONFIG_DIR`, `CODEX_HOME`) is Go-only: `test/runner.sh` pins its own config dir and `isolate_env` unsets `CODEX_HOME`. After changing the prefixes, regenerate the file from the repo root with
-`go run ./internal/hostenv/gen > test/lib/host-env-prefixes`.
+shell. The exact names both sides drop are `hostenv.IsolationVars`, generated into
+`test/lib/isolation-env-names`. `CLAUDE_CONFIG_DIR` (in `hostenv.ConfigVars`) is Go-only:
+`test/runner.sh` pins its own config dir. After changing either list, regenerate its file
+from the repo root with `go run ./internal/hostenv/gen > test/lib/host-env-prefixes` or
+`go run ./internal/hostenv/gen names > test/lib/isolation-env-names`.
 The fast-tier wiring test runs for scanner changes and in smoke section 175 at the merge gate.
 
 Round 50 measured `go run ./test/treescan` on base `9c89bab1` and the scan changes

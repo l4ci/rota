@@ -31,6 +31,13 @@ func is(name string) bool {
 	return false
 }
 
+// IsolationVars are the exact names that both sandboxes drop:
+// worker.IsolatedEnviron and isolate_env (test/lib/isolate.sh, via the
+// generated test/lib/isolation-env-names). They reach the developer's
+// ssh-agent, global rota config, Core state or codex config, and the override
+// variables win over the pinned HOME and XDG dirs.
+var IsolationVars = []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID", "ROTA_CONFIG_DIR", "ROTA_CORE_STATE_DIR", "CODEX_HOME"}
+
 // Drop reports whether a test or sandbox process must not inherit the variable:
 // a host session or a harness config dir.
 func Drop(name string) bool {

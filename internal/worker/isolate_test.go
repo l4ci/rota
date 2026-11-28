@@ -3,7 +3,10 @@ package worker
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -151,5 +154,53 @@ func TestIsolatedEnvironDropsEveryHostSession(t *testing.T) {
 	}
 	if !kept["KEEP_ME"] {
 		t.Error("isolation dropped an unrelated variable")
+	}
+}
+
+// IsolatedEnviron and isolate_env (test/lib/isolate.sh) must drop the same
+// exact names. CLAUDE_CONFIG_DIR is the one intended difference: test/runner.sh
+// pins its own before it calls isolate_env. The names live in
+// hostenv.IsolationVars, so the script may unset only what it reads.
+func TestIsolationExactNamesMatchShell(t *testing.T) {
+	names := []string{"SSH_AUTH_SOCK", "SSH_AGENT_PID", "ROTA_CONFIG_DIR", "ROTA_CORE_STATE_DIR", "CODEX_HOME", "CLAUDE_CONFIG_DIR", "ROTA_KEEP_ME"}
+	env := []string{"PATH=" + os.Getenv("PATH"), "GOCACHE=" + t.TempDir()}
+	for _, n := range names {
+		env = append(env, n+"=/caller")
+	}
+	survivors := func(environ []string) []string {
+		var kept []string
+		for _, kv := range environ {
+			if k, _, _ := strings.Cut(kv, "="); slices.Contains(names, k) {
+				kept = append(kept, k)
+			}
+		}
+		slices.Sort(kept)
+		return kept
+	}
+
+	goOut, err := IsolatedEnviron(env, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := survivors(goOut), []string{"ROTA_KEEP_ME"}; !slices.Equal(got, want) {
+		t.Errorf("Go survivors = %v, want %v", got, want)
+	}
+
+	script, err := os.ReadFile("../../test/lib/isolate.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if literal := regexp.MustCompile(`\bunset[ \t]+[^"$\s]\S*`).FindString(string(script)); literal != "" {
+		t.Errorf("isolate.sh names a variable itself (%q); add it to hostenv.IsolationVars", literal)
+	}
+
+	cmd := exec.Command("bash", "-c", `set -euo pipefail; source "$1"; isolate_env "$2"; env`, "parity", "../../test/lib/isolate.sh", t.TempDir())
+	cmd.Env = env
+	shellOut, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("isolate_env: %v\n%s", err, shellOut)
+	}
+	if got, want := survivors(strings.Split(string(shellOut), "\n")), []string{"CLAUDE_CONFIG_DIR", "ROTA_KEEP_ME"}; !slices.Equal(got, want) {
+		t.Errorf("shell survivors = %v, want %v", got, want)
 	}
 }
