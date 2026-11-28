@@ -97,6 +97,22 @@ REFDEF = re.compile(r"^(\s{0,3}\[[^\]]+\]:\s*)(\S+)")
 HTMLATTR = re.compile(r"""((?:href|src)=")([^"]*)(")""")
 
 
+def fenced_lines(lines):
+    """Yield (line, fenced), including opening and closing delimiters as fenced."""
+    fence = None
+    for line in lines:
+        fm = FENCE.match(line)
+        if fm:
+            run = fm.group(1)
+            if fence is None:
+                fence = run
+            elif run[0] == fence[0] and len(run) >= len(fence):
+                fence = None
+            yield line, True
+        else:
+            yield line, fence is not None
+
+
 def rewrite_line(line, src_rel):
     codes = []
 
@@ -124,16 +140,11 @@ ALERT = re.compile(r"^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$")
 
 
 def convert_alerts(lines):
-    out, i, fence = [], 0, None
+    out, i = [], 0
+    protected = [fenced for _, fenced in fenced_lines(lines)]
     while i < len(lines):
         ln = lines[i]
-        fm = FENCE.match(ln)
-        if fm:
-            if fence is None:
-                fence = fm.group(1)[0]
-            elif fm.group(1)[0] == fence:
-                fence = None
-        if fence is None and not fm and ln.startswith(">"):
+        if not protected[i] and ln.startswith(">"):
             j = i
             while j < len(lines) and lines[j].startswith(">"):
                 j += 1
@@ -205,26 +216,14 @@ def convert(rel):
             sys.exit("video catalog: " + str(e))
     lines = raw.split("\n")
     lines = convert_alerts(lines)
-    title, h1, fence = rel, None, None
-    for i, ln in enumerate(lines):
-        fm = FENCE.match(ln)
-        if fm:
-            fence = None if fence == fm.group(1)[0] else (fence or fm.group(1)[0])
-        if fence is None and not fm and re.match(r"^# ", ln):
+    title, h1 = rel, None
+    for i, (ln, fenced) in enumerate(fenced_lines(lines)):
+        if not fenced and re.match(r"^# ", ln):
             title, h1 = plain(ln[2:].rstrip("# ").strip()), i
             break
     rest = lines[h1 + 1:] if h1 is not None else lines
     desc = describe(rest)
-    body, fence = [], None
-    for ln in rest:
-        fm = FENCE.match(ln)
-        if fm:
-            fence = None if fence == fm.group(1)[0] else (fence or fm.group(1)[0])
-            body.append(ln)
-        elif fence is not None:
-            body.append(ln)
-        else:
-            body.append(rewrite_line(ln, rel))
+    body = [ln if fenced else rewrite_line(ln, rel) for ln, fenced in fenced_lines(rest)]
     text = "\n".join(body).strip("\n")
     extra = ""
     if fmd.get("skill"):
@@ -324,13 +323,8 @@ def reachable_pages(roots):
         rel = pages[url]
         with open(os.path.join(DOCS, rel), encoding="utf-8") as f:
             text = f.read()
-        fence = None
-        for line in text.splitlines():
-            fm = FENCE.match(line)
-            if fm:
-                fence = None if fence == fm.group(1)[0] else (fence or fm.group(1)[0])
-                continue
-            if fence:
+        for line, fenced in fenced_lines(text.splitlines()):
+            if fenced:
                 continue
             for match in INLINE.finditer(CODE.sub("", line)):
                 target = resolve(match.group(2), rel) or match.group(2)

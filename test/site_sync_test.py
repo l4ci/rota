@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise the generated video catalog through the normal site sync."""
+"""Exercise generated docs and the video catalog through the normal site sync."""
 import json
 from pathlib import Path
 import shutil
@@ -22,7 +22,7 @@ def movie(seconds, version=0):
     return box(b"ftyp", b"isom\0\0\0\0") + box(b"moov", box(b"mvhd", bytes([version, 0, 0, 0]) + fields))
 
 
-class VideoCatalogTest(unittest.TestCase):
+class SiteSyncTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
@@ -89,6 +89,44 @@ class VideoCatalogTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("git lfs pull", result.stderr)
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_nested_fences_keep_examples_literal(self):
+        docs = self.repo / "docs"
+        nav = docs / "README.md"
+        nav.write_text(nav.read_text() + "\n[Fixture](fence-fixture.md)\n")
+        for name in ("example-only", "span-only", "visible-only"):
+            (docs / (name + ".md")).write_text("# " + name + "\n\nFixture page.\n")
+        for char, other in (("`", "~"), ("~", "`")):
+            for closing_length in (4, 5):
+                with self.subTest(char=char, closing_length=closing_length):
+                    nested = (char * 4 + "markdown\n" + char * 3 + "\n"
+                              "# Example heading\n"
+                              "> [!WARNING]\n> Keep this example.\n"
+                              "[example](example-only.md)\n"
+                              "[missing](does-not-exist.md)\n" + other * 5 + "\n"
+                              "[mixed](example-only.md)\n" + char * closing_length)
+                    body = (nested + "\n\n# Fence fixture\n\n" + nested + "\n\n"
+                            "[outside](visible-only.md)\n"
+                            "`[span](span-only.md)`\n\n"
+                            "> [!NOTE]\n> Real alert.\n")
+                    (docs / "fence-fixture.md").write_text(body)
+                    result = subprocess.run(
+                        ["python3", str(self.repo / "scripts/site-sync.py"), str(self.site)],
+                        capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    text = (self.site / "rota/docs/fence-fixture.md").read_text()
+                    self.assertIn('title: "Fence fixture"\n', text)
+                    self.assertIn(nested, text)
+                    self.assertIn("[outside](/rota/docs/visible-only/)", text)
+                    self.assertIn("`[span](span-only.md)`", text)
+                    self.assertIn("> Real alert.\n{: .callout .callout-note}", text)
+                    self.assertNotIn("fence-fixture.md: link target does not exist", result.stderr)
+                    for name in ("example-only", "span-only"):
+                        self.assertIn("page unreachable from docs navigation: /rota/docs/" +
+                                      name + "/", result.stderr)
+                    for name in ("fence-fixture", "visible-only"):
+                        self.assertNotIn("page unreachable from docs navigation: /rota/docs/" +
+                                         name + "/", result.stderr)
 
 
 if __name__ == "__main__":

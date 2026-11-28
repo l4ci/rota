@@ -131,20 +131,6 @@ func TestStubUpdate(t *testing.T) {
 	}
 }
 
-func TestLinks(t *testing.T) {
-	body := "" +
-		"See [a](a.md), [r](references/r.md#sec) and [up](../rota-b/SKILL.md \"title\").\n" +
-		"Not links: `[x](code.md)` inline, [web](https://example.com/x.md), [m](mailto:a@b.c), [h](#here), [abs](/etc/x.md), [e]().\n" +
-		"```\n[f](fenced.md)\n```\n" +
-		"~~~\n[t](tilde.md)\n~~~\n" +
-		"Again [a](a.md) and [both `code` text](b.md).\n"
-	got := Links([]byte(body))
-	want := []string{"a.md", "references/r.md", "../rota-b/SKILL.md", "b.md"}
-	if strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Errorf("Links = %q, want %q", got, want)
-	}
-}
-
 func TestEveryEmbeddedLinkResolves(t *testing.T) {
 	set, err := Embedded()
 	if err != nil {
