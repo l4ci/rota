@@ -101,6 +101,9 @@ func TestRunTrainReportsCulpritAndEndsLandedItems(t *testing.T) {
 	if len(reports) != 2 || reports[0].Gate.Verdict != landing.GatePass || reports[1].Gate.SHA != "abcdef0" || reports[1].Gate.PR != "20" || !strings.Contains(reports[1].Body, "TRAIN-FAIL kit") {
 		t.Fatalf("reports: %+v", reports)
 	}
+	if body := reports[0].Body; !strings.Contains(body, "Merge commit: `abc1234`") || strings.Contains(body, "Reviewed SHA") {
+		t.Fatalf("landed member must label the train's merge commit:\n%s", body)
+	}
 	if !reflect.DeepEqual(b.calls, []string{"targets:good,kit", "start:1", "bestof:1", "bounces:1"}) || !reflect.DeepEqual(b.releases, []string{"1@dana"}) {
 		t.Fatalf("book: %+v", b)
 	}
@@ -313,6 +316,20 @@ func TestRunTrainLoadsTargetsThroughBook(t *testing.T) {
 	run := e.Run(context.Background(), "root", Request{Train: &TrainOpts{Targets: []string{"kit"}}}).Train
 	if !errors.Is(run.Err, want) || !strings.Contains(run.Err.Error(), "postgate: load train targets") {
 		t.Fatalf("run: %+v", run)
+	}
+}
+
+func TestStoppedTrainDoesNotCallTheHeadAMergeCommit(t *testing.T) {
+	var body string
+	e := Env{Book: &fakeBook{origin: true}, Git: headGit, Report: func(_ context.Context, _ string, r Report) error {
+		body = r.Body
+		return nil
+	}}
+	for _, g := range trainReports(nil, landing.TrainResult{Members: []landing.TrainMember{{Target: "kit", Branch: "feature", Landed: true}}}) {
+		e.report(context.Background(), "root", g)
+	}
+	if !strings.Contains(body, "Reviewed SHA: `abcdef0`") || strings.Contains(body, "Merge commit") {
+		t.Fatalf("report:\n%s", body)
 	}
 }
 

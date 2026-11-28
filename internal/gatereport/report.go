@@ -13,7 +13,11 @@ import (
 // RenderReport describes a completed gate without changing its outcome.
 func RenderReport(r landing.GateResult) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s\n### Gate report\n\nKind: `gate`\n\nOutcome: **%s**\n\nReviewed SHA: `%s`\n\n### Checks run\n\n", marker.Report("gate", r.SHA), r.Verdict, r.SHA)
+	label := "Reviewed SHA"
+	if r.SHA != "" && r.SHA == r.MergeCommit {
+		label = "Merge commit"
+	}
+	fmt.Fprintf(&out, "%s\n### Gate report\n\nKind: `gate`\n\nOutcome: **%s**\n\n%s: `%s`\n\n### Checks run\n\n", marker.Report("gate", r.SHA), r.Verdict, label, r.SHA)
 	for i, check := range r.Verified {
 		if i == 20 {
 			out.WriteString("- Further checks are listed in the local gate output.\n")
