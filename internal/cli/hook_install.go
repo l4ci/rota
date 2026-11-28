@@ -59,7 +59,7 @@ func writeSettings(path string, o *jsonx.Object) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o777); err != nil {
 		return err
 	}
-	return fsio.WriteFileAtomic(path, append(b, '\n'))
+	return fsio.WriteUserFile(path, append(b, '\n'))
 }
 
 func hookInstall(fs *flag.FlagSet) RunFunc {
