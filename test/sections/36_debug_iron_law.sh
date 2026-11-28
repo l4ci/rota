@@ -130,22 +130,8 @@ assert d['failedFixes'] == 3, f\"failedFixes={d['failedFixes']}\"
   # ── (h) show exits 3 when no session exists ───────────────────────────────
   rc=0; hvj debug counter show >/dev/null 2>&1 || rc=$?
   [ "$rc" = "3" ] || { echo "FAIL: show should exit 3 when no session, got $rc"; exit 1; }
-  rc=0; hvj debug counter inc-cycle >/dev/null 2>&1 || rc=$?
-  [ "$rc" = "3" ] || { echo "FAIL: inc-cycle should exit 3 when no session, got $rc"; exit 1; }
-
-  # ── (i) inc-cycle is separate from failed_fixes ───────────────────────────
-  hvj debug counter init F02 >/dev/null || { echo "FAIL: init before inc-cycle failed"; exit 1; }
-  hvj debug counter inc-cycle >/dev/null
-  c2="$(hvj debug counter inc-cycle | jget data.hypothesisCycles)" || vfail
-  [ "$c2" = "2" ] || { echo "FAIL: inc-cycle second call expected 2, got $c2"; exit 1; }
-  python3 -c "
-import json
-d = json.load(open('$SF'))
-assert d['hypothesis_cycles'] == 2, f\"hypothesis_cycles={d['hypothesis_cycles']}\"
-assert d['failed_fixes'] == 0, f\"failed_fixes should be 0, got {d['failed_fixes']}\"
-" || { echo "FAIL: inc-cycle counter or failed_fixes wrong"; exit 1; }
 ) || exit 1
 
 trap 'rm -rf "$TMP"' EXIT
 rm -rf "$TMP_DEBUG"
-pass "debug counter: init/idempotent/record-attempt/fail/pass/summary/clear/show/inc-cycle all correct"
+pass "debug counter: init/idempotent/record-attempt/fail/pass/summary/clear/show all correct"

@@ -327,8 +327,7 @@ func (g *gateRun) verifyTiers(cfg GateConfig, first, dir string, landed bool) (b
 			if tier == tierFull && g.tierCfg != nil {
 				measuredTier = "test." + g.res.Tier
 			}
-			g.e.recordVerification(g.root, g.o.Round, measuredTier, GateTarget{Name: g.res.TargetSlot, Issue: g.res.Issue, PR: g.res.PR}, prs, vr)
-			err = g.e.recordFlakes(g.root, g.o.Round, prs, vr)
+			g.e.recordVerifyResult(g.root, g.o.Round, measuredTier, GateTarget{Name: g.res.TargetSlot, Issue: g.res.Issue, PR: g.res.PR}, prs, vr, &g.res.Notes)
 		}
 		return vr, err
 	}, g.redTier(landed))

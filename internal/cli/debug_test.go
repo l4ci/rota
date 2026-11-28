@@ -82,10 +82,6 @@ func TestDebugCounterLifecycle(t *testing.T) {
 	if data(t, out)["failedFixes"] != float64(1) {
 		t.Errorf("fail: %s", out)
 	}
-	_, out, _ = rotaIn(t, dir, "debug", "counter", "inc-cycle", "--json")
-	if data(t, out)["hypothesisCycles"] != float64(1) {
-		t.Errorf("inc-cycle: %s", out)
-	}
 	code, out, _ = rotaIn(t, dir, "debug", "counter", "summary", "--json")
 	md, _ := data(t, out)["markdown"].(string)
 	if code != 0 || !strings.Contains(md, "2. def — h2") || strings.Contains(md, "Halting") || strings.Contains(md, "Iron Law triggered") {

@@ -338,7 +338,6 @@ errors. Document stat or removal errors from `plan rm`, `design rm` and
 | `rota debug counter show` | print the counter state |
 | `rota debug counter summary` | Iron Law halt note |
 | `rota debug counter clear` | delete the counter |
-| `rota debug counter inc-cycle` | count a hypothesis cycle |
 | `rota debug verdict <bugId> --verdict <PASS\|FAIL> [--body-file <path\|->]` | record whether a fix held and route on the item's failed-fix count |
 | `rota debug reset <bugId> --reason <text> --confirm --confirm-note <answer>` | start an item's failed-fix count again (manual gate) |
 | `rota debug work-fix attempt <ID> [--task <N>]` | record a `/rota-work` Step 7 fix attempt; exit 4 on the fourth since the last PASS or reset |

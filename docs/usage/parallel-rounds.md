@@ -1115,7 +1115,7 @@ Playwright's list reporter (numbered `N) <title>` failures plus an `N failed` li
 `Tests  N failed` line) and `node --test` (TAP `not ok N - <name>` or spec `✖ <name>`, plus a `fail N` count).
 A command wrapped in `rota test lock --` is classified like the bare command.
 The retry runs sequentially in the same directory at the same clean tree. A pass stays green and
-adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red. A train run again after a `FLAKY` pass, on the same base and heads, reuses that green result instead of verifying again. A failed flake-ledger write in a train is a warning, not exit 70.
+adds `FLAKY <command>` with failing test names and rerun wall time to the result's notes and structured `data.flaky` entries; it costs no bounce. A second failure stays red. A train run again after a `FLAKY` pass, on the same base and heads, reuses that green result instead of verifying again. A failed flake-ledger write leaves the verification verdict unchanged. Gates and trains report a `WARNING` note before or after landing; freeze recovery prints the warning on stderr and still clears the freeze when verification is green.
 Build, setup, panic, infrastructure (connection refused, `ECONNREFUSED`, a Playwright `Test timeout of`, a bundler build error), timeout, signal and unknown failures are not retried.
 The known-red exclusion ledger keeps its existing behavior and is checked before retrying.
 

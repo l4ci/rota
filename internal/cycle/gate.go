@@ -7,7 +7,7 @@ import (
 )
 
 // Thresholds of the post-cycle trigger gate: a cycle that referenced this many
-// items, touched this many files or ran this many debug hypothesis cycles for a
+// items, touched this many files or had this many failed debug cycles for a
 // referenced bug is worth a learning, docs or QA pass.
 const (
 	ItemThreshold       = 2
