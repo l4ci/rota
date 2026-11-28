@@ -59,6 +59,8 @@ You can edit this file by hand: reorder items, bump priorities, delete stale one
 
 One topic is special-cased: `## Glossary` holds domain-terminology entries as nested bullets (`- **<term>** — <definition>` with indented `**Aliases:**` / optional `**Not:**` / date stamp). The Glossary topic is pinned at `rota init` time; entries are written via `/rota-learn --term <name>` (`rota glossary write`) and read via `rota glossary read <term>`. The F03 tier lifecycle skips Glossary, since terms are canonical, not probationary.
 
+`rota glossary write` and `rota glossary import` validate term names using the `knowledge add` title rule: names cannot be blank or contain line breaks, `*` or `-->`. Invalid names leave knowledge and instructions unchanged; an invalid name in an import refuses the entire batch. Surrounding whitespace is trimmed after validation.
+
 `rota init` inserts a managed block in `CLAUDE.md` (or `AGENTS.md` when present) that lists the current topics (`Glossary` surfaces here like any other topic). That block keeps knowledge visible to the model across context clears without re-reading the file.
 
 ## DECISIONS.md: hard-boundary decisions

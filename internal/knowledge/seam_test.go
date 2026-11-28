@@ -65,6 +65,87 @@ func mustRead(t *testing.T, p string) string {
 	return string(b)
 }
 
+func glossaryNameStore(t *testing.T) (s Store, km, agents string) {
+	t.Helper()
+	s = lockedStore(t)
+	km, _ = s.KnowledgePath(Umbrella)
+	if err := os.WriteFile(km, []byte("# K\n\n## Glossary\n\n- **Existing** — kept\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	agents = filepath.Join(s.Root, "AGENTS.md")
+	if err := os.WriteFile(agents, []byte("# Agents\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return
+}
+
+func TestGlossaryWriteRefusesInvalidNamesWithoutWriting(t *testing.T) {
+	for _, name := range []string{"", " \t ", "a*b", "a\nb", "a\rb", "a --> b", "Slot\n"} {
+		t.Run(name, func(t *testing.T) {
+			s, km, agents := glossaryNameStore(t)
+			before, block := mustRead(t, km), mustRead(t, agents)
+			_, changed, err := s.GlossaryWrite(Umbrella, Term{Name: name, Definition: "definition"}, false, false)
+			if !errors.Is(err, bulletfmt.ErrInvalid) || changed {
+				t.Errorf("write %q: changed=%v err=%v, want invalid name and no change", name, changed, err)
+			}
+			if mustRead(t, km) != before || mustRead(t, agents) != block {
+				t.Fatal("refused write changed knowledge or instructions")
+			}
+		})
+	}
+}
+
+func TestGlossaryImportRefusesInvalidNamesWithoutWriting(t *testing.T) {
+	for _, name := range []string{"", "   ", "a*b", "a\nb", "a\rb", "a --> b"} {
+		t.Run(name, func(t *testing.T) {
+			s, km, agents := glossaryNameStore(t)
+			before, block := mustRead(t, km), mustRead(t, agents)
+			manifest := "# comment\nGood\tvalid definition\n" + name + "\tdefinition\n"
+			_, changed, err := s.GlossaryImport(Umbrella, manifest, false)
+			if err == nil || changed {
+				t.Errorf("import %q: changed=%v err=%v, want refusal and no change", name, changed, err)
+			}
+			if err != nil && !strings.Contains(err.Error(), "line 3") {
+				t.Errorf("import error lacks manifest line: %v", err)
+			}
+			if mustRead(t, km) != before || mustRead(t, agents) != block {
+				t.Fatal("refused batch changed knowledge or instructions")
+			}
+		})
+	}
+}
+
+func TestAcceptedGlossaryNamesSurviveLaterWrites(t *testing.T) {
+	for _, name := range []string{"Slot", "  Padded name  ", "Déploiement 日本語", "A:B - C — D", "<tag> [name] #1", "a\tb"} {
+		for _, via := range []string{"write", "import"} {
+			if via == "import" && strings.Contains(name, "\t") {
+				continue // Tabs separate manifest columns.
+			}
+			t.Run(via+"/"+name, func(t *testing.T) {
+				s, _, _ := glossaryNameStore(t)
+				if via == "write" {
+					got, _, err := s.GlossaryWrite(Umbrella, Term{Name: name, Definition: "original definition"}, false, false)
+					if err != nil || got != strings.TrimSpace(name) {
+						t.Fatalf("write name=%q err=%v", got, err)
+					}
+				} else if _, _, err := s.GlossaryImport(Umbrella, name+"\toriginal definition\n", false); err != nil {
+					t.Fatal(err)
+				}
+				if _, _, err := s.GlossaryWrite(Umbrella, Term{Name: "Other", Definition: "later write"}, false, false); err != nil {
+					t.Fatal(err)
+				}
+				if _, _, err := s.GlossaryImport(Umbrella, "Another\tlater import\n", false); err != nil {
+					t.Fatal(err)
+				}
+				out, missing, err := s.GlossaryRead(Umbrella, []string{strings.TrimSpace(name), "Existing", "Other", "Another"})
+				if err != nil || len(missing) != 0 || !strings.Contains(out, "original definition") {
+					t.Fatalf("term lost after later writes: missing=%v err=%v\n%s", missing, err, out)
+				}
+			})
+		}
+	}
+}
+
 func hitFixture(t *testing.T) (Store, string) {
 	t.Helper()
 	s := lockedStore(t)
