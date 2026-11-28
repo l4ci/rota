@@ -81,9 +81,26 @@ func (e Env) runGateVerify(ctx context.Context, cmds []string, dir string, led t
 
 // runE2E is the one entry point for the test.e2e tier: gate, train, the
 // post-landing check and freeze recovery all verify e2e through it, so the
-// retry policy has a single owner. Callers record vr.Flaky themselves.
+// retry policy has a single owner. Callers record the result separately.
 func (e Env) runE2E(ctx context.Context, cmds []string, dir string, led testledger.Ledger) (VerifyResult, error) {
 	return e.runGateVerify(ctx, cmds, dir, led)
+}
+
+// recordVerifyResult owns verification bookkeeping and the warning-only policy
+// for flake ledger failures. An empty tier records flakes only. A nil notes
+// sink reports on stderr, for operations such as freeze recovery with no notes.
+func (e Env) recordVerifyResult(root string, round *landing.RoundMemo, tier string, target GateTarget, prs []string, vr VerifyResult, notes *[]string) {
+	if tier != "" {
+		e.recordVerification(root, round, tier, target, prs, vr)
+	}
+	if err := e.recordFlakes(root, round, prs, vr); err != nil {
+		warning := "WARNING " + err.Error()
+		if notes != nil {
+			*notes = append(*notes, warning)
+		} else {
+			fmt.Fprintln(e.Stderr, warning)
+		}
+	}
 }
 
 func (e Env) recordFlakes(root string, round *landing.RoundMemo, prs []string, vr VerifyResult) error {
