@@ -1,4 +1,4 @@
-package labels_test
+package tracker_test
 
 import (
 	"reflect"
