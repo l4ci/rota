@@ -60,7 +60,7 @@ The checks, in the order they run:
 | `stop-hook` | a Stop and a SessionStart hook installed by `rota hook install` exist and their command resolves | the orchestrator hooks are not installed (opt-in) |
 | `guard-hook` | a `PreToolUse` hook installed by `rota hook install` sits in project or user scope (project-local never reaches a worker worktree) and its command resolves | the orchestrator hooks are not installed (opt-in) |
 | `switch` | with `orchestrator.switchOnUsage` on: two or more accounts have a `dir` and the Stop hook is installed | `orchestrator.switchOnUsage` is off |
-| `skills` | every installed skills root (user and project, Claude and Codex, including each `round.accounts` config dir) matches the binary's skill set, and has no missing or edited files | no root has a `.rota-manifest.json` (run `rota skills install`) |
+| `skills` | every installed skills root (user and project, Claude and Codex, including each `round.accounts` config dir) matches the binary's skill set, and has no missing, edited or unmanaged files | no root has a `.rota-manifest.json` (run `rota skills install`) |
 | `codex` | `codex` runs, and the default Codex home (or each `codex` account in `round.accounts`) is logged in and has the herdr integration | `codex` is not on `PATH` and no `codex` account is in `round.accounts` |
 | `agents` | the subagent files `rota agents write` generates are present and current | nothing to report: the line appears only as a `warn`, when a file is missing or stale (fix: `rota agents write`) |
 | `milestones` | with milestones on the tracker, `.rota/milestones/` holds no files left from file mode | nothing to report: the line appears only as a `warn`, when stale files exist (fix: `rota migrate milestone-files --apply`) |

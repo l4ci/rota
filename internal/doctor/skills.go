@@ -9,7 +9,7 @@ import (
 
 // skills compares the installed skill sets with the binary's. It skips until
 // something is installed (the repo's opt-in rule) and fails only on a broken
-// install: another digest, or missing or edited files.
+// install: another digest, or missing, edited or unmanaged files.
 func (d *runner) skills() Check {
 	c := d.skillsCheck()
 	rep := d.in.Skills
@@ -49,7 +49,7 @@ func (d *runner) skillsCheck() Check {
 	rep := d.in.Skills
 	var problems []string
 	hint := "run: rota skills update"
-	var manifestBad, pluginBad bool
+	var manifestBad, pluginBad, shadowed bool
 	for _, r := range have {
 		if !r.Damaged() {
 			continue
@@ -82,11 +82,19 @@ func (d *runner) skillsCheck() Check {
 			problems = append(problems, fmt.Sprintf("%s: %d edited (%s)", r.Path, len(r.Edited), first(r.Edited)))
 			hint = "run: rota skills update --overwrite"
 		}
+		if len(r.Unmanaged) > 0 {
+			shadowed = true
+			problems = append(problems, fmt.Sprintf("%s: %d unmanaged (%s)", r.Path, len(r.Unmanaged), first(r.Unmanaged)))
+		}
 	}
 	if len(problems) > 0 {
 		var hints []string
 		if manifestBad {
 			hints = append(hints, hint)
+		}
+		// --overwrite would destroy a file rota never wrote, so say how to keep it.
+		if shadowed {
+			hints = append(hints, "move the unmanaged files aside, then run: rota skills update")
 		}
 		if pluginBad {
 			hints = append(hints, pluginHint)

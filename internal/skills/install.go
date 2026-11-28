@@ -610,6 +610,9 @@ type RootStatus struct {
 	Current   bool
 	Edited    []string
 	Missing   []string
+	// Unmanaged are wanted paths the manifest does not list and install would
+	// keep: a file of someone else's stands where rota's belongs.
+	Unmanaged []string
 	// Mode is the root's recorded install mode. For a stub root Current is
 	// judged against the stub digest and Changed names what differs: skills
 	// added, removed or whose stub changed, as "<skill> (<what>)".
@@ -621,10 +624,10 @@ type RootStatus struct {
 }
 
 // Damaged says the root is installed but out of step with the binary: another
-// digest, files missing or files edited. A stub root's Current already
+// digest, files missing, edited or unmanaged. A stub root's Current already
 // judges against the stub digest.
 func (r RootStatus) Damaged() bool {
-	return !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0
+	return !r.Current || len(r.Edited) > 0 || len(r.Missing) > 0 || len(r.Unmanaged) > 0
 }
 
 // NeedsUpdate says `rota skills update` has work: some installed root is
@@ -668,7 +671,7 @@ func (s *Set) Status(roots []Root, unavailable []Unavailable, version string) (R
 		rep.StubDigest = stub.digest
 	}
 	for _, r := range roots {
-		st := RootStatus{Root: r, Edited: []string{}, Missing: []string{}}
+		st := RootStatus{Root: r, Edited: []string{}, Missing: []string{}, Unmanaged: []string{}}
 		if r.Plugin {
 			s.pluginStatus(&st)
 			rep.Roots = append(rep.Roots, st)
@@ -682,7 +685,7 @@ func (s *Set) Status(roots []Root, unavailable []Unavailable, version string) (R
 			st.Installed, st.Version, st.Digest, st.Mode = true, m.Version, m.Digest, m.EffectiveMode()
 			st.Current, st.Want = m.Digest == s.digest, s.digest
 			// want is the set install would write for this root's mode, so
-			// Status asks classify the same question planRoot does.
+			// Status reads the paths through the plan install runs.
 			want := s
 			if st.Mode == ModeStub {
 				if stubErr != nil {
@@ -692,27 +695,27 @@ func (s *Set) Status(roots []Root, unavailable []Unavailable, version string) (R
 				st.Changed = stubChanges(m.Files, stub)
 				want = stub
 			}
-			var paths []string
-			for p := range m.Files {
-				paths = append(paths, p)
+			plan, err := want.planRoot(r, Options{}, m)
+			if err != nil {
+				return rep, err
 			}
-			sort.Strings(paths)
-			for _, p := range paths {
-				ps := pathState{Recorded: m.Files[p], Managed: true}
-				if b, ok := want.files[p]; ok {
-					ps.Want, ps.Wanted = hashBytes(b), true
-				}
-				ps, err := readState(r.Path, p, ps, false)
-				if err != nil {
-					return rep, err
-				}
-				switch classify(ps).Action {
-				case actForget, actCreate:
-					st.Missing = append(st.Missing, p)
-				case actKeep:
-					st.Edited = append(st.Edited, p)
+			for _, sp := range plan.steps {
+				switch act := sp.dec.Action; {
+				case !sp.st.Managed:
+					// A path the manifest never listed matters only when
+					// install would leave someone else's file there.
+					if act == actKeep {
+						st.Unmanaged = append(st.Unmanaged, sp.path)
+					}
+				case act == actForget || act == actCreate:
+					st.Missing = append(st.Missing, sp.path)
+				case act == actKeep:
+					st.Edited = append(st.Edited, sp.path)
 				}
 			}
+			sort.Strings(st.Edited)
+			sort.Strings(st.Missing)
+			sort.Strings(st.Unmanaged)
 		}
 		rep.Roots = append(rep.Roots, st)
 	}
