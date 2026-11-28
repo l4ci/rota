@@ -64,7 +64,7 @@ func labelLiterals(root string) ([]string, error) {
 						if name == "" || strings.ContainsAny(name, "${") || strings.HasPrefix(name, "<") {
 							continue
 						}
-						if _, ok := Find(Resolve(nil), name); !ok && name != LegacySupport {
+						if _, ok := Find(Resolve(nil), name, nil); !ok && name != LegacySupport {
 							hits = append(hits, fmt.Sprintf("%s:%d: unregistered skill label %s", path, i+1, name))
 						}
 					}

@@ -3,6 +3,7 @@
 package labels
 
 import (
+	"slices"
 	"sort"
 	"strings"
 )
@@ -164,16 +165,38 @@ func Resolve(get func(string) string) []Entry {
 	return out
 }
 
-// Find returns the exact definition first, then an open-prefix definition
+// NameMatcher supplies the caller's label-name and namespace matching rule.
+// A nil matcher selects exact matching for local registry lookups.
+type NameMatcher interface {
+	HasLabel([]string, string) bool
+	CutPrefix(string, string) (string, bool)
+}
+
+type exactNames struct{}
+
+func (exactNames) HasLabel(names []string, want string) bool { return slices.Contains(names, want) }
+func (exactNames) CutPrefix(name, prefix string) (string, bool) {
+	return strings.CutPrefix(name, prefix)
+}
+
+func nameMatcher(m NameMatcher) NameMatcher {
+	if m == nil {
+		return exactNames{}
+	}
+	return m
+}
+
+// Find returns a fixed definition first, then an open-prefix definition
 // with the actual name substituted. Empty prefix suffixes are not labels.
-func Find(entries []Entry, name string) (Label, bool) {
+func Find(entries []Entry, name string, matcher NameMatcher) (Label, bool) {
+	matcher = nameMatcher(matcher)
 	for _, e := range entries {
-		if !e.Prefix && e.Name == name {
+		if !e.Prefix && matcher.HasLabel([]string{e.Name}, name) {
 			return e.Label, true
 		}
 	}
 	for _, e := range entries {
-		if e.Prefix && strings.HasPrefix(name, e.Name) && len(name) > len(e.Name) {
+		if suffix, ok := matcher.CutPrefix(name, e.Name); e.Prefix && ok && suffix != "" {
 			l := e.Label
 			l.Name = name
 			return l, true
@@ -183,7 +206,7 @@ func Find(entries []Entry, name string) (Label, bool) {
 }
 
 // Lookup resolves a single label, including existing open-prefix names.
-func Lookup(name string, get func(string) string) (Label, bool) { return Find(Resolve(get), name) }
+func Lookup(name string, get func(string) string) (Label, bool) { return Find(Resolve(get), name, nil) }
 
 // WithExtras adds declared project labels; exact registry definitions retain
 // ownership of their metadata. Names inside an open family may be declared.

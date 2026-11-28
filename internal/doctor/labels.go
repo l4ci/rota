@@ -12,6 +12,7 @@ type LabelState struct {
 	Existing []labels.Label
 	Metadata bool
 	Used     map[string]bool
+	Matcher  labels.NameMatcher
 	Problem  string
 }
 
@@ -23,7 +24,7 @@ func labelCheck(state LabelState) Check {
 		return Check{Name: "labels", Status: Skip, Detail: "name-only tracker: registry definition checks are report-only; labels cannot be synchronized"}
 	}
 	var missing, undescribed []string
-	for _, change := range labels.Diff(state.Entries, state.Existing, state.Used, state.Metadata) {
+	for _, change := range labels.Diff(state.Entries, state.Existing, state.Used, state.Metadata, state.Matcher) {
 		switch change.Kind {
 		case labels.Missing:
 			missing = append(missing, change.Label.Name)

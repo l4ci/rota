@@ -11,6 +11,7 @@ import (
 	"github.com/l4ci/rota/internal/backlog/trackertest"
 	"github.com/l4ci/rota/internal/git"
 	"github.com/l4ci/rota/internal/jsonx"
+	"github.com/l4ci/rota/internal/labels"
 	"github.com/l4ci/rota/internal/round"
 	"github.com/l4ci/rota/internal/roundcfg"
 	"github.com/l4ci/rota/internal/tracker"
@@ -45,6 +46,40 @@ func (f remoteMetadata) UpsertLabel(context.Context, tracker.Label) error {
 }
 
 var remoteNow = time.Date(2026, 10, 25, 11, 0, 0, 0, time.UTC)
+
+func TestRemoteLabelScanNameRules(t *testing.T) {
+	for _, tc := range []struct {
+		source, description, status, detail string
+	}{
+		{"github", "Work is held by a worker.", Pass, "present"},
+		{"linear", "Work is held by a worker.", Pass, "present"},
+		{"github", "", Warn, "undescribed: in-progress"},
+		{"gitlab", "Work is held by a worker.", Warn, "missing: in-progress"},
+	} {
+		t.Run(tc.source+"/"+tc.description, func(t *testing.T) {
+			tr := remoteMetadata{&remoteLabels{Fake: &trackertest.Fake{ProviderName: tc.source}}}
+			for _, entry := range labels.Resolve(nil) {
+				if entry.Prefix {
+					continue
+				}
+				label := entry.Label
+				if label.Name == labels.InProgress {
+					label.Name, label.Description = "In-Progress", tc.description
+				}
+				tr.definitions = append(tr.definitions, label)
+			}
+			scanner, cfg := remoteFixture(t, tr)
+			state := scanner.Scan(context.Background(), t.TempDir(), cfg).Labels
+			if state == nil || state.Problem != "" {
+				t.Fatalf("label scan = %+v", state)
+			}
+			check := labelCheck(*state)
+			if check.Status != tc.status || !strings.Contains(check.Detail, tc.detail) {
+				t.Fatalf("check = %+v, want %s containing %q", check, tc.status, tc.detail)
+			}
+		})
+	}
+}
 
 func remoteFixture(t *testing.T, tr Tracker) (RemoteScanner, any) {
 	t.Helper()
